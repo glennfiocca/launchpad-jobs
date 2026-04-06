@@ -1,0 +1,261 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  profile      UserProfile?
+  applications Application[]
+}
+
+model UserProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal
+  firstName   String
+  lastName    String
+  email       String
+  phone       String?
+  location    String?
+
+  // Professional links
+  linkedinUrl  String?
+  githubUrl    String?
+  portfolioUrl String?
+
+  // Resume
+  resumeUrl      String?
+  resumeFileName String?
+
+  // Headline & bio
+  headline String?
+  summary  String? @db.Text
+
+  // Current/desired role
+  currentTitle    String?
+  currentCompany  String?
+  yearsExperience Int?
+
+  // Salary
+  desiredSalaryMin Int?
+  desiredSalaryMax Int?
+
+  // Work preferences
+  openToRemote Boolean @default(true)
+  openToHybrid Boolean @default(true)
+  openToOnsite Boolean @default(false)
+
+  // Education
+  highestDegree  String?
+  fieldOfStudy   String?
+  university     String?
+  graduationYear Int?
+
+  // Eligibility
+  workAuthorization   String? // US_CITIZEN, GREEN_CARD, VISA, OTHER
+  requiresSponsorship Boolean @default(false)
+
+  // Custom free-form answers stored as JSON
+  // { "questionKey": "answer" }
+  customAnswers Json?
+
+  isComplete Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Company {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique // Greenhouse board token
+
+  logoUrl  String?
+  website  String?
+  industry String?
+  size     String?
+  about    String? @db.Text
+
+  jobs Job[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Job {
+  id         String  @id @default(cuid())
+  externalId String  // Greenhouse job ID (numeric string)
+  companyId  String
+  company    Company @relation(fields: [companyId], references: [id])
+
+  title          String
+  location       String?
+  department     String?
+  employmentType String?
+  remote         Boolean @default(false)
+
+  // Greenhouse identifiers
+  boardToken  String
+  absoluteUrl String? // Greenhouse job URL
+
+  // Full job content (HTML from Greenhouse)
+  content String? @db.Text
+
+  // Parsed metadata
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?
+
+  // Questions required for application (JSON array)
+  // [{ "id": "123", "label": "...", "required": true, "type": "text" }]
+  applicationQuestions Json?
+
+  isActive Boolean   @default(true)
+  postedAt DateTime?
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([externalId, boardToken])
+  @@index([companyId])
+  @@index([isActive])
+  @@index([remote])
+  @@index([department])
+  @@index([postedAt])
+}
+
+enum ApplicationStatus {
+  APPLIED
+  REVIEWING
+  PHONE_SCREEN
+  INTERVIEWING
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+model Application {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id])
+
+  status ApplicationStatus @default(APPLIED)
+
+  // Greenhouse application ID (returned after successful submission)
+  externalApplicationId String?
+
+  // Tracking email address for this application (for Resend inbound)
+  trackingEmail String? @unique
+
+  // Notes the user adds
+  userNotes String? @db.Text
+
+  appliedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emails        ApplicationEmail[]
+  statusHistory ApplicationStatusHistory[]
+
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([status])
+}
+
+model ApplicationEmail {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  messageId String? @unique // Email message ID for deduplication
+  from      String
+  to        String
+  subject   String
+  body      String  @db.Text
+  htmlBody  String? @db.Text
+
+  // AI-determined classification
+  aiClassification ApplicationStatus?
+  aiConfidence     Float?
+  aiReasoning      String? @db.Text
+
+  direction String @default("inbound") // inbound | outbound
+
+  receivedAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([applicationId])
+}
+
+model ApplicationStatusHistory {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  fromStatus  ApplicationStatus?
+  toStatus    ApplicationStatus
+  reason      String?
+  triggeredBy String @default("system") // user | ai | system
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId])
+}

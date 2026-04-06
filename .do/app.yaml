@@ -1,0 +1,105 @@
+name: launchpad-jobs
+region: nyc
+services:
+  - name: web
+    github:
+      repo: glennfiocca/launchpad-jobs
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    run_command: npm start
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      http_path: /api/health
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: DIRECT_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: NEXTAUTH_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${APP_URL}
+      - key: NEXTAUTH_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: GOOGLE_CLIENT_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: GOOGLE_CLIENT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: GITHUB_CLIENT_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: GITHUB_CLIENT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: RESEND_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: RESEND_FROM_EMAIL
+        scope: RUN_AND_BUILD_TIME
+        value: noreply@launchpad.jobs
+      - key: RESEND_INBOUND_DOMAIN
+        scope: RUN_AND_BUILD_TIME
+        value: track.launchpad.jobs
+      - key: RESEND_INBOUND_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: ANTHROPIC_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: UPLOADTHING_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: UPLOADTHING_APP_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: CRON_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: NEXT_PUBLIC_APP_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${APP_URL}
+      - key: NEXT_PUBLIC_APP_NAME
+        scope: RUN_AND_BUILD_TIME
+        value: Launchpad
+
+jobs:
+  - name: migrate
+    github:
+      repo: glennfiocca/launchpad-jobs
+      branch: main
+      deploy_on_push: true
+    kind: PRE_DEPLOY
+    run_command: npx prisma migrate deploy
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+
+  - name: seed-jobs
+    github:
+      repo: glennfiocca/launchpad-jobs
+      branch: main
+      deploy_on_push: false
+    kind: POST_DEPLOY
+    run_command: node -e "fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/jobs/sync', { method: 'POST', headers: { Authorization: 'Bearer ' + process.env.CRON_SECRET } })"
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: NEXT_PUBLIC_APP_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: CRON_SECRET
+        scope: RUN_TIME
+        type: SECRET

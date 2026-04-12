@@ -26,18 +26,6 @@ services:
       - key: NEXTAUTH_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-      - key: GOOGLE_CLIENT_ID
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: GOOGLE_CLIENT_SECRET
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: GITHUB_CLIENT_ID
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: GITHUB_CLIENT_SECRET
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
       - key: RESEND_API_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET

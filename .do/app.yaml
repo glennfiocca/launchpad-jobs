@@ -41,12 +41,18 @@ services:
       - key: ANTHROPIC_API_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-      - key: UPLOADTHING_SECRET
+      - key: DO_SPACES_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-      - key: UPLOADTHING_APP_ID
+      - key: DO_SPACES_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET
+      - key: DO_SPACES_BUCKET
+        scope: RUN_AND_BUILD_TIME
+        value: pipeline-uploads
+      - key: DO_SPACES_REGION
+        scope: RUN_AND_BUILD_TIME
+        value: nyc3
       - key: CRON_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET

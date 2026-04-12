@@ -1,9 +1,26 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const MAX_SIZE = 8 * 1024 * 1024; // 8MB
+
+function getSpacesClient(): S3Client | null {
+  if (!process.env.DO_SPACES_KEY || !process.env.DO_SPACES_SECRET) return null;
+  return new S3Client({
+    endpoint: `https://${process.env.DO_SPACES_REGION ?? "nyc3"}.digitaloceanspaces.com`,
+    region: process.env.DO_SPACES_REGION ?? "nyc3",
+    credentials: {
+      accessKeyId: process.env.DO_SPACES_KEY,
+      secretAccessKey: process.env.DO_SPACES_SECRET,
+    },
+  });
+}
+
+function getSpacesKey(userId: string, fileName: string): string {
+  return `resumes/${userId}/${Date.now()}-${fileName}`;
+}
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -25,25 +42,62 @@ export async function POST(request: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  const spaces = getSpacesClient();
+  const bucket = process.env.DO_SPACES_BUCKET ?? "pipeline-uploads";
 
-  await db.userProfile.upsert({
-    where: { userId: session.user.id },
-    update: {
-      resumeData: buffer,
-      resumeFileName: file.name,
-      resumeMimeType: file.type,
-      resumeUrl: null, // clear any old URL-based resume
-    },
-    create: {
-      userId: session.user.id,
-      firstName: "",
-      lastName: "",
-      email: session.user.email ?? "",
-      resumeData: buffer,
-      resumeFileName: file.name,
-      resumeMimeType: file.type,
-    },
-  });
+  if (spaces) {
+    // Production: upload to DO Spaces, store URL
+    const key = getSpacesKey(session.user.id, file.name);
+    await spaces.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: file.type,
+        ACL: "private",
+      })
+    );
+    const resumeUrl = `https://${bucket}.${process.env.DO_SPACES_REGION ?? "nyc3"}.digitaloceanspaces.com/${key}`;
+
+    await db.userProfile.upsert({
+      where: { userId: session.user.id },
+      update: {
+        resumeUrl,
+        resumeFileName: file.name,
+        resumeMimeType: file.type,
+        resumeData: null,
+      },
+      create: {
+        userId: session.user.id,
+        firstName: "",
+        lastName: "",
+        email: session.user.email ?? "",
+        resumeUrl,
+        resumeFileName: file.name,
+        resumeMimeType: file.type,
+      },
+    });
+  } else {
+    // Local dev fallback: store bytes in DB
+    await db.userProfile.upsert({
+      where: { userId: session.user.id },
+      update: {
+        resumeData: buffer,
+        resumeFileName: file.name,
+        resumeMimeType: file.type,
+        resumeUrl: null,
+      },
+      create: {
+        userId: session.user.id,
+        firstName: "",
+        lastName: "",
+        email: session.user.email ?? "",
+        resumeData: buffer,
+        resumeFileName: file.name,
+        resumeMimeType: file.type,
+      },
+    });
+  }
 
   return NextResponse.json({ success: true, fileName: file.name });
 }
@@ -86,10 +140,32 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Fetch profile first to retrieve resumeUrl for Spaces cleanup
+  const profile = await db.userProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { resumeUrl: true },
+  });
+
   await db.userProfile.updateMany({
     where: { userId: session.user.id },
     data: { resumeData: null, resumeFileName: null, resumeMimeType: null, resumeUrl: null },
   });
+
+  // Delete from DO Spaces if applicable (non-fatal)
+  const spaces = getSpacesClient();
+  if (spaces && profile?.resumeUrl) {
+    const key = profile.resumeUrl.split(".digitaloceanspaces.com/")[1];
+    if (key) {
+      await spaces
+        .send(
+          new DeleteObjectCommand({
+            Bucket: process.env.DO_SPACES_BUCKET ?? "pipeline-uploads",
+            Key: key,
+          })
+        )
+        .catch(() => {});
+    }
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -1,10 +1,9 @@
 import { Resend } from "resend";
 
-if (!process.env.RESEND_API_KEY) {
-  console.warn("RESEND_API_KEY not set — email features disabled");
+// Lazy getter — avoids throwing at module load time when key is not yet set
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY ?? "re_placeholder");
 }
-
-export const resend = new Resend(process.env.RESEND_API_KEY ?? "");
 
 export const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs";
 export const INBOUND_DOMAIN = process.env.RESEND_INBOUND_DOMAIN ?? "track.launchpad.jobs";
@@ -25,7 +24,7 @@ export async function sendApplicationConfirmation({
   trackingEmail: string;
   dashboardUrl: string;
 }) {
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM_ADDRESS,
     to,
     subject: `Application submitted: ${jobTitle} at ${companyName}`,
@@ -95,7 +94,7 @@ export async function sendStatusUpdate({
 
   const emoji = statusEmoji[newStatus] ?? "📋";
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM_ADDRESS,
     to,
     subject: `${emoji} Application update: ${jobTitle} at ${companyName}`,

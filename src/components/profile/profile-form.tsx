@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, Upload, FileText, X, Loader2 } from "lucide-react";
 
 interface ProfileFormProps {
   initialData: UserProfile | null;
@@ -72,6 +72,37 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Resume state
+  const [resumeUrl, setResumeUrl] = useState<string>(initialData?.resumeUrl ?? "");
+  const [resumeFileName, setResumeFileName] = useState<string>(initialData?.resumeFileName ?? "");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setUploadError("Please upload a PDF file");
+      return;
+    }
+    setUploadError(null);
+    setIsUploading(true);
+    const data = new FormData();
+    data.append("resume", file);
+    const res = await fetch("/api/profile/resume", { method: "POST", body: data });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setUploadError(json.error ?? "Upload failed");
+    } else {
+      setResumeFileName(file.name);
+      setResumeUrl("/api/profile/resume"); // preview via our own endpoint
+      setUploadError(null);
+    }
+    setIsUploading(false);
+  };
+
   const set = (field: keyof FormState, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -90,6 +121,8 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
       linkedinUrl: form.linkedinUrl || undefined,
       githubUrl: form.githubUrl || undefined,
       portfolioUrl: form.portfolioUrl || undefined,
+      resumeUrl: resumeUrl || undefined,
+      resumeFileName: resumeFileName || undefined,
     };
 
     const res = await fetch("/api/profile", {
@@ -172,6 +205,67 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           <label className={labelClass}>Portfolio / Website</label>
           <input className={inputClass} type="url" value={form.portfolioUrl} onChange={(e) => set("portfolioUrl", e.target.value)} placeholder="https://yoursite.com" />
         </div>
+      </div>
+
+      {/* Resume */}
+      <div className={sectionClass}>
+        <h2 className="text-base font-semibold text-slate-900">Resume</h2>
+        <p className="text-sm text-slate-500 -mt-2">
+          Your resume is attached automatically when you apply. PDF only, max 8MB.
+        </p>
+
+        {resumeUrl ? (
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-green-600 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-green-800">{resumeFileName || "resume.pdf"}</p>
+                <a href={resumeUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-green-600 hover:underline">
+                  Preview
+                </a>
+              </div>
+            </div>
+            <button type="button" onClick={() => { setResumeUrl(""); setResumeFileName(""); }}
+              className="text-green-500 hover:text-green-700">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-8 text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-colors disabled:opacity-50"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span className="text-sm">Uploading...</span>
+              </>
+            ) : (
+              <>
+                <Upload className="w-6 h-6" />
+                <span className="text-sm font-medium">Click to upload resume</span>
+                <span className="text-xs">PDF · Max 8MB</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {uploadError && (
+          <p className="text-sm text-red-500 flex items-center gap-1">
+            <AlertCircle className="w-4 h-4" /> {uploadError}
+          </p>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={handleFileChange}
+        />
       </div>
 
       {/* Professional Summary */}

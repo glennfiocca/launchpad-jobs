@@ -74,17 +74,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // Fetch resume if stored in profile
+  // Resolve resume: DB bytes (current) or DO Spaces URL (production)
   let resumeBuffer: Buffer | undefined;
-  if (profile.resumeUrl) {
+  if (profile.resumeData) {
+    resumeBuffer = Buffer.from(profile.resumeData);
+  } else if (profile.resumeUrl) {
     try {
       const res = await fetch(profile.resumeUrl);
-      if (res.ok) {
-        const arrayBuffer = await res.arrayBuffer();
-        resumeBuffer = Buffer.from(arrayBuffer);
-      }
+      if (res.ok) resumeBuffer = Buffer.from(await res.arrayBuffer());
     } catch {
-      // Non-fatal - proceed without resume
+      // Non-fatal
     }
   }
 

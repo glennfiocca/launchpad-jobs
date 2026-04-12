@@ -52,6 +52,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  password      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -78,9 +79,11 @@ model UserProfile {
   githubUrl    String?
   portfolioUrl String?
 
-  // Resume
-  resumeUrl      String?
+  // Resume — stored in DB (bytes), migrates to DO Spaces (url) in production
+  resumeData     Bytes?
+  resumeUrl      String?   // set when using DO Spaces
   resumeFileName String?
+  resumeMimeType String?
 
   // Headline & bio
   headline String?

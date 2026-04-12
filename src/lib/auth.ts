@@ -3,10 +3,10 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import EmailProvider from "next-auth/providers/email";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db) as NextAuthOptions["adapter"],
@@ -22,6 +22,7 @@ export const authOptions: NextAuthOptions = {
     EmailProvider({
       from: process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs",
       sendVerificationRequest: async ({ identifier: email, url }) => {
+        const resend = new Resend(process.env.RESEND_API_KEY ?? "");
         await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs",
           to: email,
@@ -45,9 +46,24 @@ export const authOptions: NextAuthOptions = {
         });
       },
     }),
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+        const user = await db.user.findUnique({ where: { email: credentials.email } });
+        if (!user?.password) return null;
+        const valid = await bcrypt.compare(credentials.password, user.password);
+        if (!valid) return null;
+        return { id: user.id, email: user.email, name: user.name, image: user.image };
+      },
+    }),
   ],
   session: {
-    strategy: "database",
+    strategy: "jwt",
   },
   pages: {
     signIn: "/auth/signin",
@@ -55,16 +71,21 @@ export const authOptions: NextAuthOptions = {
     verifyRequest: "/auth/verify",
   },
   callbacks: {
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token.id) {
+        session.user.id = token.id as string;
       }
       return session;
     },
   },
 };
 
-// Augment the session type
 declare module "next-auth" {
   interface Session {
     user: {

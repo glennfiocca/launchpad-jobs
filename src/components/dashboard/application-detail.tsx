@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, MapPin, Building2, Calendar, Mail, Clock, ExternalLink } from "lucide-react";
+import { X, MapPin, Calendar, ExternalLink } from "lucide-react";
+import { EmailThread } from "./email-thread";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/types";
 import type { ApplicationWithJob } from "@/types";
@@ -138,33 +139,10 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
         )}
 
         {tab === "emails" && (
-          <div className="space-y-3">
-            {application.emails.length === 0 ? (
-              <div className="text-center py-12">
-                <Mail className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm text-slate-400">No emails yet</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Forward recruiting emails to your tracking address to see them here.
-                </p>
-              </div>
-            ) : (
-              application.emails.map((email) => (
-                <div key={email.id} className="bg-slate-50 rounded-lg p-3">
-                  <div className="flex items-start justify-between mb-1">
-                    <p className="text-xs font-semibold text-slate-700">{email.subject}</p>
-                    <span className="text-xs text-slate-400 shrink-0 ml-2">{timeAgo(email.receivedAt)}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 mb-2">From: {email.from}</p>
-                  {email.aiClassification && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200">
-                      AI: {STATUS_CONFIG[email.aiClassification].label}
-                    </span>
-                  )}
-                  <p className="text-xs text-slate-600 mt-2 line-clamp-3">{email.body}</p>
-                </div>
-              ))
-            )}
-          </div>
+          <EmailThread
+            applicationId={application.id}
+            initialEmails={application.emails}
+          />
         )}
 
         {tab === "timeline" && (

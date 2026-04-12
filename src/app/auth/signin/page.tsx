@@ -11,7 +11,7 @@ export default async function SignInPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Launchpad</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Pipeline</h1>
           <p className="text-slate-500 mt-2">Apply to your dream jobs in one click</p>
         </div>
         <SignInForm />

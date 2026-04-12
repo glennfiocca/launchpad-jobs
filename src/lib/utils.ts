@@ -53,5 +53,5 @@ export function slugify(text: string): string {
 }
 
 export function generateTrackingEmail(applicationId: string): string {
-  return `app-${applicationId}@track.launchpad.jobs`;
+  return `app-${applicationId}@track.trypipeline.ai`;
 }

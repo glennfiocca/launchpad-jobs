@@ -31,10 +31,10 @@ services:
         type: SECRET
       - key: RESEND_FROM_EMAIL
         scope: RUN_AND_BUILD_TIME
-        value: noreply@launchpad.jobs
+        value: noreply@trypipeline.ai
       - key: RESEND_INBOUND_DOMAIN
         scope: RUN_AND_BUILD_TIME
-        value: track.launchpad.jobs
+        value: track.trypipeline.ai
       - key: RESEND_INBOUND_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET
@@ -55,7 +55,7 @@ services:
         value: ${APP_URL}
       - key: NEXT_PUBLIC_APP_NAME
         scope: RUN_AND_BUILD_TIME
-        value: Launchpad
+        value: Pipeline
 
 jobs:
   - name: migrate

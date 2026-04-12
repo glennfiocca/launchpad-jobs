@@ -5,8 +5,8 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY ?? "re_placeholder");
 }
 
-export const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs";
-export const INBOUND_DOMAIN = process.env.RESEND_INBOUND_DOMAIN ?? "track.launchpad.jobs";
+export const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "noreply@trypipeline.ai";
+export const INBOUND_DOMAIN = process.env.RESEND_INBOUND_DOMAIN ?? "track.trypipeline.ai";
 
 // Send application confirmation email
 export async function sendApplicationConfirmation({
@@ -32,7 +32,7 @@ export async function sendApplicationConfirmation({
       <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #0f172a;">
         <div style="margin-bottom: 24px;">
           <div style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px; color: #0f172a;">
-            🚀 Launchpad
+            🚀 Pipeline
           </div>
         </div>
 
@@ -58,7 +58,7 @@ export async function sendApplicationConfirmation({
         </a>
 
         <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">
-          Launchpad — One-click job applications
+          Pipeline — One-click job applications
         </p>
       </div>
     `,

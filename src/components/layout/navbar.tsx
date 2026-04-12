@@ -19,7 +19,7 @@ export function Navbar() {
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
               <Rocket className="w-4 h-4 text-white" />
             </div>
-            Launchpad
+            Pipeline
           </Link>
 
           {/* Nav links */}

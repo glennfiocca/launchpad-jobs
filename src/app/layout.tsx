@@ -6,7 +6,7 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Launchpad — One-Click Job Applications",
+  title: "Pipeline — One-Click Job Applications",
   description: "Apply to top tech jobs in one click. Track your applications, communicate with recruiters, and land your dream job.",
 };
 

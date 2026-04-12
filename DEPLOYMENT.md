@@ -45,7 +45,7 @@
 1. Create account at [resend.com](https://resend.com)
 2. Add and verify your domain
 3. Create an API key
-4. Set up inbound email routing for `track.launchpad.jobs` → `https://your-app/api/webhooks/resend`
+4. Set up inbound email routing for `track.trypipeline.ai` → `https://your-app/api/webhooks/resend`
 5. Generate an inbound webhook secret
 
 ### 4. AI (Anthropic)

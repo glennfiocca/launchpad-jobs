@@ -63,7 +63,7 @@ export async function POST(
   }
 
   const fromAddress =
-    application.trackingEmail ?? process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs";
+    application.trackingEmail ?? process.env.RESEND_FROM_EMAIL ?? "noreply@trypipeline.ai";
 
   // Send via Resend — instantiated here per spec (getResend is not exported)
   const resend = new Resend(process.env.RESEND_API_KEY ?? "");

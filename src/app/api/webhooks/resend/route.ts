@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   const { from, to, subject, text, html, messageId, date } = payload;
 
   // Find the application by tracking email address
-  // The "to" field contains the tracking address like app-{id}@track.launchpad.jobs
+  // The "to" field contains the tracking address like app-{id}@track.trypipeline.ai
   const toAddresses = Array.isArray(to) ? to : [to];
 
   let application = null;

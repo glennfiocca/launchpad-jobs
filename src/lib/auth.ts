@@ -8,17 +8,17 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db) as NextAuthOptions["adapter"],
   providers: [
     EmailProvider({
-      from: process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs",
+      from: process.env.RESEND_FROM_EMAIL ?? "noreply@trypipeline.ai",
       sendVerificationRequest: async ({ identifier: email, url }) => {
         const resend = new Resend(process.env.RESEND_API_KEY ?? "");
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL ?? "noreply@launchpad.jobs",
+          from: process.env.RESEND_FROM_EMAIL ?? "noreply@trypipeline.ai",
           to: email,
-          subject: "Sign in to Launchpad",
+          subject: "Sign in to Pipeline",
           html: `
             <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
               <h1 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">
-                Sign in to Launchpad
+                Sign in to Pipeline
               </h1>
               <p style="color: #64748b; margin-bottom: 24px;">
                 Click the button below to sign in. This link expires in 24 hours.

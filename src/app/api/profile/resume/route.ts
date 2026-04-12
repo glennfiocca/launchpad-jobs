@@ -126,7 +126,7 @@ export async function GET(request: Request) {
     return new NextResponse("No resume uploaded", { status: 404 });
   }
 
-  return new NextResponse(profile.resumeData, {
+  return new NextResponse(new Uint8Array(profile.resumeData), {
     headers: {
       "Content-Type": profile.resumeMimeType ?? "application/pdf",
       "Content-Disposition": `inline; filename="${profile.resumeFileName ?? "resume.pdf"}"`,

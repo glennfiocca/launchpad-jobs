@@ -36,45 +36,6 @@ export function stripHtml(html: string): string {
 }
 
 /**
- * Finds the best matching value from a Greenhouse select values array
- * by comparing the stored string label against available option labels.
- * Tries: exact match → case-insensitive exact → one contains the other → key word overlap.
- */
-function fuzzyMatchValue(
-  stored: string,
-  values: Array<{ value: number; label: string }>
-): number | null {
-  const s = stored.toLowerCase().trim();
-
-  // Exact (case-insensitive)
-  const exact = values.find((v) => v.label.toLowerCase().trim() === s);
-  if (exact) return exact.value;
-
-  // One contains the other
-  const contains = values.find(
-    (v) =>
-      v.label.toLowerCase().includes(s) || s.includes(v.label.toLowerCase().trim())
-  );
-  if (contains) return contains.value;
-
-  // Key word overlap: split both into words, count matches
-  const storedWords = new Set(s.split(/\W+/).filter(Boolean));
-  let bestScore = 0;
-  let bestValue: number | null = null;
-  for (const v of values) {
-    const vWords = v.label.toLowerCase().split(/\W+/).filter(Boolean);
-    const overlap = vWords.filter((w) => storedWords.has(w)).length;
-    if (overlap > bestScore) {
-      bestScore = overlap;
-      bestValue = v.value;
-    }
-  }
-  if (bestScore >= 2) return bestValue;
-
-  return null;
-}
-
-/**
  * Auto-answer a single question from the user profile.
  * Returns { fieldName: value } map if we can answer it, or null if we cannot.
  */
@@ -225,21 +186,6 @@ export function autoAnswerQuestion(
     if (field.type !== "multi_value_single_select") return null;
     const val = resolveYesNo(field, false);
     return val !== null ? { [fieldName]: val } : null;
-  }
-
-  // --- Voluntary identification (EEOC) — fuzzy match stored label against available values ---
-  const voluntaryPatterns: Array<{ pattern: RegExp; profileValue: string | null | undefined }> = [
-    { pattern: /\bgender\b/i, profileValue: profile.voluntaryGender },
-    { pattern: /\brace\b|\bethnicity\b/i, profileValue: profile.voluntaryRace },
-    { pattern: /\bveteran\b/i, profileValue: profile.voluntaryVeteranStatus },
-    { pattern: /\bdisability\b|\bdisabled\b/i, profileValue: profile.voluntaryDisability },
-  ];
-
-  for (const { pattern, profileValue } of voluntaryPatterns) {
-    if (pattern.test(question.label) && profileValue && field.values.length > 0) {
-      const matched = fuzzyMatchValue(profileValue, field.values);
-      if (matched !== null) return { [fieldName]: matched };
-    }
   }
 
   return null;

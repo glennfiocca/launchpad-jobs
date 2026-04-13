@@ -1,5 +1,6 @@
 import type { UserProfile } from "@prisma/client";
 import type { GreenhouseQuestionField } from "@/types";
+import { resolveEeocFields } from "@/lib/greenhouse/eeoc";
 
 const GREENHOUSE_BASE_URL = "https://boards-api.greenhouse.io/v1/boards";
 
@@ -46,6 +47,12 @@ export async function applyToGreenhouseJob(
   if (coverLetter) {
     const coverBlob = new Blob([coverLetter], { type: "text/plain" });
     formData.append("cover_letter", coverBlob, "cover_letter.txt");
+  }
+
+  // EEOC voluntary identification fields
+  const eeocFields = resolveEeocFields(profile);
+  for (const [key, val] of Object.entries(eeocFields)) {
+    formData.append(key, val);
   }
 
   // Append all question answers directly as flat form fields (question_XXXXXXXX keys)

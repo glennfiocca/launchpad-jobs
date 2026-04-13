@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ProfileForm } from "@/components/profile/profile-form";
+import { ProfileTabs } from "@/components/profile/profile-tabs";
 
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
@@ -20,7 +20,7 @@ export default async function ProfilePage() {
           Fill this out once. We&apos;ll use it to automatically apply to jobs for you.
         </p>
       </div>
-      <ProfileForm initialData={profile} />
+      <ProfileTabs profile={profile} />
     </div>
   );
 }

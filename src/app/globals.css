@@ -26,6 +26,9 @@ body {
 .job-content h2 { font-size: 1.125rem; }
 .job-content h3 { font-size: 1rem; }
 .job-content p { margin-bottom: 0.75rem; color: #374151; line-height: 1.7; }
-.job-content ul, .job-content ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
-.job-content li { margin-bottom: 0.25rem; color: #374151; }
+.job-content ul { padding-left: 1.5rem; margin-bottom: 0.75rem; list-style-type: disc; }
+.job-content ol { padding-left: 1.5rem; margin-bottom: 0.75rem; list-style-type: decimal; }
+.job-content li { margin-bottom: 0.25rem; color: #374151; display: list-item; }
 .job-content a { color: #2563eb; text-decoration: underline; }
+.job-content strong { font-weight: 600; color: #0f172a; }
+.job-content em { font-style: italic; }

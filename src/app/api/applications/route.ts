@@ -3,13 +3,18 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { applyToGreenhouseJob } from "@/lib/greenhouse";
+import { autoAnswerQuestion } from "@/lib/greenhouse/questions";
 import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
+import { getPresignedGetUrl } from "@/lib/spaces";
 import { z } from "zod";
-import type { ApiResponse, ApplicationWithJob } from "@/types";
+import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion } from "@/types";
 
 const applySchema = z.object({
   jobId: z.string().min(1),
+  additionalAnswers: z
+    .record(z.string(), z.union([z.string(), z.number()]))
+    .optional(),
 });
 
 export async function GET() {
@@ -80,12 +85,28 @@ export async function POST(request: Request) {
     resumeBuffer = Buffer.from(profile.resumeData);
   } else if (profile.resumeUrl) {
     try {
-      const res = await fetch(profile.resumeUrl);
-      if (res.ok) resumeBuffer = Buffer.from(await res.arrayBuffer());
+      const key = profile.resumeUrl.split(".digitaloceanspaces.com/")[1];
+      const presignedUrl = key ? await getPresignedGetUrl(key, 300) : null;
+      if (presignedUrl) {
+        const res = await fetch(presignedUrl);
+        if (res.ok) resumeBuffer = Buffer.from(await res.arrayBuffer());
+      }
     } catch {
-      // Non-fatal
+      // Non-fatal: proceed without resume if fetch fails
     }
   }
+
+  // Build question answers: auto-answer from profile, then overlay user-provided answers
+  const storedQuestions = job.applicationQuestions
+    ? (job.applicationQuestions as unknown as GreenhouseQuestion[])
+    : [];
+
+  const questionAnswers: Record<string, string | number> = {};
+  for (const question of storedQuestions) {
+    const auto = autoAnswerQuestion(question, profile);
+    if (auto) Object.assign(questionAnswers, auto);
+  }
+  Object.assign(questionAnswers, parsed.data.additionalAnswers ?? {});
 
   // Submit to Greenhouse
   const applyResult = await applyToGreenhouseJob({
@@ -94,6 +115,7 @@ export async function POST(request: Request) {
     profile,
     resumeBuffer,
     resumeFileName: profile.resumeFileName ?? "resume.pdf",
+    questionAnswers,
   });
 
   // Create application record regardless of Greenhouse result

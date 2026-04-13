@@ -3,8 +3,9 @@
 import { useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap, Loader2 } from "lucide-react";
+import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
+import { ApplyModal } from "@/components/jobs/apply-modal";
 import type { JobWithCompany } from "@/types";
 
 interface JobDetailProps {
@@ -24,33 +25,9 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
     () => (job.content ? decodeEntities(job.content) : null),
     [job.content]
   );
-  const [applying, setApplying] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleApply = async () => {
-    if (!session) return;
-    setApplying(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: job.id }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setApplied(true);
-      } else {
-        setError(data.error ?? "Failed to apply");
-      }
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setApplying(false);
-    }
-  };
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 h-[calc(100vh-8rem)] overflow-hidden flex flex-col sticky top-24">
@@ -116,21 +93,11 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
           <div className="space-y-2">
             {error && <p className="text-sm text-red-500">{error}</p>}
             <button
-              onClick={handleApply}
-              disabled={applying}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
+              onClick={() => setShowModal(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors"
             >
-              {applying ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Applying...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4" />
-                  One-Click Apply
-                </>
-              )}
+              <Zap className="w-4 h-4" />
+              One-Click Apply
             </button>
             {job.absoluteUrl && (
               <a
@@ -151,6 +118,18 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
           >
             Sign in to apply
           </Link>
+        )}
+
+        {showModal && (
+          <ApplyModal
+            job={job}
+            onClose={() => setShowModal(false)}
+            onApplied={(applicationId, warning) => {
+              setShowModal(false);
+              setApplied(true);
+              if (warning) setError(warning);
+            }}
+          />
         )}
       </div>
 

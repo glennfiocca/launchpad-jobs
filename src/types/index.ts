@@ -54,10 +54,7 @@ export interface GreenhouseJobsResponse {
   };
 }
 
-export interface GreenhouseQuestion {
-  required: boolean;
-  private: boolean;
-  label: string;
+export interface GreenhouseQuestionField {
   name: string;
   type:
     | "input_text"
@@ -66,7 +63,13 @@ export interface GreenhouseQuestion {
     | "multi_value_single_select"
     | "multi_value_multi_select";
   values: Array<{ value: number; label: string }>;
+}
+
+export interface GreenhouseQuestion {
+  label: string;
+  required: boolean;
   description: string | null;
+  fields: GreenhouseQuestionField[];
 }
 
 // Job filter params

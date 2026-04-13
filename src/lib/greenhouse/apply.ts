@@ -1,5 +1,5 @@
 import type { UserProfile } from "@prisma/client";
-import type { GreenhouseQuestion } from "@/types";
+import type { GreenhouseQuestionField } from "@/types";
 
 const GREENHOUSE_BASE_URL = "https://boards-api.greenhouse.io/v1/boards";
 
@@ -10,7 +10,7 @@ export interface ApplyOptions {
   resumeBuffer?: Buffer;
   resumeFileName?: string;
   coverLetter?: string;
-  additionalAnswers?: Record<string, string>;
+  questionAnswers?: Record<string, string | number>;
 }
 
 export interface ApplyResult {
@@ -23,7 +23,7 @@ export interface ApplyResult {
 export async function applyToGreenhouseJob(
   options: ApplyOptions
 ): Promise<ApplyResult> {
-  const { boardToken, jobId, profile, resumeBuffer, resumeFileName, coverLetter, additionalAnswers } = options;
+  const { boardToken, jobId, profile, resumeBuffer, resumeFileName, coverLetter, questionAnswers } = options;
 
   const url = `${GREENHOUSE_BASE_URL}/${boardToken}/jobs/${jobId}`;
 
@@ -48,25 +48,10 @@ export async function applyToGreenhouseJob(
     formData.append("cover_letter", coverBlob, "cover_letter.txt");
   }
 
-  // LinkedIn URL (common Greenhouse question)
-  if (profile.linkedinUrl) {
-    formData.append("job_application[answers_attributes][0][question_id]", "linkedin");
-    formData.append("job_application[answers_attributes][0][answer]", profile.linkedinUrl);
-  }
-
-  // Any additional answers from custom questions
-  if (additionalAnswers) {
-    let idx = 1;
-    for (const [questionId, answer] of Object.entries(additionalAnswers)) {
-      formData.append(
-        `job_application[answers_attributes][${idx}][question_id]`,
-        questionId
-      );
-      formData.append(
-        `job_application[answers_attributes][${idx}][answer]`,
-        answer
-      );
-      idx++;
+  // Append all question answers directly as flat form fields (question_XXXXXXXX keys)
+  if (questionAnswers) {
+    for (const [fieldName, value] of Object.entries(questionAnswers)) {
+      formData.append(fieldName, String(value));
     }
   }
 
@@ -98,7 +83,7 @@ export async function applyToGreenhouseJob(
 
 // Map Greenhouse question types to our form field types
 export function mapQuestionType(
-  ghType: GreenhouseQuestion["type"]
+  ghType: GreenhouseQuestionField["type"]
 ): "text" | "textarea" | "file" | "select" | "multiselect" {
   switch (ghType) {
     case "input_text":

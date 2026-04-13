@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { Mail } from "lucide-react";
+import { Mail, CheckCircle } from "lucide-react";
 
 export function SignInForm() {
   const [email, setEmail] = useState("");
@@ -34,18 +34,16 @@ export function SignInForm() {
     }
   };
 
-  const inputClass =
-    "w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
-
   if (sent) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
-        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Mail className="w-6 h-6 text-green-600" />
+      <div className="bg-[#0a0a0a] border border-white/8 rounded-2xl p-8 text-center">
+        <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CheckCircle className="w-6 h-6 text-green-400" />
         </div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">Check your email</h2>
-        <p className="text-slate-500 text-sm">
-          We sent a sign-in link to <span className="font-medium text-slate-700">{email}</span>.
+        <h2 className="text-xl font-semibold text-white mb-2">Check your email</h2>
+        <p className="text-zinc-400 text-sm leading-relaxed">
+          We sent a sign-in link to{" "}
+          <span className="font-medium text-zinc-300">{email}</span>.
           Click the link to continue.
         </p>
       </div>
@@ -53,31 +51,39 @@ export function SignInForm() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-      <h2 className="text-lg font-semibold text-slate-900 mb-1">Sign in</h2>
-      <p className="text-sm text-slate-500 mb-6">
+    <div className="bg-[#0a0a0a] border border-white/8 rounded-2xl p-8">
+      <h2 className="text-lg font-semibold text-white mb-1">Welcome back</h2>
+      <p className="text-sm text-zinc-400 mb-6">
         Enter your email and we&apos;ll send you a magic link.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {error && (
-          <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+          <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg">
+            {error}
+          </p>
         )}
 
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email address"
-          required
-          className={inputClass}
-          autoFocus
-        />
+        <div>
+          <label htmlFor="email" className="block text-sm text-zinc-400 mb-1.5">
+            Email address
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+            autoFocus
+            className="bg-black border border-white/10 text-white placeholder-zinc-600 rounded-xl px-4 py-3 w-full focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 text-sm transition-colors"
+          />
+        </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
+          className="bg-white text-black font-semibold rounded-xl px-5 py-3 w-full hover:bg-white/90 transition-colors disabled:opacity-50 text-sm mt-1"
         >
           {loading ? "Sending..." : "Send magic link"}
         </button>

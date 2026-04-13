@@ -1,54 +1,113 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
 import { JobDetail } from "./job-detail";
 import type { JobWithCompany, JobFilters, ApiResponse } from "@/types";
 import { Loader2 } from "lucide-react";
 
+const LIMIT = 20;
+
 export function JobBoard() {
   const [jobs, setJobs] = useState<JobWithCompany[]>([]);
   const [selected, setSelected] = useState<JobWithCompany | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<JobFilters>({});
-  const limit = 20;
 
-  const fetchJobs = useCallback(async (f: JobFilters, p: number) => {
-    setLoading(true);
-    const params = new URLSearchParams();
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const isFetchingRef = useRef(false);
+  const hasMoreRef = useRef(false);
+
+  const hasMore = jobs.length < total;
+  hasMoreRef.current = hasMore;
+
+  const loadNextPage = useCallback(() => {
+    if (isFetchingRef.current || !hasMoreRef.current) return;
+    isFetchingRef.current = true;
+    setPage(p => p + 1);
+  }, []);
+
+  // After each fetch, re-trigger intersection check in case sentinel is still in viewport
+  const recheckSentinel = useCallback(() => {
+    const observer = observerRef.current;
+    const sentinel = sentinelRef.current;
+    if (!observer || !sentinel) return;
+    observer.unobserve(sentinel);
+    observer.observe(sentinel);
+  }, []);
+
+  const fetchJobs = useCallback(async (f: JobFilters, p: number, replace: boolean) => {
+    if (replace) setLoading(true);
+    else setLoadingMore(true);
+
+    const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
     if (f.query) params.set("query", f.query);
     if (f.location) params.set("location", f.location);
     if (f.department) params.set("department", f.department);
     if (f.company) params.set("company", f.company);
     if (f.remote) params.set("remote", "true");
     if (f.employmentType) params.set("employmentType", f.employmentType);
-    params.set("page", String(p));
-    params.set("limit", String(limit));
 
     try {
       const res = await fetch(`/api/jobs?${params}`);
       const data: ApiResponse<JobWithCompany[]> = await res.json();
       if (data.success && data.data) {
-        setJobs(data.data);
+        setJobs(prev => replace ? data.data! : [...prev, ...data.data!]);
         setTotal(data.meta?.total ?? 0);
       }
     } catch {
-      // Non-fatal
+      // non-fatal
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (replace) setLoading(false);
+      else setLoadingMore(false);
+      // Re-evaluate intersection in case sentinel is still in viewport after load
+      recheckSentinel();
     }
-  }, []);
+  }, [recheckSentinel]);
 
+  // Observer set up once — sentinel is always mounted so ref is valid immediately
   useEffect(() => {
-    fetchJobs(filters, page);
-  }, [filters, page, fetchJobs]);
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadNextPage();
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    observerRef.current = observer;
+    return () => {
+      observer.disconnect();
+      observerRef.current = null;
+    };
+  }, [loadNextPage]);
+
+  // Filter change: reset and fetch fresh page 1
+  useEffect(() => {
+    isFetchingRef.current = false;
+    setPage(1);
+    fetchJobs(filters, 1, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  // Page increment from scroll: fetch next page and append
+  useEffect(() => {
+    if (page === 1) return;
+    fetchJobs(filters, page, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const handleFiltersChange = (f: JobFilters) => {
     setFilters(f);
-    setPage(1);
     setSelected(null);
   };
 
@@ -80,31 +139,21 @@ export function JobBoard() {
                 />
               ))}
             </div>
-
-            {/* Pagination */}
-            {total > limit && (
-              <div className="flex items-center justify-center gap-2 mt-6">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage(p => p - 1)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-slate-500">
-                  Page {page} of {Math.ceil(total / limit)}
-                </span>
-                <button
-                  disabled={page >= Math.ceil(total / limit)}
-                  onClick={() => setPage(p => p + 1)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50"
-                >
-                  Next
-                </button>
-              </div>
-            )}
           </>
         )}
+
+        {/*
+          Sentinel is ALWAYS rendered (outside the loading/empty conditionals) so
+          the IntersectionObserver can attach on first mount. The observer only
+          fires on intersection *changes*, so recheckSentinel() forces re-evaluation
+          after each fetch in case sentinel is still in viewport.
+        */}
+        <div ref={sentinelRef} className="py-4 flex justify-center">
+          {loadingMore && <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />}
+          {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
+            <p className="text-xs text-slate-400">All {total.toLocaleString()} jobs loaded</p>
+          )}
+        </div>
       </div>
 
       {/* Right: job detail panel */}

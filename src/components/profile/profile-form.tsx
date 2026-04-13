@@ -142,20 +142,21 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
   };
 
   const inputClass =
-    "w-full px-4 py-2.5 rounded-lg border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
-  const labelClass = "block text-sm font-medium text-slate-700 mb-1";
-  const sectionClass = "bg-white rounded-xl border border-slate-200 p-6 space-y-4";
+    "bg-black border border-white/10 text-white rounded-xl px-4 py-2.5 w-full focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10 placeholder:text-zinc-700 text-sm";
+  const labelClass = "block text-sm text-zinc-400 font-medium mb-1";
+  const sectionClass = "bg-[#0a0a0a] border border-white/8 rounded-2xl p-6 space-y-4";
+  const sectionTitleClass = "text-white font-semibold text-sm uppercase tracking-wide mb-4";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-2 text-green-600 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 text-sm">
           <CheckCircle className="w-4 h-4 shrink-0" />
           Profile saved successfully!
         </div>
@@ -163,7 +164,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
       {/* Personal Info */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Personal Information</h2>
+        <h2 className={sectionTitleClass}>Personal Information</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>First Name *</label>
@@ -192,7 +193,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
       {/* Professional Links */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Professional Links</h2>
+        <h2 className={sectionTitleClass}>Professional Links</h2>
         <div>
           <label className={labelClass}>LinkedIn URL</label>
           <input className={inputClass} type="url" value={form.linkedinUrl} onChange={(e) => set("linkedinUrl", e.target.value)} placeholder="https://linkedin.com/in/yourname" />
@@ -209,25 +210,25 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
       {/* Resume */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Resume</h2>
-        <p className="text-sm text-slate-500 -mt-2">
+        <h2 className={sectionTitleClass}>Resume</h2>
+        <p className="text-sm text-zinc-500 -mt-2">
           Your resume is attached automatically when you apply. PDF only, max 8MB.
         </p>
 
         {resumeUrl ? (
-          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+          <div className="flex items-center justify-between bg-[#111111] border border-white/8 rounded-xl px-4 py-3">
             <div className="flex items-center gap-3">
-              <FileText className="w-5 h-5 text-green-600 shrink-0" />
+              <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-green-800">{resumeFileName || "resume.pdf"}</p>
+                <p className="text-sm font-medium text-green-400">{resumeFileName || "resume.pdf"}</p>
                 <a href={resumeUrl} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-green-600 hover:underline">
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
                   Preview
                 </a>
               </div>
             </div>
             <button type="button" onClick={() => { setResumeUrl(""); setResumeFileName(""); }}
-              className="text-green-500 hover:text-green-700">
+              className="text-zinc-600 hover:text-zinc-400 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -236,25 +237,25 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-8 text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-colors disabled:opacity-50"
+            className="w-full flex flex-col items-center justify-center gap-2 bg-black border-2 border-dashed border-white/10 rounded-xl py-8 hover:border-white/20 transition-colors disabled:opacity-50"
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                <span className="text-sm">Uploading...</span>
+                <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+                <span className="text-sm text-zinc-500">Uploading...</span>
               </>
             ) : (
               <>
-                <Upload className="w-6 h-6" />
-                <span className="text-sm font-medium">Click to upload resume</span>
-                <span className="text-xs">PDF · Max 8MB</span>
+                <Upload className="w-6 h-6 text-zinc-600" />
+                <span className="text-sm font-medium text-zinc-400">Upload PDF</span>
+                <span className="text-xs text-zinc-600">Max 8MB</span>
               </>
             )}
           </button>
         )}
 
         {uploadError && (
-          <p className="text-sm text-red-500 flex items-center gap-1">
+          <p className="text-sm text-red-400 flex items-center gap-1">
             <AlertCircle className="w-4 h-4" /> {uploadError}
           </p>
         )}
@@ -270,7 +271,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
       {/* Professional Summary */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Professional Summary</h2>
+        <h2 className={sectionTitleClass}>Professional Summary</h2>
         <div>
           <label className={labelClass}>Headline</label>
           <input className={inputClass} value={form.headline} onChange={(e) => set("headline", e.target.value)} placeholder="Senior Software Engineer at Acme Corp" />
@@ -289,50 +290,79 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
         </div>
         <div>
           <label className={labelClass}>Bio / Summary</label>
-          <textarea className={inputClass} rows={4} value={form.summary} onChange={(e) => set("summary", e.target.value)} placeholder="Tell employers about yourself..." />
+          <textarea
+            className={`${inputClass} resize-none`}
+            rows={4}
+            value={form.summary}
+            onChange={(e) => set("summary", e.target.value)}
+            placeholder="Tell employers about yourself..."
+          />
         </div>
       </div>
 
       {/* Salary Preferences */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Salary Expectations</h2>
+        <h2 className={sectionTitleClass}>Salary Expectations</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Minimum (USD/year)</label>
-            <input className={inputClass} type="number" min="0" value={form.desiredSalaryMin} onChange={(e) => set("desiredSalaryMin", e.target.value)} placeholder="120000" />
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">$</span>
+              <input
+                className={`${inputClass} pl-7`}
+                type="number"
+                min="0"
+                value={form.desiredSalaryMin}
+                onChange={(e) => set("desiredSalaryMin", e.target.value)}
+                placeholder="120000"
+              />
+            </div>
           </div>
           <div>
             <label className={labelClass}>Maximum (USD/year)</label>
-            <input className={inputClass} type="number" min="0" value={form.desiredSalaryMax} onChange={(e) => set("desiredSalaryMax", e.target.value)} placeholder="160000" />
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">$</span>
+              <input
+                className={`${inputClass} pl-7`}
+                type="number"
+                min="0"
+                value={form.desiredSalaryMax}
+                onChange={(e) => set("desiredSalaryMax", e.target.value)}
+                placeholder="160000"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Work Preferences */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Work Preferences</h2>
-        <div className="space-y-3">
+        <h2 className={sectionTitleClass}>Work Preferences</h2>
+        <div className="flex gap-3">
           {[
-            { key: "openToRemote" as const, label: "Open to Remote" },
-            { key: "openToHybrid" as const, label: "Open to Hybrid" },
-            { key: "openToOnsite" as const, label: "Open to On-site" },
+            { key: "openToRemote" as const, label: "Remote" },
+            { key: "openToHybrid" as const, label: "Hybrid" },
+            { key: "openToOnsite" as const, label: "Onsite" },
           ].map(({ key, label }) => (
-            <label key={key} className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form[key] as boolean}
-                onChange={(e) => set(key, e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-slate-700">{label}</span>
-            </label>
+            <button
+              key={key}
+              type="button"
+              onClick={() => set(key, !form[key])}
+              className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
+                form[key]
+                  ? "bg-white text-black border-white font-medium"
+                  : "bg-white/5 border-white/10 text-zinc-400"
+              }`}
+            >
+              {label}
+            </button>
           ))}
         </div>
       </div>
 
       {/* Education */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Education</h2>
+        <h2 className={sectionTitleClass}>Education</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Highest Degree</label>
@@ -365,7 +395,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
       {/* Work Authorization */}
       <div className={sectionClass}>
-        <h2 className="text-base font-semibold text-slate-900">Work Authorization</h2>
+        <h2 className={sectionTitleClass}>Work Authorization</h2>
         <div>
           <label className={labelClass}>Authorization Status</label>
           <select className={inputClass} value={form.workAuthorization} onChange={(e) => set("workAuthorization", e.target.value)}>
@@ -381,19 +411,21 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             type="checkbox"
             checked={form.requiresSponsorship}
             onChange={(e) => set("requiresSponsorship", e.target.checked)}
-            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="w-4 h-4 rounded accent-white"
           />
-          <span className="text-sm text-slate-700">I require visa sponsorship</span>
+          <span className="text-sm text-zinc-400">I require visa sponsorship</span>
         </label>
       </div>
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="w-full py-3 px-6 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
-      >
-        {saving ? "Saving..." : "Save Profile"}
-      </button>
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={saving}
+          className="bg-white text-black font-semibold rounded-xl px-6 py-3 hover:bg-zinc-100 transition-colors disabled:opacity-50 text-sm"
+        >
+          {saving ? "Saving..." : "Save Profile"}
+        </button>
+      </div>
     </form>
   );
 }

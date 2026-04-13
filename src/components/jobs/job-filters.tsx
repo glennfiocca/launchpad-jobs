@@ -41,13 +41,14 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
     setCompany(""); setRemote(false); setEmploymentType("");
   };
 
-  const inputClass = "w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white";
+  const inputClass =
+    "w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10";
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 space-y-3">
+    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 mb-4 space-y-3">
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
         <input
           type="text"
           placeholder="Job title, keyword, company..."
@@ -60,7 +61,7 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
       <div className="grid grid-cols-2 gap-3">
         {/* Location */}
         <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <input
             type="text"
             placeholder="Location"
@@ -72,7 +73,7 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
 
         {/* Company */}
         <div className="relative">
-          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <input
             type="text"
             placeholder="Company"
@@ -87,7 +88,7 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setShowMore(!showMore)}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+          className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
         >
           <Filter className="w-3.5 h-3.5" />
           {showMore ? "Less filters" : "More filters"}
@@ -99,41 +100,45 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
               type="checkbox"
               checked={remote}
               onChange={(e) => setRemote(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="w-3.5 h-3.5 rounded accent-white border-white/20"
             />
-            <span className="text-sm text-slate-600">Remote only</span>
+            <span className="text-sm text-zinc-400">Remote only</span>
           </label>
 
           {hasFilters && (
             <button
               onClick={clearAll}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors underline"
             >
               <X className="w-3 h-3" />
-              Clear
+              Clear all
             </button>
           )}
         </div>
       </div>
 
       {showMore && (
-        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/8">
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Department</label>
+            <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1.5">
+              Department
+            </label>
             <input
               type="text"
               placeholder="Engineering, Sales..."
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Employment Type</label>
+            <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1.5">
+              Employment Type
+            </label>
             <select
               value={employmentType}
               onChange={(e) => setEmploymentType(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
             >
               <option value="">Any</option>
               <option value="full_time">Full-time</option>

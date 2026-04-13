@@ -9,15 +9,15 @@ export function ProfileTabs({ profile }: { profile: UserProfile | null }) {
   const [tab, setTab] = useState<"profile" | "voluntary">("profile");
 
   const tabClass = (active: boolean) =>
-    `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+    `text-sm font-medium transition-colors border-b-2 pb-3 ${
       active
-        ? "border-blue-600 text-blue-600"
-        : "border-transparent text-slate-500 hover:text-slate-700"
+        ? "text-white border-white -mb-px font-medium"
+        : "text-zinc-500 hover:text-zinc-300 border-transparent"
     }`;
 
   return (
     <div>
-      <div className="flex border-b border-slate-200 mb-6">
+      <div className="flex gap-6 border-b border-white/8 mb-6">
         <button className={tabClass(tab === "profile")} onClick={() => setTab("profile")}>
           Profile
         </button>

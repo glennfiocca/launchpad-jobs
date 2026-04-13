@@ -36,11 +36,11 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
   }, {});
 
   return (
-    <div className="flex gap-6">
-      {/* Left: tab + list */}
-      <div className={`flex-1 min-w-0 ${selected ? "hidden lg:flex lg:flex-col" : "flex flex-col"}`}>
-        {/* Status tabs */}
-        <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1">
+    <div className="bg-black flex gap-4">
+      {/* Left panel: status tabs + application list */}
+      <div className={`flex-1 min-w-0 bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col ${selected ? "hidden lg:flex" : "flex"}`}>
+        {/* Status filter pills */}
+        <div className="flex items-center gap-1 p-3 overflow-x-auto border-b border-white/5">
           {STATUS_TABS.map(({ key, label }) => {
             const count = key === "ALL" ? applications.length : (counts[key] ?? 0);
             return (
@@ -49,15 +49,13 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
                 onClick={() => setActiveTab(key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                   activeTab === key
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    ? "bg-white/10 text-white"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
                 }`}
               >
                 {label}
                 {count > 0 && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    activeTab === key ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
-                  }`}>
+                  <span className="bg-white/8 text-zinc-400 text-xs rounded-full px-1.5 py-0.5 ml-1">
                     {count}
                   </span>
                 )}
@@ -66,12 +64,13 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
           })}
         </div>
 
+        {/* Application list */}
         {filtered.length === 0 ? (
-          <div className="text-center py-16 text-slate-400 text-sm">
+          <div className="text-center py-16 text-zinc-600 text-sm">
             No applications in this category
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="flex-1 overflow-y-auto">
             {filtered.map((app) => (
               <ApplicationCard
                 key={app.id}
@@ -84,7 +83,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
         )}
       </div>
 
-      {/* Right: detail */}
+      {/* Right panel: detail */}
       {selected && (
         <div className="w-full lg:w-[520px] shrink-0">
           <ApplicationDetail

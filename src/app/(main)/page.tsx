@@ -3,66 +3,84 @@ import { ArrowRight, Zap, BarChart3, MessageSquare } from "lucide-react";
 
 export default function HomePage() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="bg-black">
       {/* Hero */}
-      <div className="text-center py-24">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm font-medium mb-6">
-          <Zap className="w-3.5 h-3.5" />
-          One-click applications powered by AI
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Subtle radial glow behind hero text */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex items-start justify-center overflow-hidden"
+        >
+          <div className="mt-16 w-[600px] h-[400px] rounded-full bg-blue-500/10 blur-[120px]" />
         </div>
-        <h1 className="text-5xl sm:text-6xl font-extrabold text-slate-900 leading-tight mb-6">
-          Apply to your dream job
-          <br />
-          <span className="text-blue-600">in one click.</span>
-        </h1>
-        <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-10">
-          Fill your profile once. Apply everywhere instantly. AI tracks your applications
-          and keeps you informed — no more spreadsheets.
-        </p>
-        <div className="flex items-center justify-center gap-4">
-          <Link
-            href="/jobs"
-            className="flex items-center gap-2 px-8 py-4 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors text-lg"
-          >
-            Browse Jobs
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-          <Link
-            href="/auth/signin"
-            className="flex items-center gap-2 px-8 py-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold hover:border-slate-300 hover:bg-white transition-colors text-lg"
-          >
-            Create Profile
-          </Link>
+
+        <div className="relative text-center py-28">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-sm font-medium mb-8">
+            <Zap className="w-3.5 h-3.5 text-blue-400" />
+            One-click applications powered by AI
+          </div>
+          <h1 className="text-5xl sm:text-6xl font-semibold text-white leading-tight mb-6 tracking-tight">
+            Apply to your dream job
+            <br />
+            <span className="text-zinc-400">in one click.</span>
+          </h1>
+          <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Fill your profile once. Apply everywhere instantly. AI tracks your applications
+            and keeps you informed — no more spreadsheets.
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <Link
+              href="/jobs"
+              className="flex items-center gap-2 px-8 py-4 rounded-xl bg-white text-black font-semibold hover:bg-white/90 transition-colors text-base"
+            >
+              Browse Jobs
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+            <Link
+              href="/auth/signin"
+              className="flex items-center gap-2 px-8 py-4 rounded-xl border border-white/10 text-white font-semibold hover:border-white/25 transition-colors text-base"
+            >
+              Create Profile
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* Features */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-24">
-        {[
-          {
-            icon: <Zap className="w-6 h-6 text-blue-600" />,
-            title: "One-Click Apply",
-            desc: "Your profile auto-fills every application. What used to take 20 minutes takes 1 second.",
-          },
-          {
-            icon: <BarChart3 className="w-6 h-6 text-green-600" />,
-            title: "Smart Tracking",
-            desc: "AI reads your recruiting emails and automatically updates your application status.",
-          },
-          {
-            icon: <MessageSquare className="w-6 h-6 text-purple-600" />,
-            title: "In-App Messaging",
-            desc: "All recruiter communications live in one place. Never lose track of a conversation.",
-          },
-        ].map((feature) => (
-          <div key={feature.title} className="bg-white rounded-2xl border border-slate-200 p-6">
-            <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center mb-4">
-              {feature.icon}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-28">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {[
+            {
+              icon: <Zap className="w-5 h-5 text-blue-400" />,
+              iconBg: "bg-blue-500/10",
+              title: "One-Click Apply",
+              desc: "Your profile auto-fills every application. What used to take 20 minutes takes 1 second.",
+            },
+            {
+              icon: <BarChart3 className="w-5 h-5 text-green-400" />,
+              iconBg: "bg-green-500/10",
+              title: "Smart Tracking",
+              desc: "AI reads your recruiting emails and automatically updates your application status.",
+            },
+            {
+              icon: <MessageSquare className="w-5 h-5 text-purple-400" />,
+              iconBg: "bg-purple-500/10",
+              title: "In-App Messaging",
+              desc: "All recruiter communications live in one place. Never lose track of a conversation.",
+            },
+          ].map((feature) => (
+            <div
+              key={feature.title}
+              className="bg-[#0a0a0a] border border-white/8 rounded-2xl p-6 hover:border-white/15 transition-colors"
+            >
+              <div className={`w-9 h-9 ${feature.iconBg} rounded-lg flex items-center justify-center mb-4`}>
+                {feature.icon}
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2">{feature.title}</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed">{feature.desc}</p>
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">{feature.title}</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">{feature.desc}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -8,11 +8,11 @@ export default async function SignInPage() {
   if (session) redirect("/dashboard");
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-black px-4">
+      <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Pipeline</h1>
-          <p className="text-slate-500 mt-2">Apply to your dream jobs in one click</p>
+          <p className="text-lg font-bold text-white tracking-tight">Pipeline</p>
+          <p className="text-zinc-400 text-sm mt-1">Apply to your dream jobs in one click</p>
         </div>
         <SignInForm />
       </div>

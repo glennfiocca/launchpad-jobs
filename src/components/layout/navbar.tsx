@@ -11,14 +11,12 @@ export function Navbar() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
+    <nav className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-white/8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-slate-900">
-            <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Rocket className="w-4 h-4 text-white" />
-            </div>
+          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-white">
+            <Rocket className="w-5 h-5 text-white" />
             Pipeline
           </Link>
 
@@ -29,8 +27,8 @@ export function Navbar() {
               className={cn(
                 "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 pathname?.startsWith("/jobs")
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  ? "text-white bg-white/8"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
               )}
             >
               Browse Jobs
@@ -43,8 +41,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     pathname?.startsWith("/dashboard")
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      ? "text-white bg-white/8"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                   )}
                 >
                   <LayoutDashboard className="w-4 h-4" />
@@ -55,8 +53,8 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     pathname === "/profile"
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      ? "text-white bg-white/8"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                   )}
                 >
                   <User className="w-4 h-4" />
@@ -64,7 +62,7 @@ export function Navbar() {
                 </Link>
                 <button
                   onClick={() => signOut({ callbackUrl: "/" })}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-white transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out
@@ -73,7 +71,7 @@ export function Navbar() {
             ) : (
               <Link
                 href="/auth/signin"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white text-black hover:bg-white/90 transition-colors"
               >
                 <LogIn className="w-4 h-4" />
                 Sign In

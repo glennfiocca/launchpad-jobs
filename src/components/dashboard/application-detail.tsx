@@ -13,14 +13,14 @@ interface ApplicationDetailProps {
   onClose: () => void;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  blue: "bg-blue-50 text-blue-700",
-  yellow: "bg-yellow-50 text-yellow-700",
-  purple: "bg-purple-50 text-purple-700",
-  orange: "bg-orange-50 text-orange-700",
-  green: "bg-green-50 text-green-700",
-  red: "bg-red-50 text-red-700",
-  gray: "bg-slate-50 text-slate-600",
+const STATUS_BADGE_COLORS: Record<string, string> = {
+  blue: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+  yellow: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+  purple: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
+  orange: "bg-orange-500/10 text-orange-400 border border-orange-500/20",
+  green: "bg-green-500/10 text-green-400 border border-green-500/20",
+  red: "bg-red-500/10 text-red-400 border border-red-500/20",
+  gray: "bg-zinc-800 text-zinc-400 border border-zinc-700",
 };
 
 type Tab = "overview" | "emails" | "timeline";
@@ -28,7 +28,7 @@ type Tab = "overview" | "emails" | "timeline";
 export function ApplicationDetail({ application, onClose }: ApplicationDetailProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const statusConfig = STATUS_CONFIG[application.status];
-  const statusColorClass = STATUS_COLORS[statusConfig.color];
+  const statusBadgeClass = STATUS_BADGE_COLORS[statusConfig.color] ?? STATUS_BADGE_COLORS.gray;
 
   const NEXT_STEPS: Partial<Record<ApplicationStatus, string>> = {
     APPLIED: "Wait for the recruiter to review your application. Usually takes 1–2 weeks.",
@@ -41,12 +41,13 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 h-[calc(100vh-8rem)] overflow-hidden flex flex-col sticky top-24">
+    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl h-[calc(100vh-8rem)] overflow-hidden flex flex-col sticky top-24">
       {/* Header */}
-      <div className="p-5 border-b border-slate-100">
+      <div className="p-6 border-b border-white/8">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-bold overflow-hidden">
+            {/* Company logo */}
+            <div className="w-10 h-10 rounded-lg bg-white/8 flex items-center justify-center text-zinc-400 font-bold overflow-hidden shrink-0">
               {application.job.company.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={application.job.company.logoUrl} alt={application.job.company.name} className="w-full h-full object-cover" />
@@ -55,17 +56,20 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
               )}
             </div>
             <div>
-              <p className="text-xs text-slate-500">{application.job.company.name}</p>
-              <h2 className="text-base font-bold text-slate-900">{application.job.title}</h2>
+              <p className="text-zinc-400 text-xs">{application.job.company.name}</p>
+              <h2 className="text-white text-lg font-semibold">{application.job.title}</h2>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+          <button
+            onClick={onClose}
+            className="text-zinc-500 hover:text-white hover:bg-white/8 rounded-lg p-1.5 transition-colors"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Status badge + next steps */}
-        <div className={cn("rounded-lg px-3 py-2.5 mb-3", statusColorClass)}>
+        <div className={cn("rounded-xl px-3 py-2.5 mb-3", statusBadgeClass)}>
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-semibold uppercase tracking-wide">{statusConfig.label}</span>
             <span className="text-xs opacity-70">{formatDate(application.appliedAt)}</span>
@@ -73,22 +77,34 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
           <p className="text-xs opacity-80">{NEXT_STEPS[application.status]}</p>
         </div>
 
-        {/* Meta */}
-        <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+        {/* Meta row */}
+        <div className="flex flex-wrap gap-3 text-zinc-500 text-sm">
           {application.job.location && (
-            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{application.job.location}</span>
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              {application.job.location}
+            </span>
           )}
-          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Applied {timeAgo(application.appliedAt)}</span>
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            Applied {timeAgo(application.appliedAt)}
+          </span>
           {application.job.absoluteUrl && (
-            <a href={application.job.absoluteUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">
-              <ExternalLink className="w-3 h-3" />View job
+            <a
+              href={application.job.absoluteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              View job
             </a>
           )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-100 px-5">
+      <div className="flex border-b border-white/8 px-6">
         {(["overview", "emails", "timeline"] as Tab[]).map((t) => (
           <button
             key={t}
@@ -96,13 +112,13 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
             className={cn(
               "px-3 py-2.5 text-sm font-medium capitalize border-b-2 -mb-px transition-colors",
               tab === t
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-slate-500 hover:text-slate-700"
+                ? "text-white border-white"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
             )}
           >
             {t}
             {t === "emails" && application.emails.length > 0 && (
-              <span className="ml-1.5 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">
+              <span className="ml-1 bg-white/10 text-zinc-400 text-xs rounded-full px-1.5 py-0.5">
                 {application.emails.length}
               </span>
             )}
@@ -113,26 +129,26 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-5">
         {tab === "overview" && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tracking Email</h3>
-              <div className="bg-slate-50 rounded-lg p-3 text-xs font-mono text-slate-600 break-all">
+              <h3 className="text-xs text-zinc-600 uppercase tracking-wide font-medium mb-2">Tracking Email</h3>
+              <div className="bg-black border border-white/10 rounded-xl p-3 font-mono text-zinc-300 text-sm break-all">
                 {application.trackingEmail ?? "Not assigned"}
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-zinc-600 mt-1">
                 Forward recruiting emails here to auto-track status.
               </p>
             </div>
             {application.userNotes && (
               <div>
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Notes</h3>
-                <p className="text-sm text-slate-700 whitespace-pre-wrap">{application.userNotes}</p>
+                <h3 className="text-xs text-zinc-600 uppercase tracking-wide font-medium mb-2">Notes</h3>
+                <p className="text-sm text-zinc-300 whitespace-pre-wrap">{application.userNotes}</p>
               </div>
             )}
             {application.externalApplicationId && (
               <div>
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Application ID</h3>
-                <p className="text-xs font-mono text-slate-600">{application.externalApplicationId}</p>
+                <h3 className="text-xs text-zinc-600 uppercase tracking-wide font-medium mb-2">Application ID</h3>
+                <p className="text-xs font-mono text-zinc-400">{application.externalApplicationId}</p>
               </div>
             )}
           </div>
@@ -148,25 +164,27 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
         {tab === "timeline" && (
           <div className="space-y-3">
             {application.statusHistory.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">No history yet</p>
+              <p className="text-sm text-zinc-600 text-center py-8">No history yet</p>
             ) : (
               <div className="relative">
-                <div className="absolute left-3 top-0 bottom-0 w-px bg-slate-200" />
+                {/* Connector line */}
+                <div className="absolute left-3 top-0 bottom-0 w-px bg-white/10" />
                 <div className="space-y-4">
                   {application.statusHistory.map((entry) => (
                     <div key={entry.id} className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-white border-2 border-blue-400 shrink-0 z-10 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-blue-400" />
+                      {/* Timeline dot */}
+                      <div className="w-6 h-6 rounded-full bg-white/8 border border-white/15 shrink-0 z-10 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-white" />
                       </div>
                       <div className="flex-1 min-w-0 pb-1">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-slate-900">
+                          <p className="text-sm font-medium text-white">
                             {STATUS_CONFIG[entry.toStatus].label}
                           </p>
-                          <span className="text-xs text-slate-400">{timeAgo(entry.createdAt)}</span>
+                          <span className="text-xs text-zinc-500">{timeAgo(entry.createdAt)}</span>
                         </div>
-                        {entry.reason && <p className="text-xs text-slate-500 mt-0.5">{entry.reason}</p>}
-                        <p className="text-xs text-slate-400">via {entry.triggeredBy}</p>
+                        {entry.reason && <p className="text-xs text-zinc-500 mt-0.5">{entry.reason}</p>}
+                        <p className="text-xs text-zinc-600">via {entry.triggeredBy}</p>
                       </div>
                     </div>
                   ))}

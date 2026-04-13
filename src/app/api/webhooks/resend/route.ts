@@ -23,7 +23,9 @@ const resendWebhookSchema = z.object({
   }),
 });
 
-const resend = new Resend(process.env.RESEND_API_KEY ?? "");
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY ?? "");
+}
 
 async function verifyWebhookSecret(): Promise<boolean> {
   const headersList = await headers();
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   // Fetch email body — not included in webhook payload; 502 on failure
-  const { data: emailContent, error: fetchError } = await resend.emails.receiving.get(data.email_id);
+  const { data: emailContent, error: fetchError } = await getResend().emails.receiving.get(data.email_id);
   if (fetchError || !emailContent) {
     console.error("Failed to fetch inbound email body:", fetchError);
     return NextResponse.json({ error: "Failed to fetch email content" }, { status: 502 });

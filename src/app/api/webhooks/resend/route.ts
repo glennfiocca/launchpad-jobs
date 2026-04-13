@@ -1,62 +1,59 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { Resend } from "resend";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { classifyRecruitingEmail, shouldUpdateStatus } from "@/lib/ai";
 import { sendStatusUpdate } from "@/lib/email";
 import type { ApplicationStatus } from "@prisma/client";
 import { STATUS_CONFIG } from "@/types";
 
-// Resend inbound email webhook payload type
-interface ResendInboundEmail {
-  from: string;
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-  messageId?: string;
-  date?: string;
-}
+const resendWebhookSchema = z.object({
+  type: z.string(),
+  created_at: z.string(),
+  data: z.object({
+    email_id: z.string().min(1),
+    from: z.string(),
+    to: z.array(z.string()).min(1),
+    cc: z.array(z.string()).optional(),
+    bcc: z.array(z.string()).optional(),
+    subject: z.string(),
+    message_id: z.string(),
+    created_at: z.string(),
+  }),
+});
 
-// Verify webhook came from Resend (simple secret check)
-function verifyWebhookSecret(req: Request): boolean {
-  const headersList = headers();
-  const secret = (headersList as unknown as Map<string, string>).get("x-resend-signature") ?? "";
+const resend = new Resend(process.env.RESEND_API_KEY ?? "");
+
+async function verifyWebhookSecret(): Promise<boolean> {
+  const headersList = await headers();
+  const secret = headersList.get("x-resend-signature") ?? "";
   return !process.env.RESEND_INBOUND_SECRET || secret === process.env.RESEND_INBOUND_SECRET;
 }
 
 export async function POST(request: Request) {
-  if (!verifyWebhookSecret(request)) {
+  if (!(await verifyWebhookSecret())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let payload: ResendInboundEmail;
-  try {
-    payload = await request.json() as ResendInboundEmail;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const parseResult = resendWebhookSchema.safeParse(await request.json());
+  if (!parseResult.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
+  const { data } = parseResult.data;
 
-  const { from, to, subject, text, html, messageId, date } = payload;
-
-  // Find the application by tracking email address
-  // The "to" field contains the tracking address like app-{id}@track.trypipeline.ai
-  const toAddresses = Array.isArray(to) ? to : [to];
-
-  let application = null;
-  for (const toAddr of toAddresses) {
-    application = await db.application.findUnique({
-      where: { trackingEmail: toAddr },
-      include: { user: true, job: { include: { company: true } } },
-    });
-    if (application) break;
-  }
+  // Locate application by tracking address using a single IN query
+  const application = await db.application.findFirst({
+    where: { trackingEmail: { in: data.to } },
+    include: { user: true, job: { include: { company: true } } },
+  });
 
   if (!application) {
-    // Not a tracked application email — ignore
     return NextResponse.json({ received: true, matched: false });
   }
 
-  // Deduplicate by messageId
+  // Deduplicate by message_id
+  const messageId = data.message_id || null;
   if (messageId) {
     const existing = await db.applicationEmail.findUnique({ where: { messageId } });
     if (existing) {
@@ -64,25 +61,37 @@ export async function POST(request: Request) {
     }
   }
 
-  // Store the email
+  // Fetch email body — not included in webhook payload; 502 on failure
+  const { data: emailContent, error: fetchError } = await resend.emails.receiving.get(data.email_id);
+  if (fetchError || !emailContent) {
+    console.error("Failed to fetch inbound email body:", fetchError);
+    return NextResponse.json({ error: "Failed to fetch email content" }, { status: 502 });
+  }
+  const textBody = emailContent.text ?? "";
+  const htmlBody = emailContent.html ?? null;
+
+  // Persist the email record
   const emailRecord = await db.applicationEmail.create({
     data: {
       applicationId: application.id,
-      messageId: messageId ?? null,
-      from,
-      to: Array.isArray(to) ? to.join(", ") : to,
-      subject,
-      body: text,
-      htmlBody: html ?? null,
+      messageId,
+      from: data.from,
+      to: data.to.join(", "),
+      subject: data.subject,
+      body: textBody,
+      htmlBody,
       direction: "inbound",
-      receivedAt: date ? new Date(date) : new Date(),
+      receivedAt: new Date(data.created_at),
     },
   });
 
-  // AI classify the email
-  const classification = await classifyRecruitingEmail(subject, text, application.status);
+  // AI classification
+  const classification = await classifyRecruitingEmail(
+    data.subject,
+    textBody,
+    application.status,
+  );
 
-  // Update email record with AI classification
   await db.applicationEmail.update({
     where: { id: emailRecord.id },
     data: {
@@ -92,30 +101,28 @@ export async function POST(request: Request) {
     },
   });
 
-  // Update application status if appropriate
+  // Conditionally update application status
   if (shouldUpdateStatus(application.status, classification.status, classification.confidence)) {
     const prevStatus = application.status;
 
-    await db.application.update({
-      where: { id: application.id },
-      data: { status: classification.status },
-    });
+    await db.$transaction([
+      db.application.update({
+        where: { id: application.id },
+        data: { status: classification.status },
+      }),
+      db.applicationStatusHistory.create({
+        data: {
+          applicationId: application.id,
+          fromStatus: prevStatus,
+          toStatus: classification.status,
+          reason: `AI classified email: "${data.subject}" (confidence: ${Math.round(classification.confidence * 100)}%)`,
+          triggeredBy: "ai",
+        },
+      }),
+    ]);
 
-    await db.applicationStatusHistory.create({
-      data: {
-        applicationId: application.id,
-        fromStatus: prevStatus,
-        toStatus: classification.status,
-        reason: `AI classified email: "${subject}" (confidence: ${Math.round(classification.confidence * 100)}%)`,
-        triggeredBy: "ai",
-      },
-    });
-
-    // Notify user of status change
     if (application.user.email && application.user.name) {
       const statusConfig = STATUS_CONFIG[classification.status as ApplicationStatus];
-      const appUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`;
-
       await sendStatusUpdate({
         to: application.user.email,
         userName: application.user.name,
@@ -123,12 +130,12 @@ export async function POST(request: Request) {
         companyName: application.job.company.name,
         newStatus: classification.status,
         statusLabel: statusConfig.label,
-        dashboardUrl: appUrl,
-      }).catch((err) => {
+        dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+      }).catch((err: unknown) => {
         console.error("Failed to send status update email:", err);
       });
     }
   }
 
-  return NextResponse.json({ received: true, matched: true, classification });
+  return NextResponse.json({ received: true, matched: true });
 }

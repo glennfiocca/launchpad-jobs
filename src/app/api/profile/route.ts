@@ -58,6 +58,39 @@ export async function GET() {
   });
 }
 
+const voluntarySchema = z.object({
+  voluntaryGender: z.string().nullable().optional(),
+  voluntaryRace: z.string().nullable().optional(),
+  voluntaryVeteranStatus: z.string().nullable().optional(),
+  voluntaryDisability: z.string().nullable().optional(),
+});
+
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json<ApiResponse<never>>(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const body = await request.json();
+  const parsed = voluntarySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json<ApiResponse<never>>(
+      { success: false, error: parsed.error.message },
+      { status: 400 }
+    );
+  }
+
+  const profile = await db.userProfile.updateMany({
+    where: { userId: session.user.id },
+    data: parsed.data,
+  });
+
+  return NextResponse.json<ApiResponse<typeof profile>>({ success: true, data: profile });
+}
+
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

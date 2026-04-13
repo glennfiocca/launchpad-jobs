@@ -56,7 +56,7 @@ export function VoluntaryForm({ initialData }: VoluntaryFormProps) {
 
     try {
       const res = await fetch("/api/profile", {
-        method: "PUT",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });

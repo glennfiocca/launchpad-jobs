@@ -9,16 +9,18 @@ import { STATUS_CONFIG } from "@/types";
 
 const resendWebhookSchema = z.object({
   type: z.string(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   data: z.object({
     email_id: z.string().min(1),
-    from: z.string(),
-    to: z.array(z.string()).min(1),
-    cc: z.array(z.string()).optional(),
-    bcc: z.array(z.string()).optional(),
-    subject: z.string(),
-    message_id: z.string(),
-    created_at: z.string(),
+    from: z.string().default(""),
+    to: z.union([z.array(z.string()), z.string()]).transform((v) =>
+      Array.isArray(v) ? v : [v]
+    ),
+    cc: z.array(z.string()).nullish(),
+    bcc: z.array(z.string()).nullish(),
+    subject: z.string().default(""),
+    message_id: z.string().nullish(),
+    created_at: z.string().optional(),
   }),
 });
 
@@ -29,6 +31,7 @@ function getResend() {
 export async function POST(request: Request) {
   const parseResult = resendWebhookSchema.safeParse(await request.json());
   if (!parseResult.success) {
+    console.error("Resend webhook parse error:", JSON.stringify(parseResult.error.flatten()));
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
   const { data } = parseResult.data;
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
       body: textBody,
       htmlBody,
       direction: "inbound",
-      receivedAt: new Date(data.created_at),
+      receivedAt: data.created_at ? new Date(data.created_at) : new Date(),
     },
   });
 

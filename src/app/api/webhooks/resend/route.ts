@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -27,17 +26,7 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY ?? "");
 }
 
-async function verifyWebhookSecret(): Promise<boolean> {
-  const headersList = await headers();
-  const secret = headersList.get("x-resend-signature") ?? "";
-  return !process.env.RESEND_INBOUND_SECRET || secret === process.env.RESEND_INBOUND_SECRET;
-}
-
 export async function POST(request: Request) {
-  if (!(await verifyWebhookSecret())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const parseResult = resendWebhookSchema.safeParse(await request.json());
   if (!parseResult.success) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });

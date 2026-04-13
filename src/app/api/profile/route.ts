@@ -33,6 +33,10 @@ const profileSchema = z.object({
   graduationYear: z.number().int().min(1950).max(2030).optional(),
   workAuthorization: z.string().optional(),
   requiresSponsorship: z.boolean().default(false),
+  voluntaryGender: z.string().optional(),
+  voluntaryRace: z.string().optional(),
+  voluntaryVeteranStatus: z.string().optional(),
+  voluntaryDisability: z.string().optional(),
 });
 
 export async function GET() {

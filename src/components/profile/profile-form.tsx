@@ -34,6 +34,10 @@ interface FormState {
   graduationYear: string;
   workAuthorization: string;
   requiresSponsorship: boolean;
+  voluntaryGender: string;
+  voluntaryRace: string;
+  voluntaryVeteranStatus: string;
+  voluntaryDisability: string;
 }
 
 function initFormState(data: UserProfile | null): FormState {
@@ -62,6 +66,10 @@ function initFormState(data: UserProfile | null): FormState {
     graduationYear: data?.graduationYear?.toString() ?? "",
     workAuthorization: data?.workAuthorization ?? "",
     requiresSponsorship: data?.requiresSponsorship ?? false,
+    voluntaryGender: data?.voluntaryGender ?? "",
+    voluntaryRace: data?.voluntaryRace ?? "",
+    voluntaryVeteranStatus: data?.voluntaryVeteranStatus ?? "",
+    voluntaryDisability: data?.voluntaryDisability ?? "",
   };
 }
 
@@ -385,6 +393,66 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           />
           <span className="text-sm text-slate-700">I require visa sponsorship</span>
         </label>
+      </div>
+
+      {/* Voluntary Identification */}
+      <div className={sectionClass}>
+        <h2 className="text-base font-semibold text-slate-900">Voluntary Identification</h2>
+        <p className="text-sm text-slate-500 -mt-2">
+          These questions are voluntary and used only for EEOC reporting. Your answers are stored in your profile and auto-filled on applications.
+        </p>
+
+        {/* Gender */}
+        <div>
+          <label className={labelClass}>Gender Identity</label>
+          <select className={inputClass} value={form.voluntaryGender} onChange={(e) => set("voluntaryGender", e.target.value)}>
+            <option value="">Prefer not to answer</option>
+            <option value="Man">Man</option>
+            <option value="Woman">Woman</option>
+            <option value="Non-binary">Non-binary</option>
+            <option value="Prefer to self-describe">Prefer to self-describe</option>
+            <option value="Decline to self-identify">Decline to self-identify</option>
+          </select>
+        </div>
+
+        {/* Race / Ethnicity */}
+        <div>
+          <label className={labelClass}>Race / Ethnicity</label>
+          <select className={inputClass} value={form.voluntaryRace} onChange={(e) => set("voluntaryRace", e.target.value)}>
+            <option value="">Prefer not to answer</option>
+            <option value="American Indian or Alaska Native">American Indian or Alaska Native</option>
+            <option value="Asian">Asian</option>
+            <option value="Black or African American">Black or African American</option>
+            <option value="Hispanic or Latino">Hispanic or Latino</option>
+            <option value="Native Hawaiian or Other Pacific Islander">Native Hawaiian or Other Pacific Islander</option>
+            <option value="White">White</option>
+            <option value="Two or more races">Two or more races</option>
+            <option value="Decline to self-identify">Decline to self-identify</option>
+          </select>
+        </div>
+
+        {/* Veteran Status */}
+        <div>
+          <label className={labelClass}>Veteran Status</label>
+          <select className={inputClass} value={form.voluntaryVeteranStatus} onChange={(e) => set("voluntaryVeteranStatus", e.target.value)}>
+            <option value="">Prefer not to answer</option>
+            <option value="I am not a veteran">I am not a veteran</option>
+            <option value="I identify as one or more of the classifications of a Protected Veteran">I am a Protected Veteran</option>
+            <option value="I am a disabled veteran">I am a disabled veteran</option>
+            <option value="Decline to self-identify">Decline to self-identify</option>
+          </select>
+        </div>
+
+        {/* Disability */}
+        <div>
+          <label className={labelClass}>Disability Status</label>
+          <select className={inputClass} value={form.voluntaryDisability} onChange={(e) => set("voluntaryDisability", e.target.value)}>
+            <option value="">Prefer not to answer</option>
+            <option value="Yes, I have a disability, or have had one in the past">Yes, I have a disability (or have had one in the past)</option>
+            <option value="No, I don't have a disability">No, I don&apos;t have a disability</option>
+            <option value="I don't wish to answer">I don&apos;t wish to answer</option>
+          </select>
+        </div>
       </div>
 
       <button

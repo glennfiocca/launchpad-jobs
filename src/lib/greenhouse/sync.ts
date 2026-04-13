@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { createGreenhouseClient, isRemoteJob, extractDepartment } from "./client";
+import { decode } from "html-entities";
 
 interface SyncResult {
   companyName: string;
@@ -58,7 +59,7 @@ export async function syncGreenhouseBoard(
       remote,
       boardToken,
       absoluteUrl: ghJob.absolute_url,
-      content: ghJob.content ?? null,
+      content: ghJob.content ? decode(ghJob.content) : null,
       isActive: true,
       postedAt: ghJob.updated_at ? new Date(ghJob.updated_at) : null,
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap, Loader2 } from "lucide-react";
@@ -12,8 +12,18 @@ interface JobDetailProps {
   onClose: () => void;
 }
 
+function decodeEntities(html: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = html;
+  return textarea.value;
+}
+
 export function JobDetail({ job, onClose }: JobDetailProps) {
   const { data: session } = useSession();
+  const decodedContent = useMemo(
+    () => (job.content ? decodeEntities(job.content) : null),
+    [job.content]
+  );
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,10 +156,10 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
 
       {/* Job content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {job.content ? (
+        {decodedContent ? (
           <div
             className="job-content text-sm"
-            dangerouslySetInnerHTML={{ __html: job.content }}
+            dangerouslySetInnerHTML={{ __html: decodedContent }}
           />
         ) : (
           <p className="text-slate-400 text-sm">No description available.</p>

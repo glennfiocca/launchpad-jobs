@@ -63,14 +63,10 @@ export async function POST(request: Request) {
     }
   }
 
-  // Fetch email body — not included in webhook payload; 502 on failure
-  const { data: emailContent, error: fetchError } = await getResend().emails.receiving.get(data.email_id);
-  if (fetchError || !emailContent) {
-    console.error("Failed to fetch inbound email body:", fetchError);
-    return NextResponse.json({ error: "Failed to fetch email content" }, { status: 502 });
-  }
-  const textBody = emailContent.text ?? "";
-  const htmlBody = emailContent.html ?? null;
+  // Fetch email body — not in webhook payload; gracefully degrade if unavailable
+  const { data: emailContent } = await getResend().emails.receiving.get(data.email_id);
+  const textBody = emailContent?.text ?? "";
+  const htmlBody = emailContent?.html ?? null;
 
   // Persist the email record
   const emailRecord = await db.applicationEmail.create({
@@ -86,6 +82,11 @@ export async function POST(request: Request) {
       receivedAt: new Date(data.created_at),
     },
   });
+
+  // Skip AI classification if body is empty (content unavailable)
+  if (!textBody) {
+    return NextResponse.json({ received: true, matched: true });
+  }
 
   // AI classification
   const classification = await classifyRecruitingEmail(

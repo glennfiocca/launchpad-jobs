@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -117,9 +118,23 @@ export async function GET(request: Request) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  // Serve from DO Spaces URL if available (production path)
+  // Serve from DO Spaces via presigned URL (private bucket)
   if (profile.resumeUrl) {
-    return NextResponse.redirect(profile.resumeUrl);
+    const spaces = getSpacesClient();
+    if (spaces) {
+      const key = profile.resumeUrl.split(".digitaloceanspaces.com/")[1];
+      const signedUrl = await getSignedUrl(
+        spaces,
+        new GetObjectCommand({
+          Bucket: process.env.DO_SPACES_BUCKET ?? "pipeline-uploads",
+          Key: key,
+          ResponseContentDisposition: `inline; filename="${profile.resumeFileName ?? "resume.pdf"}"`,
+          ResponseContentType: profile.resumeMimeType ?? "application/pdf",
+        }),
+        { expiresIn: 900 } // 15 minutes
+      );
+      return NextResponse.redirect(signedUrl);
+    }
   }
 
   if (!profile.resumeData) {

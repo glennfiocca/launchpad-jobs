@@ -6,6 +6,7 @@ import Link from "next/link";
 import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 import { ApplyModal } from "@/components/jobs/apply-modal";
+import { CompanyLogo } from "@/components/company-logo";
 import type { JobWithCompany } from "@/types";
 
 interface JobDetailProps {
@@ -36,12 +37,11 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-white/8 flex items-center justify-center text-white font-bold overflow-hidden">
-              {job.company.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={job.company.logoUrl} alt={job.company.name} className="w-full h-full object-cover" />
-              ) : (
-                job.company.name.charAt(0).toUpperCase()
-              )}
+              <CompanyLogo
+                name={job.company.name}
+                logoUrl={job.company.logoUrl}
+                website={job.company.website}
+              />
             </div>
             <div>
               <p className="text-sm text-zinc-400">{job.company.name}</p>

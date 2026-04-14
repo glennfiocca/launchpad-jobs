@@ -2,6 +2,7 @@
 
 import { MapPin, Wifi } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
+import { CompanyLogo } from "@/components/company-logo";
 import type { JobWithCompany } from "@/types";
 
 interface JobCardProps {
@@ -24,12 +25,11 @@ export function JobCard({ job, selected, onClick }: JobCardProps) {
       <div className="flex items-start gap-3">
         {/* Company logo */}
         <div className="w-10 h-10 rounded-lg bg-white/8 flex items-center justify-center shrink-0 text-white font-bold text-sm overflow-hidden">
-          {job.company.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={job.company.logoUrl} alt={job.company.name} className="w-full h-full object-cover" />
-          ) : (
-            job.company.name.charAt(0).toUpperCase()
-          )}
+          <CompanyLogo
+            name={job.company.name}
+            logoUrl={job.company.logoUrl}
+            website={job.company.website}
+          />
         </div>
 
         <div className="flex-1 min-w-0">

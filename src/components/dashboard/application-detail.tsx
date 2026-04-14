@@ -6,6 +6,7 @@ import { EmailThread } from "./email-thread";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/types";
 import { STATUS_BADGE_STYLES } from "@/lib/styles";
+import { CompanyLogo } from "@/components/company-logo";
 import type { ApplicationWithJob } from "@/types";
 import type { ApplicationStatus } from "@prisma/client";
 
@@ -38,12 +39,11 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
           <div className="flex items-center gap-3">
             {/* Company logo */}
             <div className="w-10 h-10 rounded-lg bg-white/8 flex items-center justify-center text-zinc-400 font-bold overflow-hidden shrink-0">
-              {application.job.company.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={application.job.company.logoUrl} alt={application.job.company.name} className="w-full h-full object-cover" />
-              ) : (
-                application.job.company.name.charAt(0)
-              )}
+              <CompanyLogo
+                name={application.job.company.name}
+                logoUrl={application.job.company.logoUrl}
+                website={application.job.company.website}
+              />
             </div>
             <div>
               <p className="text-zinc-400 text-xs">{application.job.company.name}</p>

@@ -4,6 +4,7 @@ import { MapPin, Mail } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/types";
 import { STATUS_BADGE_STYLES } from "@/lib/styles";
+import { CompanyLogo } from "@/components/company-logo";
 import type { ApplicationWithJob } from "@/types";
 
 interface ApplicationCardProps {
@@ -30,12 +31,11 @@ export function ApplicationCard({ application, selected, onClick }: ApplicationC
       <div className="flex items-start gap-3">
         {/* Company logo */}
         <div className="rounded-lg bg-white/8 h-9 w-9 flex items-center justify-center text-zinc-400 font-bold text-sm shrink-0 overflow-hidden">
-          {application.job.company.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={application.job.company.logoUrl} alt={application.job.company.name} className="w-full h-full object-cover" />
-          ) : (
-            application.job.company.name.charAt(0)
-          )}
+          <CompanyLogo
+            name={application.job.company.name}
+            logoUrl={application.job.company.logoUrl}
+            website={application.job.company.website}
+          />
         </div>
 
         <div className="flex-1 min-w-0">

@@ -5,7 +5,7 @@ import { SignInForm } from "@/components/auth/signin-form";
 
 export default async function SignInPage() {
   const session = await getServerSession(authOptions);
-  if (session) redirect("/dashboard");
+  if (session) redirect("/profile");
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black px-4">

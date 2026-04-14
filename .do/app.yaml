@@ -1,5 +1,10 @@
 name: launchpad-jobs
 region: nyc
+domains:
+  - domain: trypipeline.ai
+    type: PRIMARY
+  - domain: www.trypipeline.ai
+    type: ALIAS
 services:
   - name: web
     github:

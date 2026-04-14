@@ -80,7 +80,15 @@ export function Footer() {
           <p className="text-xs text-zinc-600">
             © {new Date().getFullYear()} Pipeline. All rights reserved.
           </p>
-          <p className="text-xs text-zinc-600">Built for job seekers who move fast.</p>
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-zinc-600">Built for job seekers who move fast.</p>
+            <a
+              href="https://logo.dev"
+              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Logos provided by Logo.dev
+            </a>
+          </div>
         </div>
       </div>
     </footer>

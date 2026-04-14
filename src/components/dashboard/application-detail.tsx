@@ -13,12 +13,19 @@ import type { ApplicationStatus } from "@prisma/client";
 interface ApplicationDetailProps {
   application: ApplicationWithJob;
   onClose: () => void;
+  onApplicationUpdate?: (updated: ApplicationWithJob) => void;
 }
 
 type Tab = "overview" | "emails" | "timeline";
 
-export function ApplicationDetail({ application, onClose }: ApplicationDetailProps) {
+const TERMINAL_STATUSES: ApplicationStatus[] = ["WITHDRAWN", "LISTING_REMOVED", "REJECTED", "OFFER"];
+
+export function ApplicationDetail({ application, onClose, onApplicationUpdate }: ApplicationDetailProps) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+
   const statusConfig = STATUS_CONFIG[application.status];
 
   const NEXT_STEPS: Partial<Record<ApplicationStatus, string>> = {
@@ -30,6 +37,26 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
     REJECTED: "Don't be discouraged. Request feedback and keep applying.",
     WITHDRAWN: "You've withdrawn from this opportunity.",
   };
+
+  const isTerminal = TERMINAL_STATUSES.includes(application.status);
+
+  async function handleWithdraw() {
+    setIsWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      const res = await fetch(`/api/applications/${application.id}`, { method: "DELETE" });
+      const json = await res.json() as { success: boolean; data?: ApplicationWithJob; error?: string };
+      if (json.success && json.data) {
+        onApplicationUpdate?.(json.data);
+      } else {
+        setWithdrawError(json.error ?? "Failed to withdraw application.");
+      }
+    } catch {
+      setWithdrawError("Network error. Please try again.");
+    }
+    setIsWithdrawing(false);
+    setConfirmingWithdraw(false);
+  }
 
   return (
     <div className="bg-[#0a0a0a] border border-white/8 rounded-xl h-[calc(100vh-8rem)] overflow-hidden flex flex-col sticky top-24">
@@ -46,7 +73,7 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
               />
             </div>
             <div>
-              <p className="text-zinc-400 text-xs">{application.job.company.name}</p>
+              <p className="text-zinc-300 text-xs">{application.job.company.name}</p>
               <h2 className="text-white text-lg font-semibold">{application.job.title}</h2>
             </div>
           </div>
@@ -75,8 +102,52 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
           );
         })()}
 
+        {/* LISTING_REMOVED informational banner */}
+        {application.status === "LISTING_REMOVED" && (
+          <div className="bg-amber-500/8 border border-amber-500/20 text-amber-200 text-xs px-4 py-3 rounded-xl mb-3">
+            This job listing has been removed by the employer. Your application is no longer being reviewed.
+          </div>
+        )}
+
+        {/* Withdraw button / confirm flow */}
+        {!isTerminal && (
+          <div className="flex items-center gap-2 mt-2">
+            {!confirmingWithdraw ? (
+              <button
+                onClick={() => setConfirmingWithdraw(true)}
+                className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 bg-red-500/5 hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-all"
+              >
+                Withdraw
+              </button>
+            ) : (
+              <>
+                <span className="text-xs text-zinc-400">Are you sure?</span>
+                <button
+                  onClick={handleWithdraw}
+                  disabled={isWithdrawing}
+                  className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 bg-red-500/5 hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                >
+                  {isWithdrawing ? "Withdrawing…" : "Yes, withdraw"}
+                </button>
+                <button
+                  onClick={() => { setConfirmingWithdraw(false); setWithdrawError(null); }}
+                  disabled={isWithdrawing}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/8 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Withdraw error */}
+        {withdrawError && (
+          <p className="text-xs text-red-400 mt-2">{withdrawError}</p>
+        )}
+
         {/* Meta row */}
-        <div className="flex flex-wrap gap-3 text-zinc-500 text-sm">
+        <div className="flex flex-wrap gap-3 text-zinc-400 text-sm mt-3">
           {application.job.location && (
             <span className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
@@ -116,7 +187,7 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
           >
             {t}
             {t === "emails" && application.emails.length > 0 && (
-              <span className="ml-1 bg-white/10 text-zinc-400 text-xs rounded-full px-1.5 py-0.5">
+              <span className="ml-1 bg-white/10 text-zinc-300 text-xs rounded-full px-1.5 py-0.5">
                 {application.emails.length}
               </span>
             )}
@@ -129,23 +200,23 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
         {tab === "overview" && (
           <div className="space-y-5">
             <div>
-              <h3 className="text-xs text-zinc-600 uppercase tracking-wide font-medium mb-2">Tracking Email</h3>
+              <h3 className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Tracking Email</h3>
               <div className="bg-black border border-white/10 rounded-xl p-3 font-mono text-zinc-300 text-sm break-all">
                 {application.trackingEmail ?? "Not assigned"}
               </div>
-              <p className="text-xs text-zinc-600 mt-1">
+              <p className="text-xs text-zinc-500 mt-1">
                 Forward recruiting emails here to auto-track status.
               </p>
             </div>
             {application.userNotes && (
               <div>
-                <h3 className="text-xs text-zinc-600 uppercase tracking-wide font-medium mb-2">Notes</h3>
+                <h3 className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Notes</h3>
                 <p className="text-sm text-zinc-300 whitespace-pre-wrap">{application.userNotes}</p>
               </div>
             )}
             {application.externalApplicationId && (
               <div>
-                <h3 className="text-xs text-zinc-600 uppercase tracking-wide font-medium mb-2">Application ID</h3>
+                <h3 className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Application ID</h3>
                 <p className="text-xs font-mono text-zinc-400">{application.externalApplicationId}</p>
               </div>
             )}
@@ -156,13 +227,14 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
           <EmailThread
             applicationId={application.id}
             initialEmails={application.emails}
+            readOnly={application.status === "LISTING_REMOVED" || application.status === "WITHDRAWN"}
           />
         )}
 
         {tab === "timeline" && (
           <div className="space-y-3">
             {application.statusHistory.length === 0 ? (
-              <p className="text-sm text-zinc-600 text-center py-8">No history yet</p>
+              <p className="text-sm text-zinc-500 text-center py-8">No history yet</p>
             ) : (
               <div className="relative">
                 {/* Connector line */}
@@ -182,7 +254,7 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
                           <span className="text-xs text-zinc-500">{timeAgo(entry.createdAt)}</span>
                         </div>
                         {entry.reason && <p className="text-xs text-zinc-500 mt-0.5">{entry.reason}</p>}
-                        <p className="text-xs text-zinc-600">via {entry.triggeredBy}</p>
+                        <p className="text-xs text-zinc-500">via {entry.triggeredBy}</p>
                       </div>
                     </div>
                   ))}

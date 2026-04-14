@@ -25,7 +25,8 @@ export function ApplicationCard({ application, selected, onClick }: ApplicationC
         "w-full text-left p-4 cursor-pointer transition-all border-b border-white/5 relative",
         selected
           ? "bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-indigo-500 before:rounded-r-full"
-          : "hover:bg-white/3"
+          : "hover:bg-white/3",
+        application.status === "LISTING_REMOVED" && "opacity-75"
       )}
     >
       <div className="flex items-start gap-3">
@@ -41,7 +42,7 @@ export function ApplicationCard({ application, selected, onClick }: ApplicationC
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-zinc-400 text-sm">{application.job.company.name}</p>
+              <p className="text-zinc-300 text-sm">{application.job.company.name}</p>
               <p className="text-white font-medium text-sm truncate">{application.job.title}</p>
             </div>
             <span className={cn("inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium", style.badge)}>
@@ -53,16 +54,16 @@ export function ApplicationCard({ application, selected, onClick }: ApplicationC
           {/* Meta row */}
           <div className="flex items-center gap-3 mt-2">
             {application.job.location && (
-              <span className="flex items-center gap-1 text-xs text-zinc-600">
+              <span className="flex items-center gap-1 text-xs text-zinc-500">
                 <MapPin className="w-3 h-3" />
                 {application.job.location}
               </span>
             )}
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-zinc-500">
               Applied {timeAgo(application.appliedAt)}
             </span>
             {hasNewEmail && (
-              <span className="flex items-center gap-1 bg-white/8 text-zinc-400 text-xs rounded-full px-2 py-0.5">
+              <span className="flex items-center gap-1 bg-white/8 text-zinc-300 text-xs rounded-full px-2 py-0.5">
                 <Mail className="w-3 h-3" />
                 {application.emails.length} email{application.emails.length !== 1 ? "s" : ""}
               </span>

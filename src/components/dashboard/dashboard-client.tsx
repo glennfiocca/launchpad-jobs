@@ -11,7 +11,9 @@ interface DashboardClientProps {
   initialApplications: ApplicationWithJob[];
 }
 
-const STATUS_TABS: Array<{ key: ApplicationStatus | "ALL"; label: string }> = [
+type TabKey = ApplicationStatus | "ALL" | "CLOSED";
+
+const STATUS_TABS: Array<{ key: TabKey; label: string }> = [
   { key: "ALL", label: "All" },
   { key: "APPLIED", label: "Applied" },
   { key: "REVIEWING", label: "Reviewing" },
@@ -19,21 +21,40 @@ const STATUS_TABS: Array<{ key: ApplicationStatus | "ALL"; label: string }> = [
   { key: "INTERVIEWING", label: "Interviewing" },
   { key: "OFFER", label: "Offer" },
   { key: "REJECTED", label: "Rejected" },
+  { key: "CLOSED", label: "Closed" },
 ];
 
 export function DashboardClient({ initialApplications }: DashboardClientProps) {
-  const [applications] = useState(initialApplications);
-  const [activeTab, setActiveTab] = useState<ApplicationStatus | "ALL">("ALL");
+  const [applications, setApplications] = useState(initialApplications);
+  const [activeTab, setActiveTab] = useState<TabKey>("ALL");
   const [selected, setSelected] = useState<ApplicationWithJob | null>(null);
 
-  const filtered = activeTab === "ALL"
-    ? applications
-    : applications.filter((a) => a.status === activeTab);
+  const filtered =
+    activeTab === "ALL"
+      ? applications
+      : activeTab === "CLOSED"
+        ? applications.filter((a) => a.status === "WITHDRAWN" || a.status === "LISTING_REMOVED")
+        : applications.filter((a) => a.status === activeTab);
 
   const counts = applications.reduce<Record<string, number>>((acc, a) => {
     acc[a.status] = (acc[a.status] ?? 0) + 1;
     return acc;
   }, {});
+
+  const closedCount = (counts["WITHDRAWN"] ?? 0) + (counts["LISTING_REMOVED"] ?? 0);
+
+  function getTabCount(key: TabKey): number {
+    if (key === "ALL") return applications.length;
+    if (key === "CLOSED") return closedCount;
+    return counts[key] ?? 0;
+  }
+
+  function handleApplicationUpdate(updated: ApplicationWithJob) {
+    setApplications((prev) =>
+      prev.map((a) => (a.id === updated.id ? updated : a))
+    );
+    setSelected(updated);
+  }
 
   return (
     <div className="bg-black flex gap-4">
@@ -42,7 +63,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
         {/* Status filter pills */}
         <div className="flex items-center gap-1 p-3 overflow-x-auto border-b border-white/5">
           {STATUS_TABS.map(({ key, label }) => {
-            const count = key === "ALL" ? applications.length : (counts[key] ?? 0);
+            const count = getTabCount(key);
             return (
               <button
                 key={key}
@@ -89,6 +110,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
           <ApplicationDetail
             application={selected}
             onClose={() => setSelected(null)}
+            onApplicationUpdate={handleApplicationUpdate}
           />
         </div>
       )}

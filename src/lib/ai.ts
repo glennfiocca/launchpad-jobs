@@ -85,7 +85,7 @@ Respond with ONLY valid JSON in this exact format:
   }
 }
 
-// STATUS_PRIORITY: higher = more advanced in the process
+// STATUS_PRIORITY: higher = more advanced in the process; terminal/inactive statuses are 0
 const STATUS_PRIORITY: Record<ApplicationStatus, number> = {
   APPLIED: 1,
   REVIEWING: 2,
@@ -94,6 +94,7 @@ const STATUS_PRIORITY: Record<ApplicationStatus, number> = {
   OFFER: 5,
   REJECTED: 0,
   WITHDRAWN: 0,
+  LISTING_REMOVED: 0,
 };
 
 // Only advance status if the AI is confident AND the new status is further in the process

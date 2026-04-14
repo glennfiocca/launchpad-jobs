@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
 import { JobDetail } from "./job-detail";
@@ -22,6 +23,7 @@ export function JobBoard() {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const hasMoreRef = useRef(false);
+  const hasAnimatedRef = useRef(false);
 
   const hasMore = jobs.length < total;
   hasMoreRef.current = hasMore;
@@ -130,14 +132,30 @@ export function JobBoard() {
           <>
             <p className="text-sm text-slate-500 mb-3">{total.toLocaleString()} jobs found</p>
             <div className="space-y-2">
-              {jobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  selected={selected?.id === job.id}
-                  onClick={() => setSelected(job)}
-                />
-              ))}
+              {jobs.map((job, index) => {
+                const shouldAnimate = !hasAnimatedRef.current && index < 10;
+                if (index === jobs.length - 1 && !hasAnimatedRef.current) {
+                  hasAnimatedRef.current = true;
+                }
+                return (
+                  <motion.div
+                    key={job.id}
+                    initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.3,
+                      ease: "easeOut",
+                      delay: shouldAnimate ? Math.min(index * 0.04, 0.4) : 0,
+                    }}
+                  >
+                    <JobCard
+                      job={job}
+                      selected={selected?.id === job.id}
+                      onClick={() => setSelected(job)}
+                    />
+                  </motion.div>
+                );
+              })}
             </div>
           </>
         )}

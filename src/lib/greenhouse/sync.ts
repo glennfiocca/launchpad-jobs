@@ -103,6 +103,52 @@ export async function syncGreenhouseBoard(
   });
   result.jobsDeactivated = deactivated.count;
 
+  // Mark active applications on now-removed listings as LISTING_REMOVED
+  if (deactivated.count > 0) {
+    const removedJobs = await db.job.findMany({
+      where: {
+        boardToken,
+        isActive: false,
+        externalId: { notIn: Array.from(activeExternalIds) },
+      },
+      select: { id: true },
+    });
+
+    const removedJobIds = removedJobs.map((j) => j.id);
+
+    // Find applications that are still in an "active" state for these jobs
+    const affectedApplications = await db.application.findMany({
+      where: {
+        jobId: { in: removedJobIds },
+        status: { notIn: ["REJECTED", "WITHDRAWN", "LISTING_REMOVED", "OFFER"] },
+      },
+      select: { id: true, status: true },
+    });
+
+    for (const app of affectedApplications) {
+      try {
+        await db.application.update({
+          where: { id: app.id },
+          data: { status: "LISTING_REMOVED" },
+        });
+
+        await db.applicationStatusHistory.create({
+          data: {
+            applicationId: app.id,
+            fromStatus: app.status,
+            toStatus: "LISTING_REMOVED",
+            reason: "Job listing removed by employer",
+            triggeredBy: "system",
+          },
+        });
+      } catch (err) {
+        result.errors.push(
+          `Application ${app.id} LISTING_REMOVED update: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
   return result;
 }
 

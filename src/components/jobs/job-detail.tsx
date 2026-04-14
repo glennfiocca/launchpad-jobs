@@ -44,7 +44,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
               />
             </div>
             <div>
-              <p className="text-sm text-zinc-400">{job.company.name}</p>
+              <p className="text-sm text-zinc-300">{job.company.name}</p>
               <h2 className="text-xl font-semibold text-white">{job.title}</h2>
             </div>
           </div>
@@ -59,8 +59,8 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
         {/* Meta */}
         <div className="flex flex-wrap gap-3 mb-4">
           {job.location && (
-            <span className="flex items-center gap-1.5 text-sm text-zinc-500">
-              <MapPin className="w-4 h-4 text-zinc-600" />
+            <span className="flex items-center gap-1.5 text-sm text-zinc-400">
+              <MapPin className="w-4 h-4 text-zinc-500" />
               {job.location}
             </span>
           )}
@@ -71,13 +71,13 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
             </span>
           )}
           {job.department && (
-            <span className="flex items-center gap-1.5 text-sm text-zinc-500">
-              <Building2 className="w-4 h-4 text-zinc-600" />
+            <span className="flex items-center gap-1.5 text-sm text-zinc-400">
+              <Building2 className="w-4 h-4 text-zinc-500" />
               {job.department}
             </span>
           )}
           {job.postedAt && (
-            <span className="flex items-center gap-1.5 text-sm text-zinc-600">
+            <span className="flex items-center gap-1.5 text-sm text-zinc-500">
               <Calendar className="w-4 h-4" />
               {timeAgo(job.postedAt)}
             </span>

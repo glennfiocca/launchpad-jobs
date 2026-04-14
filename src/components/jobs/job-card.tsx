@@ -35,18 +35,18 @@ export function JobCard({ job, selected, onClick }: JobCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs text-zinc-400 mb-0.5">{job.company.name}</p>
+              <p className="text-xs text-zinc-300 mb-0.5">{job.company.name}</p>
               <h3 className="text-sm font-semibold text-white leading-tight">{job.title}</h3>
             </div>
             {job.postedAt && (
-              <span className="text-xs text-zinc-600 shrink-0">{timeAgo(job.postedAt)}</span>
+              <span className="text-xs text-zinc-500 shrink-0">{timeAgo(job.postedAt)}</span>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {job.location && (
-              <span className="flex items-center gap-1 text-xs text-zinc-500">
-                <MapPin className="w-3 h-3 text-zinc-600" />
+              <span className="flex items-center gap-1 text-xs text-zinc-400">
+                <MapPin className="w-3 h-3 text-zinc-500" />
                 {job.location}
               </span>
             )}
@@ -57,7 +57,7 @@ export function JobCard({ job, selected, onClick }: JobCardProps) {
               </span>
             )}
             {job.department && (
-              <span className="text-xs text-zinc-400 bg-white/8 border border-white/10 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-zinc-300 bg-white/8 border border-white/10 px-2 py-0.5 rounded-full">
                 {job.department}
               </span>
             )}

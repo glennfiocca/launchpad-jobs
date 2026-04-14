@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, User, LogOut, LogIn } from "lucide-react";
@@ -32,60 +33,70 @@ export function Navbar() {
 
           {/* Nav links */}
           <div className="flex items-center gap-1">
-            <Link
-              href="/jobs"
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                pathname?.startsWith("/jobs")
-                  ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              Browse Jobs
-            </Link>
+            <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>
+              <Link
+                href="/jobs"
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  pathname?.startsWith("/jobs")
+                    ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                Browse Jobs
+              </Link>
+            </motion.div>
 
             {session ? (
               <>
-                <Link
-                  href="/dashboard"
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    pathname?.startsWith("/dashboard")
-                      ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
-                  )}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Dashboard
-                </Link>
-                <Link
-                  href="/profile"
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    pathname === "/profile"
-                      ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
-                  )}
-                >
-                  <User className="w-4 h-4" />
-                  Profile
-                </Link>
-                <button
+                <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>
+                  <Link
+                    href="/dashboard"
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                      pathname?.startsWith("/dashboard")
+                        ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
+                        : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    )}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Dashboard
+                  </Link>
+                </motion.div>
+                <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>
+                  <Link
+                    href="/profile"
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                      pathname === "/profile"
+                        ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
+                        : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    )}
+                  >
+                    <User className="w-4 h-4" />
+                    Profile
+                  </Link>
+                </motion.div>
+                <motion.button
+                  whileHover={{ y: -1 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                   onClick={() => signOut({ callbackUrl: "/" })}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-white transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out
-                </button>
+                </motion.button>
               </>
             ) : (
-              <Link
-                href="/auth/signin"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white text-black hover:bg-white/90 transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                Sign In
-              </Link>
+              <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>
+                <Link
+                  href="/auth/signin"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white text-black hover:bg-white/90 transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Sign In
+                </Link>
+              </motion.div>
             )}
           </div>
         </div>

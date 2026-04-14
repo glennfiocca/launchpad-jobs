@@ -9,6 +9,7 @@ import type { ApplicationEmail, ApplicationStatus } from "@prisma/client";
 interface EmailThreadProps {
   applicationId: string;
   initialEmails: ApplicationEmail[];
+  readOnly?: boolean;
 }
 
 interface ReplyState {
@@ -112,7 +113,7 @@ function ReplyComposer({
   );
 }
 
-export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) {
+export function EmailThread({ applicationId, initialEmails, readOnly = false }: EmailThreadProps) {
   const [emails, setEmails] = useState<ApplicationEmail[]>(initialEmails);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reply, setReply] = useState<ReplyState>(EMPTY_REPLY);
@@ -172,11 +173,11 @@ export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) 
         <div className="text-center py-12">
           <Mail className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
           <p className="text-sm text-zinc-500">No emails yet</p>
-          <p className="text-xs text-zinc-600 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Forward recruiting emails to your tracking address to see them here.
           </p>
         </div>
-        <ComposeButton onClick={openCompose} />
+        {!readOnly && <ComposeButton onClick={openCompose} />}
       </div>
     );
   }
@@ -198,10 +199,10 @@ export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) 
                 <p className="text-white text-sm font-medium truncate">{email.subject}</p>
                 <DirectionBadge direction={email.direction} />
               </div>
-              <span className="text-zinc-600 text-xs shrink-0 ml-2">{timeAgo(email.receivedAt)}</span>
+              <span className="text-zinc-500 text-xs shrink-0 ml-2">{timeAgo(email.receivedAt)}</span>
             </div>
 
-            <p className="text-zinc-500 text-sm mb-1.5">From: {email.from}</p>
+            <p className="text-zinc-400 text-sm mb-1.5">From: {email.from}</p>
 
             {email.aiClassification && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 inline-block mb-1.5">
@@ -215,7 +216,7 @@ export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) 
                 {email.body}
               </pre>
             ) : (
-              <p className="text-zinc-500 text-sm mt-1.5 line-clamp-3">{email.body}</p>
+              <p className="text-zinc-400 text-sm mt-1.5 line-clamp-3">{email.body}</p>
             )}
 
             {/* Toggle + Reply row */}
@@ -223,7 +224,7 @@ export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) 
               <button
                 type="button"
                 onClick={() => setExpandedId(isExpanded ? null : email.id)}
-                className="flex items-center gap-0.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
               >
                 {isExpanded ? (
                   <><ChevronUp className="w-3 h-3" />Show less</>
@@ -232,11 +233,11 @@ export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) 
                 )}
               </button>
 
-              {email.direction === "inbound" && !isReplying && (
+              {!readOnly && email.direction === "inbound" && !isReplying && (
                 <button
                   type="button"
                   onClick={() => openReply(email)}
-                  className="flex items-center gap-0.5 text-xs text-zinc-600 hover:text-zinc-300 transition-colors ml-auto"
+                  className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
                 >
                   <Reply className="w-3 h-3" />Reply
                 </button>
@@ -260,18 +261,20 @@ export function EmailThread({ applicationId, initialEmails }: EmailThreadProps) 
       })}
 
       {/* Compose new email */}
-      {reply.id === "new" ? (
-        <ReplyComposer
-          reply={reply}
-          onChange={patchReply}
-          onSubmit={handleSendReply}
-          onCancel={cancelReply}
-          sending={sending}
-          error={sendError}
-          showToInput={true}
-        />
-      ) : (
-        <ComposeButton onClick={openCompose} />
+      {!readOnly && (
+        reply.id === "new" ? (
+          <ReplyComposer
+            reply={reply}
+            onChange={patchReply}
+            onSubmit={handleSendReply}
+            onCancel={cancelReply}
+            sending={sending}
+            error={sendError}
+            showToInput={true}
+          />
+        ) : (
+          <ComposeButton onClick={openCompose} />
+        )
       )}
     </div>
   );
@@ -282,7 +285,7 @@ function ComposeButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-300 transition-colors px-3 py-2 rounded-xl border border-dashed border-white/10 hover:border-white/20 w-full justify-center"
+      className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-3 py-2 rounded-xl border border-dashed border-white/10 hover:border-white/20 w-full justify-center"
     >
       <Mail className="w-3 h-3" />
       Compose new email

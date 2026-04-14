@@ -164,4 +164,9 @@ export const STATUS_CONFIG: Record<
     color: "gray",
     description: "You withdrew your application",
   },
+  LISTING_REMOVED: {
+    label: "Listing Removed",
+    color: "gray",
+    description: "This job listing has been removed by the employer.",
+  },
 };

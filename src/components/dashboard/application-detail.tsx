@@ -59,7 +59,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
   }
 
   return (
-    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl h-[calc(100vh-8rem)] overflow-hidden flex flex-col sticky top-24">
+    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col sticky top-[152px] h-[calc(100vh-10rem)]">
       {/* Header */}
       <div className="p-6 border-b border-white/8">
         <div className="flex items-start justify-between mb-3">

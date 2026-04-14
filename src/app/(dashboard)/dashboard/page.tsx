@@ -25,11 +25,11 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="bg-black min-h-screen">
-      <div className="border-b border-white/8 bg-black px-6 py-5">
+    <>
+      <div className="border-b border-white/8 bg-black py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-white text-2xl font-semibold">My Applications</h1>
+            <h1 className="text-white text-xl font-semibold">My Applications</h1>
             <p className="text-zinc-500 text-sm mt-1">{applications.length} total applications</p>
           </div>
           <div className="flex items-center gap-3">
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="px-6 py-6">
+      <div className="py-4 pb-8">
         {applications.length === 0 ? (
           <div className="text-center py-24 bg-[#0a0a0a] rounded-xl border border-white/8">
             <div className="w-16 h-16 bg-white/8 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -72,6 +72,6 @@ export default async function DashboardPage() {
           <DashboardClient initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]} />
         )}
       </div>
-    </div>
+    </>
   );
 }

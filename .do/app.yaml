@@ -53,6 +53,12 @@ services:
       - key: DO_SPACES_REGION
         scope: RUN_AND_BUILD_TIME
         value: nyc3
+      - key: LOGO_DEV_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: NEXT_PUBLIC_LOGO_DEV_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
       - key: CRON_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET

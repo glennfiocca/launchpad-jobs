@@ -36,7 +36,7 @@ function getPlaceholderColor(name: string): string {
 function getLogoUrl(website: string): string | null {
   try {
     const hostname = new URL(website).hostname;
-    return `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${hostname}&size=128`;
+    return `https://img.logo.dev/${hostname}?token=${process.env.NEXT_PUBLIC_LOGO_DEV_KEY}&size=200&format=png`;
   } catch {
     return null;
   }
@@ -52,7 +52,7 @@ interface CompanyLogoProps {
 /**
  * Renders a company logo with a three-tier fallback:
  *   1. logoUrl (stored value)
- *   2. Google gstatic favicon API derived from company website
+ *   2. logo.dev API derived from company website
  *   3. Initials placeholder with a deterministic brand-safe color
  */
 export function CompanyLogo({ name, logoUrl, website, className }: CompanyLogoProps) {
@@ -70,10 +70,10 @@ export function CompanyLogo({ name, logoUrl, website, className }: CompanyLogoPr
 
   const handleError = () => {
     if (src === logoUrl && faviconUrl) {
-      // logoUrl failed — try Google favicon
+      // logoUrl failed — try logo.dev
       setSrc(faviconUrl);
     } else {
-      // Google favicon (or logoUrl with no favicon fallback) failed — show initials
+      // logo.dev (or logoUrl with no fallback) failed — show initials
       setFailed(true);
     }
   };

@@ -8,6 +8,12 @@ import { getSpacesClient, SPACES_BUCKET } from '../src/lib/spaces';
 // Config
 // ---------------------------------------------------------------------------
 
+const LOGO_DEV_KEY = process.env.LOGO_DEV_KEY;
+if (!LOGO_DEV_KEY) {
+  console.error('LOGO_DEV_KEY not set in environment');
+  process.exit(1);
+}
+
 const SPACES_REGION = process.env.DO_SPACES_REGION ?? 'nyc3';
 const RATE_LIMIT_MS = 300;
 
@@ -180,11 +186,11 @@ function delay(ms: number): Promise<void> {
 }
 
 async function fetchLogo(domain: string): Promise<Buffer> {
-  const url = `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+  const url = `https://img.logo.dev/${domain}?token=${LOGO_DEV_KEY}&size=200&format=png`;
   const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) throw new Error(`Google favicon returned ${res.status} for ${domain}`);
+  if (!res.ok) throw new Error(`logo.dev returned ${res.status} for ${domain}`);
   const arrayBuffer = await res.arrayBuffer();
-  if (arrayBuffer.byteLength < 200) throw new Error(`Logo too small (${arrayBuffer.byteLength} bytes) for ${domain} — likely a placeholder`);
+  if (arrayBuffer.byteLength < 200) throw new Error(`Logo too small (${arrayBuffer.byteLength} bytes) — likely a placeholder`);
   return Buffer.from(arrayBuffer);
 }
 

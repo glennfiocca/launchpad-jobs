@@ -15,9 +15,9 @@ export function JobCard({ job, selected, onClick }: JobCardProps) {
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left rounded-xl border transition-all p-4",
+        "w-full text-left rounded-xl border transition-all p-4 relative overflow-hidden",
         selected
-          ? "bg-white/5 border-white/25 ring-1 ring-white/10"
+          ? "bg-white/5 border-indigo-500/30 ring-1 ring-indigo-500/15 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-indigo-500 before:rounded-r-full"
           : "bg-[#0a0a0a] border-white/8 hover:bg-white/3 hover:border-white/12"
       )}
     >

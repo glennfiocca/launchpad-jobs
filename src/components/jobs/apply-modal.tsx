@@ -62,7 +62,7 @@ function SelectField({ field, value, onChange }: FieldProps) {
         const opt = field.values.find((v) => String(v.value) === e.target.value);
         if (opt !== undefined) onChange(field.name, opt.value);
       }}
-      className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+      className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
     >
       <option value="">Select an option...</option>
       {field.values.map((v) => (
@@ -147,7 +147,7 @@ function QuestionInput({
           type="text"
           value={value !== undefined ? String(value) : ""}
           onChange={(e) => onChange(field.name, e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
         />
       )}
 
@@ -156,7 +156,7 @@ function QuestionInput({
           rows={4}
           value={value !== undefined ? String(value) : ""}
           onChange={(e) => onChange(field.name, e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10 resize-y"
+          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 resize-y transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
         />
       )}
 

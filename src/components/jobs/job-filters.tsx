@@ -42,7 +42,7 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
   };
 
   const inputClass =
-    "w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10";
+    "w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]";
 
   return (
     <div className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 mb-4 space-y-3">
@@ -128,7 +128,7 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
               placeholder="Engineering, Sales..."
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+              className="w-full px-4 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
             />
           </div>
           <div>
@@ -138,7 +138,7 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
             <select
               value={employmentType}
               onChange={(e) => setEmploymentType(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+              className="w-full px-4 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
             >
               <option value="">Any</option>
               <option value="full_time">Full-time</option>

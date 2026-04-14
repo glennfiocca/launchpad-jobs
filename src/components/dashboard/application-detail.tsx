@@ -5,6 +5,7 @@ import { X, MapPin, Calendar, ExternalLink } from "lucide-react";
 import { EmailThread } from "./email-thread";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/types";
+import { STATUS_BADGE_STYLES } from "@/lib/styles";
 import type { ApplicationWithJob } from "@/types";
 import type { ApplicationStatus } from "@prisma/client";
 
@@ -13,22 +14,11 @@ interface ApplicationDetailProps {
   onClose: () => void;
 }
 
-const STATUS_BADGE_COLORS: Record<string, string> = {
-  blue: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
-  yellow: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
-  purple: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
-  orange: "bg-orange-500/10 text-orange-400 border border-orange-500/20",
-  green: "bg-green-500/10 text-green-400 border border-green-500/20",
-  red: "bg-red-500/10 text-red-400 border border-red-500/20",
-  gray: "bg-zinc-800 text-zinc-400 border border-zinc-700",
-};
-
 type Tab = "overview" | "emails" | "timeline";
 
 export function ApplicationDetail({ application, onClose }: ApplicationDetailProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const statusConfig = STATUS_CONFIG[application.status];
-  const statusBadgeClass = STATUS_BADGE_COLORS[statusConfig.color] ?? STATUS_BADGE_COLORS.gray;
 
   const NEXT_STEPS: Partial<Record<ApplicationStatus, string>> = {
     APPLIED: "Wait for the recruiter to review your application. Usually takes 1–2 weeks.",
@@ -69,13 +59,21 @@ export function ApplicationDetail({ application, onClose }: ApplicationDetailPro
         </div>
 
         {/* Status badge + next steps */}
-        <div className={cn("rounded-xl px-3 py-2.5 mb-3", statusBadgeClass)}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wide">{statusConfig.label}</span>
-            <span className="text-xs opacity-70">{formatDate(application.appliedAt)}</span>
-          </div>
-          <p className="text-xs opacity-80">{NEXT_STEPS[application.status]}</p>
-        </div>
+        {(() => {
+          const style = STATUS_BADGE_STYLES[statusConfig.color] ?? STATUS_BADGE_STYLES.gray;
+          return (
+            <div className={cn("rounded-xl px-3 py-2.5 mb-3", style.badge)}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide", style.badge)}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", style.dot, style.pulse && "animate-status-pulse")} />
+                  {statusConfig.label}
+                </span>
+                <span className="text-xs opacity-70">{formatDate(application.appliedAt)}</span>
+              </div>
+              <p className="text-xs opacity-80">{NEXT_STEPS[application.status]}</p>
+            </div>
+          );
+        })()}
 
         {/* Meta row */}
         <div className="flex flex-wrap gap-3 text-zinc-500 text-sm">

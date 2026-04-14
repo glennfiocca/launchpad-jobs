@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Zap, BarChart3, MessageSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   return (
@@ -19,10 +20,14 @@ export default function HomePage() {
             <Zap className="w-3.5 h-3.5 text-blue-400" />
             One-click applications powered by AI
           </div>
-          <h1 className="text-5xl sm:text-6xl font-semibold text-white leading-tight mb-6 tracking-tight">
-            Apply to your dream job
+          <h1 className="text-5xl sm:text-6xl font-semibold leading-tight mb-6 tracking-tight">
+            <span className="bg-gradient-to-r from-white via-white to-zinc-400 bg-clip-text text-transparent">
+              Apply to your dream job
+            </span>
             <br />
-            <span className="text-zinc-400">in one click.</span>
+            <span className="bg-gradient-to-r from-indigo-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              in one click.
+            </span>
           </h1>
           <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             Fill your profile once. Apply everywhere instantly. AI tracks your applications
@@ -73,8 +78,9 @@ export default function HomePage() {
               key={feature.title}
               className="bg-[#0a0a0a] border border-white/8 rounded-2xl p-6 hover:border-white/15 transition-colors"
             >
-              <div className={`w-9 h-9 ${feature.iconBg} rounded-lg flex items-center justify-center mb-4`}>
-                {feature.icon}
+              <div className={cn("relative w-9 h-9 rounded-lg flex items-center justify-center mb-4", feature.iconBg)}>
+                <div className={cn("absolute inset-0 rounded-lg blur-md opacity-60", feature.iconBg)} />
+                <div className="relative">{feature.icon}</div>
               </div>
               <h3 className="text-base font-semibold text-white mb-2">{feature.title}</h3>
               <p className="text-zinc-400 text-sm leading-relaxed">{feature.desc}</p>

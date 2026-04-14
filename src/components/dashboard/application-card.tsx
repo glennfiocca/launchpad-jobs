@@ -3,6 +3,7 @@
 import { MapPin, Mail } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/types";
+import { STATUS_BADGE_STYLES } from "@/lib/styles";
 import type { ApplicationWithJob } from "@/types";
 
 interface ApplicationCardProps {
@@ -11,28 +12,18 @@ interface ApplicationCardProps {
   onClick: () => void;
 }
 
-const STATUS_BADGE_COLORS: Record<string, string> = {
-  blue: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
-  yellow: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
-  purple: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
-  orange: "bg-orange-500/10 text-orange-400 border border-orange-500/20",
-  green: "bg-green-500/10 text-green-400 border border-green-500/20",
-  red: "bg-red-500/10 text-red-400 border border-red-500/20",
-  gray: "bg-zinc-800 text-zinc-400 border border-zinc-700",
-};
-
 export function ApplicationCard({ application, selected, onClick }: ApplicationCardProps) {
   const statusConfig = STATUS_CONFIG[application.status];
-  const statusClass = STATUS_BADGE_COLORS[statusConfig.color] ?? STATUS_BADGE_COLORS.gray;
+  const style = STATUS_BADGE_STYLES[statusConfig.color] ?? STATUS_BADGE_STYLES.gray;
   const hasNewEmail = application.emails.length > 0;
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left p-4 cursor-pointer transition-all border-b border-white/5",
+        "w-full text-left p-4 cursor-pointer transition-all border-b border-white/5 relative",
         selected
-          ? "bg-white/5"
+          ? "bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-indigo-500 before:rounded-r-full"
           : "hover:bg-white/3"
       )}
     >
@@ -53,7 +44,8 @@ export function ApplicationCard({ application, selected, onClick }: ApplicationC
               <p className="text-zinc-400 text-sm">{application.job.company.name}</p>
               <p className="text-white font-medium text-sm truncate">{application.job.title}</p>
             </div>
-            <span className={cn("text-xs px-2 py-0.5 rounded-full shrink-0 font-medium", statusClass)}>
+            <span className={cn("inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium", style.badge)}>
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", style.dot, style.pulse && "animate-status-pulse")} />
               {statusConfig.label}
             </span>
           </div>

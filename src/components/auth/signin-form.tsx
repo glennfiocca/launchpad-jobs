@@ -76,7 +76,7 @@ export function SignInForm() {
             placeholder="you@example.com"
             required
             autoFocus
-            className="bg-black border border-white/10 text-white placeholder-zinc-600 rounded-xl px-4 py-3 w-full focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 text-sm transition-colors"
+            className="bg-black border border-white/10 text-white placeholder-zinc-600 rounded-xl px-4 py-3 w-full text-sm transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
           />
         </div>
 

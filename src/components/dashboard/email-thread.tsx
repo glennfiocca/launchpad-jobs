@@ -66,7 +66,7 @@ function ReplyComposer({
             value={reply.to}
             onChange={(e) => onChange({ to: e.target.value })}
             placeholder="recipient@example.com"
-            className="bg-black border border-white/10 rounded-xl text-white placeholder:text-zinc-600 px-2 py-0.5 text-xs w-full mt-0.5 focus:outline-none focus:border-white/20"
+            className="bg-black border border-white/10 rounded-xl text-white placeholder:text-zinc-600 px-2 py-0.5 text-xs w-full mt-0.5 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
           />
         ) : (
           <span className="text-zinc-300">{reply.to}</span>
@@ -79,7 +79,7 @@ function ReplyComposer({
           required
           value={reply.subject}
           onChange={(e) => onChange({ subject: e.target.value })}
-          className="bg-black border border-white/10 rounded-xl text-white placeholder:text-zinc-600 px-2 py-0.5 text-xs w-full mt-0.5 focus:outline-none focus:border-white/20"
+          className="bg-black border border-white/10 rounded-xl text-white placeholder:text-zinc-600 px-2 py-0.5 text-xs w-full mt-0.5 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
         />
       </div>
       <textarea
@@ -88,7 +88,7 @@ function ReplyComposer({
         value={reply.body}
         onChange={(e) => onChange({ body: e.target.value })}
         placeholder="Write your reply..."
-        className="bg-black border border-white/10 rounded-xl text-white placeholder:text-zinc-600 px-3 py-2 text-sm w-full resize-y focus:outline-none focus:border-white/20"
+        className="bg-black border border-white/10 rounded-xl text-white placeholder:text-zinc-600 px-3 py-2 text-sm w-full resize-y transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
       />
       {error && <p className="text-xs text-red-400">{error}</p>}
       <div className="flex gap-2">

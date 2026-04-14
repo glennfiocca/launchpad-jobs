@@ -1,0 +1,88 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+
+export function Footer() {
+  const { data: session } = useSession();
+
+  return (
+    <footer className="mt-auto border-t border-white/8 bg-black">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14">
+        <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-md">
+            <Link
+              href="/"
+              className="inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
+            >
+              <Image
+                src="/pipeline-logo.png"
+                alt="Pipeline"
+                width={180}
+                height={40}
+                className="h-7 w-auto opacity-95"
+              />
+            </Link>
+            <p className="mt-4 text-sm text-zinc-500 leading-relaxed">
+              One profile. Every application. AI-powered tracking so you can focus on landing the
+              role.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
+              Product
+            </h3>
+            <ul className="space-y-3">
+              <li>
+                <Link
+                  href="/jobs"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Browse jobs
+                </Link>
+              </li>
+              {session ? (
+                <>
+                  <li>
+                    <Link
+                      href="/dashboard"
+                      className="text-sm text-zinc-400 hover:text-white transition-colors"
+                    >
+                      Dashboard
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/profile"
+                      className="text-sm text-zinc-400 hover:text-white transition-colors"
+                    >
+                      Profile
+                    </Link>
+                  </li>
+                </>
+              ) : (
+                <li>
+                  <Link
+                    href="/auth/signin"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Sign in
+                  </Link>
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-12 pt-8 border-t border-white/8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="text-xs text-zinc-600">
+            © {new Date().getFullYear()} Pipeline. All rights reserved.
+          </p>
+          <p className="text-xs text-zinc-600">Built for job seekers who move fast.</p>
+        </div>
+      </div>
+    </footer>
+  );
+}

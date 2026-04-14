@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { Rocket, LayoutDashboard, User, LogOut, LogIn } from "lucide-react";
+import { LayoutDashboard, User, LogOut, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -15,9 +16,18 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-white">
-            <Rocket className="w-5 h-5 text-white" />
-            Pipeline
+          <Link
+            href="/"
+            className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
+          >
+            <Image
+              src="/pipeline-logo.png"
+              alt="Pipeline"
+              width={200}
+              height={44}
+              className="h-8 w-auto"
+              priority
+            />
           </Link>
 
           {/* Nav links */}

@@ -97,15 +97,15 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
       </div>
 
       {/* Two-column content */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 h-[calc(100vh-10rem)]">
         {/* Left: application list */}
-        <div className={`flex-1 min-w-0 bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col ${selected ? "hidden lg:flex" : "flex"}`}>
+        <div className={`flex-1 min-w-0 min-h-0 bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col ${selected ? "hidden lg:flex" : "flex"}`}>
           {filtered.length === 0 ? (
             <div className="text-center py-16 text-zinc-600 text-sm">
               No applications in this category
             </div>
           ) : (
-            <div className="overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               {filtered.map((app) => (
                 <ApplicationCard
                   key={app.id}
@@ -120,7 +120,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
 
         {/* Right: detail panel */}
         {selected && (
-          <div className="w-full lg:w-[520px] shrink-0">
+          <div className="w-full lg:w-[520px] shrink-0 min-h-0">
             <ApplicationDetail
               application={selected}
               onClose={() => setSelected(null)}

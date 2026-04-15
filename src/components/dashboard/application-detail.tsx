@@ -202,7 +202,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
       </div>
 
       {/* Tab content */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-5">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-5">
         {tab === "overview" && (
           <div className="space-y-5">
             <div>

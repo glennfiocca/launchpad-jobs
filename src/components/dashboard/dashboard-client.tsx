@@ -120,7 +120,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
 
         {/* Right: detail panel */}
         {selected && (
-          <div className="w-full lg:w-[520px] shrink-0 min-h-0">
+          <div className="w-full lg:w-[520px] shrink-0 min-h-0 h-full overflow-hidden">
             <ApplicationDetail
               application={selected}
               onClose={() => setSelected(null)}

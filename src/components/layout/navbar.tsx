@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, User, LogOut, LogIn, CreditCard } from "lucide-react";
+import { LayoutDashboard, User, LogOut, LogIn, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditsBadge } from "@/components/billing/credits-badge";
 
@@ -88,8 +88,8 @@ export function Navbar() {
                         : "text-zinc-400 hover:text-white hover:bg-white/5"
                     )}
                   >
-                    <CreditCard className="w-4 h-4" />
-                    Billing
+                    <Zap className="w-4 h-4" />
+                    Pro
                   </Link>
                 </motion.div>
                 <CreditsBadge />

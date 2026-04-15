@@ -31,7 +31,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl h-[calc(100vh-8rem)] overflow-hidden flex flex-col sticky top-24">
+    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b border-white/8">
         <div className="flex items-start justify-between mb-4">
@@ -134,7 +134,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
       </div>
 
       {/* Job content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
         {decodedContent ? (
           <div
             className="job-content text-sm"

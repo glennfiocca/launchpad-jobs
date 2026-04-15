@@ -20,6 +20,7 @@ export function JobBoard() {
   const [filters, setFilters] = useState<JobFilters>({});
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const hasMoreRef = useRef(false);
@@ -76,13 +77,14 @@ export function JobBoard() {
   // Observer set up once — sentinel is always mounted so ref is valid immediately
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    const list = listRef.current;
+    if (!sentinel || !list) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) loadNextPage();
       },
-      { rootMargin: "300px" }
+      { root: list, rootMargin: "300px" }
     );
 
     observer.observe(sentinel);
@@ -114,69 +116,68 @@ export function JobBoard() {
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="h-full flex gap-6">
       {/* Left: filters + list */}
-      <div className={`flex-1 min-w-0 ${selected ? "hidden lg:flex lg:flex-col" : "flex flex-col"}`}>
+      <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${selected ? "hidden lg:flex" : "flex"}`}>
+        {/* Filters — non-scrolling */}
         <FiltersBar filters={filters} onChange={handleFiltersChange} />
 
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-          </div>
-        ) : jobs.length === 0 ? (
-          <div className="text-center py-24">
-            <p className="text-slate-400 text-lg">No jobs found</p>
-            <p className="text-slate-400 text-sm mt-1">Try adjusting your filters</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-slate-500 mb-3">{total.toLocaleString()} jobs found</p>
-            <div className="space-y-2">
-              {jobs.map((job, index) => {
-                const shouldAnimate = !hasAnimatedRef.current && index < 10;
-                if (index === jobs.length - 1 && !hasAnimatedRef.current) {
-                  hasAnimatedRef.current = true;
-                }
-                return (
-                  <motion.div
-                    key={job.id}
-                    initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.3,
-                      ease: "easeOut",
-                      delay: shouldAnimate ? Math.min(index * 0.04, 0.4) : 0,
-                    }}
-                  >
-                    <JobCard
-                      job={job}
-                      selected={selected?.id === job.id}
-                      onClick={() => setSelected(job)}
-                    />
-                  </motion.div>
-                );
-              })}
+        {/* Scrollable job list — this is the infinite-scroll container */}
+        <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
             </div>
-          </>
-        )}
-
-        {/*
-          Sentinel is ALWAYS rendered (outside the loading/empty conditionals) so
-          the IntersectionObserver can attach on first mount. The observer only
-          fires on intersection *changes*, so recheckSentinel() forces re-evaluation
-          after each fetch in case sentinel is still in viewport.
-        */}
-        <div ref={sentinelRef} className="py-4 flex justify-center">
-          {loadingMore && <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />}
-          {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
-            <p className="text-xs text-slate-400">All {total.toLocaleString()} jobs loaded</p>
+          ) : jobs.length === 0 ? (
+            <div className="text-center py-24">
+              <p className="text-slate-400 text-lg">No jobs found</p>
+              <p className="text-slate-400 text-sm mt-1">Try adjusting your filters</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-slate-500 mb-3">{total.toLocaleString()} jobs found</p>
+              <div className="space-y-2">
+                {jobs.map((job, index) => {
+                  const shouldAnimate = !hasAnimatedRef.current && index < 10;
+                  if (index === jobs.length - 1 && !hasAnimatedRef.current) {
+                    hasAnimatedRef.current = true;
+                  }
+                  return (
+                    <motion.div
+                      key={job.id}
+                      initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.3,
+                        ease: "easeOut",
+                        delay: shouldAnimate ? Math.min(index * 0.04, 0.4) : 0,
+                      }}
+                    >
+                      <JobCard
+                        job={job}
+                        selected={selected?.id === job.id}
+                        onClick={() => setSelected(job)}
+                      />
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
           )}
+
+          {/* Sentinel always inside the scroll container */}
+          <div ref={sentinelRef} className="py-4 flex justify-center">
+            {loadingMore && <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />}
+            {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
+              <p className="text-xs text-slate-400">All {total.toLocaleString()} jobs loaded</p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Right: job detail panel */}
+      {/* Right: job detail — height comes from flex stretch, detail handles internal scroll */}
       {selected && (
-        <div className="w-full lg:w-[560px] shrink-0">
+        <div className="w-full lg:w-[560px] shrink-0 min-h-0">
           <JobDetail job={selected} onClose={() => setSelected(null)} />
         </div>
       )}

@@ -160,7 +160,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
             Applied {timeAgo(application.appliedAt)}
           </span>
           <Link
-            href={`/jobs?job=${application.job.id}`}
+            href={`/jobs?job=${encodeURIComponent(application.job.publicJobId)}`}
             className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm transition-colors"
           >
             <ExternalLink className="w-3 h-3" />

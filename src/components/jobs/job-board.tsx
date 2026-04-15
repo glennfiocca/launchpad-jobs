@@ -11,6 +11,10 @@ import { Loader2 } from "lucide-react";
 
 const LIMIT = 20;
 
+function jobMatchesUrlParam(job: JobWithCompany, param: string): boolean {
+  return job.id === param || (!!job.publicJobId && job.publicJobId === param);
+}
+
 export function JobBoard() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,6 +30,8 @@ export function JobBoard() {
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const jobsRef = useRef<JobWithCompany[]>([]);
+  jobsRef.current = jobs;
   const observerRef = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const hasMoreRef = useRef(false);
@@ -115,44 +121,62 @@ export function JobBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // Deep link: /jobs?job=<id> — select from list or fetch by id
+  // Clear selection when URL has no ?job=
   useEffect(() => {
     if (!jobIdFromUrl) {
       setSelected(null);
-      return;
     }
+  }, [jobIdFromUrl]);
 
-    const match = jobs.find((j) => j.id === jobIdFromUrl);
+  // Prefer list row when the job appears in the loaded list (infinite scroll)
+  useEffect(() => {
+    if (!jobIdFromUrl) return;
+    const match = jobs.find((j) => jobMatchesUrlParam(j, jobIdFromUrl));
     if (match) {
       setSelected(match);
-      return;
     }
+  }, [jobIdFromUrl, jobs]);
 
-    // Already resolved via API (job may not appear in current filtered/paginated list)
-    if (selected?.id === jobIdFromUrl) return;
-
+  // Fetch by id/publicJobId only when not in list — abort only when `job` param changes (not when `jobs` churns)
+  useEffect(() => {
+    if (!jobIdFromUrl) return;
     if (loading) return;
 
-    let cancelled = false;
+    const inList = jobsRef.current.some((j) => jobMatchesUrlParam(j, jobIdFromUrl));
+    if (inList) return;
+
+    const ac = new AbortController();
+    const param = jobIdFromUrl;
+
     (async () => {
-      const res = await fetch(`/api/jobs/${jobIdFromUrl}`);
-      const data: ApiResponse<JobWithCompany> = await res.json();
-      if (cancelled) return;
-      if (data.success && data.data) {
-        setSelected(data.data);
-      } else {
-        router.replace("/jobs", { scroll: false });
+      try {
+        const res = await fetch(`/api/jobs/${encodeURIComponent(param)}`, {
+          signal: ac.signal,
+        });
+        const data: ApiResponse<JobWithCompany> = await res.json();
+        if (ac.signal.aborted) return;
+        if (data.success && data.data) {
+          setSelected(data.data);
+        } else {
+          router.replace("/jobs", { scroll: false });
+        }
+      } catch {
+        if (!ac.signal.aborted) {
+          router.replace("/jobs", { scroll: false });
+        }
       }
     })();
+
     return () => {
-      cancelled = true;
+      ac.abort();
     };
-  }, [jobIdFromUrl, jobs, loading, router, selected]);
+  }, [jobIdFromUrl, loading, router]);
 
   const selectJob = useCallback(
     (job: JobWithCompany) => {
       setSelected(job);
-      router.replace(`/jobs?job=${job.id}`, { scroll: false });
+      const slug = job.publicJobId ?? job.id;
+      router.replace(`/jobs?job=${encodeURIComponent(slug)}`, { scroll: false });
     },
     [router]
   );

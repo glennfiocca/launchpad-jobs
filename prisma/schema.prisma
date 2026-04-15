@@ -186,6 +186,8 @@ model Company {
 
 model Job {
   id         String  @id @default(cuid())
+  /// External listing ref (e.g. PL + hash) for URLs and search; internal `id` stays the FK.
+  publicJobId String  @unique
   externalId String  // Greenhouse job ID (numeric string)
   companyId  String
   company    Company @relation(fields: [companyId], references: [id])

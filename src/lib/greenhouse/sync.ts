@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { generateUniquePublicJobId } from "@/lib/public-job-id";
 import { createGreenhouseClient, isRemoteJob, extractDepartment } from "./client";
 import { decode } from "html-entities";
 
@@ -72,7 +73,12 @@ export async function syncGreenhouseBoard(
       if (existing) {
         await db.job.update({
           where: { id: existing.id },
-          data: jobData,
+          data: {
+            ...jobData,
+            ...(!existing.publicJobId
+              ? { publicJobId: await generateUniquePublicJobId() }
+              : {}),
+          },
         });
         result.jobsUpdated++;
       } else {
@@ -81,6 +87,7 @@ export async function syncGreenhouseBoard(
             ...jobData,
             externalId,
             companyId: company.id,
+            publicJobId: await generateUniquePublicJobId(),
           },
         });
         result.jobsAdded++;

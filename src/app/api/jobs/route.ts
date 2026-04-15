@@ -22,6 +22,7 @@ export async function GET(request: Request) {
         { title: { contains: query, mode: "insensitive" as const } },
         { content: { contains: query, mode: "insensitive" as const } },
         { company: { name: { contains: query, mode: "insensitive" as const } } },
+        { publicJobId: { contains: query, mode: "insensitive" as const } },
       ],
     }),
     ...(location && {

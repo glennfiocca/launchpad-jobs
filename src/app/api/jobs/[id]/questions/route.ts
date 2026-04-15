@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createGreenhouseClient } from "@/lib/greenhouse";
+import { findJobByRouteId } from "@/lib/job-lookup";
 import { Prisma } from "@prisma/client";
 import type { ApiResponse, GreenhouseQuestion } from "@/types";
 
@@ -18,15 +19,17 @@ export async function GET(
     );
   }
 
-  const { id } = await params;
+  const { id: routeId } = await params;
 
-  const job = await db.job.findUnique({ where: { id } });
+  const job = await findJobByRouteId(routeId);
   if (!job) {
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Job not found" },
       { status: 404 }
     );
   }
+
+  const internalId = job.id;
 
   // Return cached questions if available
   if (job.applicationQuestions) {
@@ -43,7 +46,7 @@ export async function GET(
     const questions: GreenhouseQuestion[] = ghJob.questions ?? [];
 
     await db.job.update({
-      where: { id },
+      where: { id: internalId },
       data: { applicationQuestions: questions as unknown as Prisma.InputJsonValue },
     });
 

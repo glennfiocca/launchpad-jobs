@@ -1,21 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createGreenhouseClient } from "@/lib/greenhouse";
+import { findJobByRouteId } from "@/lib/job-lookup";
 import type { ApiResponse, JobWithCompany } from "@/types";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: routeId } = await params;
 
-  const job = await db.job.findUnique({
-    where: { id },
-    include: {
-      company: true,
-      _count: { select: { applications: true } },
-    },
-  });
+  const job = await findJobByRouteId(routeId);
 
   if (!job) {
     return NextResponse.json<ApiResponse<never>>(
@@ -23,6 +18,8 @@ export async function GET(
       { status: 404 }
     );
   }
+
+  const internalId = job.id;
 
   // Fetch fresh questions from Greenhouse if needed
   let applicationQuestions = job.applicationQuestions;
@@ -33,7 +30,7 @@ export async function GET(
       applicationQuestions = (ghJob.questions ?? null) as typeof job.applicationQuestions;
       // Cache the questions
       await db.job.update({
-        where: { id },
+        where: { id: internalId },
         data: { applicationQuestions: applicationQuestions ?? undefined },
       });
     } catch {

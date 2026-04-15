@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { X, MapPin, Calendar, ExternalLink } from "lucide-react";
 import { EmailThread } from "./email-thread";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
@@ -158,17 +159,13 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
             <Calendar className="w-3 h-3" />
             Applied {timeAgo(application.appliedAt)}
           </span>
-          {application.job.absoluteUrl && (
-            <a
-              href={application.job.absoluteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View job
-            </a>
-          )}
+          <Link
+            href={`/jobs?job=${application.job.id}`}
+            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            View job
+          </Link>
         </div>
       </div>
 

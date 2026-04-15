@@ -122,17 +122,6 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
               <Zap className="w-4 h-4" />
               One-Click Apply
             </button>
-            {job.absoluteUrl && (
-              <a
-                href={job.absoluteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-transparent border border-white/10 text-zinc-300 text-sm hover:border-white/25 hover:text-white transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                View on Greenhouse
-              </a>
-            )}
           </div>
         ) : (
           <Link
@@ -165,7 +154,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
             e.currentTarget.focus({ preventScroll: true });
           }
         }}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 outline-none focus-visible:ring-2 focus-visible:ring-white/15 rounded-b-xl"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 outline-none focus-visible:ring-2 focus-visible:ring-white/15"
       >
         {decodedContent ? (
           <div
@@ -177,6 +166,20 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
           <p className="text-zinc-500 text-sm">No description available.</p>
         )}
       </div>
+
+      {job.absoluteUrl && (
+        <div className="shrink-0 border-t border-white/8 px-6 py-2.5 flex justify-end rounded-b-xl">
+          <a
+            href={job.absoluteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+            Original listing
+          </a>
+        </div>
+      )}
     </div>
   );
 }

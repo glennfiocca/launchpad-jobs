@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
@@ -11,6 +12,10 @@ import { Loader2 } from "lucide-react";
 const LIMIT = 20;
 
 export function JobBoard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobIdFromUrl = searchParams.get("job");
+
   const [jobs, setJobs] = useState<JobWithCompany[]>([]);
   const [selected, setSelected] = useState<JobWithCompany | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,9 +115,57 @@ export function JobBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  // Deep link: /jobs?job=<id> — select from list or fetch by id
+  useEffect(() => {
+    if (!jobIdFromUrl) {
+      setSelected(null);
+      return;
+    }
+
+    const match = jobs.find((j) => j.id === jobIdFromUrl);
+    if (match) {
+      setSelected(match);
+      return;
+    }
+
+    // Already resolved via API (job may not appear in current filtered/paginated list)
+    if (selected?.id === jobIdFromUrl) return;
+
+    if (loading) return;
+
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/jobs/${jobIdFromUrl}`);
+      const data: ApiResponse<JobWithCompany> = await res.json();
+      if (cancelled) return;
+      if (data.success && data.data) {
+        setSelected(data.data);
+      } else {
+        router.replace("/jobs", { scroll: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobIdFromUrl, jobs, loading, router, selected]);
+
+  const selectJob = useCallback(
+    (job: JobWithCompany) => {
+      setSelected(job);
+      router.replace(`/jobs?job=${job.id}`, { scroll: false });
+    },
+    [router]
+  );
+
+  const closeDetail = useCallback(() => {
+    setSelected(null);
+    router.replace("/jobs", { scroll: false });
+  }, [router]);
+
   const handleFiltersChange = (f: JobFilters) => {
     setFilters(f);
     setSelected(null);
+    router.replace("/jobs", { scroll: false });
   };
 
   return (
@@ -156,7 +209,7 @@ export function JobBoard() {
                       <JobCard
                         job={job}
                         selected={selected?.id === job.id}
-                        onClick={() => setSelected(job)}
+                        onClick={() => selectJob(job)}
                       />
                     </motion.div>
                   );
@@ -178,7 +231,7 @@ export function JobBoard() {
       {/* Right: job detail — height comes from flex stretch, detail handles internal scroll */}
       {selected && (
         <div className="w-full lg:w-[560px] shrink-0 min-h-0 h-full">
-          <JobDetail job={selected} onClose={() => setSelected(null)} />
+          <JobDetail job={selected} onClose={closeDetail} />
         </div>
       )}
     </div>

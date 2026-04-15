@@ -87,9 +87,9 @@ export function BillingClient({
   );
 
   return (
-    <div className="py-10 max-w-2xl">
-      <h1 className="text-2xl font-bold text-white mb-1">Billing</h1>
-      <p className="text-sm text-zinc-500 mb-8">
+    <div className="py-10 max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold text-white mb-1 text-center">Billing</h1>
+      <p className="text-sm text-zinc-500 mb-8 text-center">
         Manage your plan and application credits.
       </p>
 
@@ -213,7 +213,6 @@ export function BillingClient({
           <ul className="space-y-2 text-sm text-zinc-300">
             {[
               "No daily application cap — apply to as many jobs as you want",
-              "Full application tracking & email monitoring",
               "Cancel any time",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2">

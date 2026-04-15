@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,17 @@ function formatTimeRemaining(resetsAt: Date): string {
 
 export function CreditsBadge() {
   const [status, setStatus] = useState<CreditStatus | null>(null);
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showTooltip() {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setTooltipVisible(true);
+  }
+
+  function hideTooltip() {
+    hideTimer.current = setTimeout(() => setTooltipVisible(false), 150);
+  }
 
   useEffect(() => {
     fetch("/api/billing/status")
@@ -37,7 +48,7 @@ export function CreditsBadge() {
 
   if (status.isSubscribed) {
     return (
-      <div className="relative group">
+      <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>
         <Link
           href="/billing"
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors"
@@ -45,10 +56,16 @@ export function CreditsBadge() {
           <Zap className="w-3.5 h-3.5 fill-indigo-400" />
           Pro
         </Link>
-        <div className="absolute top-full right-0 mt-2 w-48 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-          <p className="text-white font-medium mb-1">Pro Plan</p>
-          <p>Unlimited applications — no daily cap.</p>
-        </div>
+        {tooltipVisible && (
+          <div
+            onMouseEnter={showTooltip}
+            onMouseLeave={hideTooltip}
+            className="absolute top-full right-0 mt-2 w-48 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed z-50 shadow-xl"
+          >
+            <p className="text-white font-medium mb-1">Pro Plan</p>
+            <p>Unlimited applications — no daily cap.</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -59,7 +76,7 @@ export function CreditsBadge() {
     : `${status.creditsRemaining} of ${FREE_TIER_CREDITS} free applications remaining today. Resets in ${formatTimeRemaining(status.resetsAt)}.`;
 
   return (
-    <div className="relative group">
+    <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>
       <Link
         href="/billing"
         className={cn(
@@ -72,13 +89,25 @@ export function CreditsBadge() {
         <Zap className={cn("w-3.5 h-3.5", isLow && "fill-amber-400")} />
         {status.creditsRemaining}/{FREE_TIER_CREDITS} left
       </Link>
-      <div className="absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-        <p className={cn("font-medium mb-1", isLow ? "text-amber-400" : "text-white")}>
-          Free tier
-        </p>
-        <p>{tooltipText}</p>
-        <p className="mt-1.5 text-indigo-400">Upgrade for unlimited →</p>
-      </div>
+      {tooltipVisible && (
+        <div
+          onMouseEnter={showTooltip}
+          onMouseLeave={hideTooltip}
+          className="absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed z-50 shadow-xl"
+        >
+          <p className={cn("font-medium mb-1", isLow ? "text-amber-400" : "text-white")}>
+            Free tier
+          </p>
+          <p>{tooltipText}</p>
+          <Link
+            href="/billing"
+            onClick={() => setTooltipVisible(false)}
+            className="mt-1.5 block text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            Upgrade for unlimited →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

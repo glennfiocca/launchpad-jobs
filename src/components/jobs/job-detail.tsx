@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useLayoutEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap } from "lucide-react";
@@ -23,8 +23,18 @@ function decodeEntities(html: string): string {
 export function JobDetail({ job, onClose }: JobDetailProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Immediate reset on job change
+    el.scrollTo({ top: 0, behavior: "instant" });
+    // Double rAF: fires after paint + after layout stabilizes (fonts, images)
+    let rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(() => {
+        el.scrollTo({ top: 0, behavior: "instant" });
+      });
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [job.id]);
 
   const { data: session } = useSession();

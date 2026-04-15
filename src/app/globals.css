@@ -42,6 +42,32 @@ body {
 }
 
 /* Job content HTML from Greenhouse */
+
+/*
+ * CONTAINMENT: Prevent any employer HTML element from becoming a competing
+ * scroll container. All overflow must flow through the outer overflow-y-auto
+ * wrapper, not through nested divs/sections/tables.
+ * max-height: none prevents clipped sections that hide content.
+ */
+.job-content * {
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+/* Images must stay within the scroll region and not trigger layout shifts */
+.job-content img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+/* Tables stay within bounds */
+.job-content table {
+  width: 100%;
+  table-layout: fixed;
+  word-break: break-word;
+}
+
 .job-content h1,
 .job-content h2,
 .job-content h3 {

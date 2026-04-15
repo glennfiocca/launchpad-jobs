@@ -24,6 +24,17 @@ const STATUS_TABS: Array<{ key: TabKey; label: string }> = [
   { key: "CLOSED", label: "Closed" },
 ];
 
+// Active tab color styles keyed by TabKey (ALL uses neutral).
+const TAB_ACTIVE_STYLES: Partial<Record<TabKey, string>> = {
+  APPLIED:      "bg-blue-500/10 text-blue-400",
+  REVIEWING:    "bg-amber-500/10 text-amber-400",
+  PHONE_SCREEN: "bg-purple-500/10 text-purple-400",
+  INTERVIEWING: "bg-orange-500/10 text-orange-400",
+  OFFER:        "bg-emerald-500/10 text-emerald-400",
+  REJECTED:     "bg-red-500/10 text-red-400",
+  CLOSED:       "bg-zinc-800 text-zinc-400",
+};
+
 export function DashboardClient({ initialApplications }: DashboardClientProps) {
   const [applications, setApplications] = useState(initialApplications);
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
@@ -69,7 +80,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
                 onClick={() => setActiveTab(key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors lg:flex-1 lg:justify-center ${
                   activeTab === key
-                    ? "bg-white/10 text-white"
+                    ? (TAB_ACTIVE_STYLES[key] ?? "bg-white/10 text-white")
                     : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
                 }`}
               >

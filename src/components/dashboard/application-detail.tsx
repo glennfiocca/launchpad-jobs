@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, MapPin, Calendar, ExternalLink } from "lucide-react";
 import { EmailThread } from "./email-thread";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
@@ -22,6 +22,12 @@ const TERMINAL_STATUSES: ApplicationStatus[] = ["WITHDRAWN", "LISTING_REMOVED", 
 
 export function ApplicationDetail({ application, onClose, onApplicationUpdate }: ApplicationDetailProps) {
   const [tab, setTab] = useState<Tab>("overview");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [application.id]);
+
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -196,7 +202,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-5">
         {tab === "overview" && (
           <div className="space-y-5">
             <div>

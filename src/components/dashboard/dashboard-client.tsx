@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { ApplicationWithJob } from "@/types";
 import { ApplicationCard } from "./application-card";
 import { ApplicationDetail } from "./application-detail";
@@ -67,8 +67,14 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
     setSelected(updated);
   }
 
+  const detailScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    detailScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [selected?.id]);
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 h-[calc(100dvh-3rem)] lg:h-[calc(100dvh-4rem)]">
       {/* Full-width tab bar */}
       <div className="bg-[#0a0a0a] border border-white/8 rounded-xl">
         <div className="flex items-center gap-1 px-3 py-2.5 overflow-x-auto">
@@ -97,30 +103,28 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
       </div>
 
       {/* Two-column content */}
-      <div className="flex gap-4 h-[calc(100vh-10rem)]">
+      <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: application list */}
-        <div className={`flex-1 min-w-0 min-h-0 bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col ${selected ? "hidden lg:flex" : "flex"}`}>
+        <div className={`flex-1 min-h-0 bg-[#0a0a0a] border border-white/8 rounded-xl overflow-y-auto overscroll-contain ${selected ? "hidden lg:block" : "block"}`}>
           {filtered.length === 0 ? (
             <div className="text-center py-16 text-zinc-600 text-sm">
               No applications in this category
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto">
-              {filtered.map((app) => (
-                <ApplicationCard
-                  key={app.id}
-                  application={app}
-                  selected={selected?.id === app.id}
-                  onClick={() => setSelected(app)}
-                />
-              ))}
-            </div>
+            filtered.map((app) => (
+              <ApplicationCard
+                key={app.id}
+                application={app}
+                selected={selected?.id === app.id}
+                onClick={() => setSelected(app)}
+              />
+            ))
           )}
         </div>
 
         {/* Right: detail panel */}
         {selected && (
-          <div className="w-full lg:w-[520px] shrink-0 min-h-0 h-full overflow-hidden">
+          <div ref={detailScrollRef} className="w-full lg:w-[520px] shrink-0 overflow-y-auto overscroll-contain">
             <ApplicationDetail
               application={selected}
               onClose={() => setSelected(null)}

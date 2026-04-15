@@ -28,7 +28,7 @@ export default async function AdminDashboardPage() {
       orderBy: { appliedAt: "desc" },
       include: {
         user: { select: { email: true, name: true } },
-        job: { select: { title: true, company: { select: { name: true } } } },
+        job: { select: { title: true, publicJobId: true, company: { select: { name: true } } } },
       },
     }),
     db.application.groupBy({ by: ["status"], _count: { status: true } }),
@@ -79,6 +79,7 @@ export default async function AdminDashboardPage() {
             <div key={app.id} className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm text-white">{app.job.title}</p>
+                <p className="text-[10px] font-mono text-zinc-500 tabular-nums">{app.job.publicJobId}</p>
                 <p className="text-xs text-zinc-400">
                   {app.job.company.name} · {app.user.email}
                 </p>

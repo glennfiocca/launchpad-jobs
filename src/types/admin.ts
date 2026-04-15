@@ -25,6 +25,7 @@ export interface AdminUser {
 
 export interface AdminJob {
   id: string
+  publicJobId: string
   title: string
   location: string | null
   department: string | null

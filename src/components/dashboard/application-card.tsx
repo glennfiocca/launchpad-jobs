@@ -52,7 +52,10 @@ export function ApplicationCard({ application, selected, onClick }: ApplicationC
           </div>
 
           {/* Meta row */}
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2">
+            <span className="text-[10px] font-mono text-zinc-500 tabular-nums tracking-tight">
+              {application.job.publicJobId}
+            </span>
             {application.job.location && (
               <span className="flex items-center gap-1 text-xs text-zinc-500">
                 <MapPin className="w-3 h-3" />

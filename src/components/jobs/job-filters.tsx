@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, MapPin, Building2, Filter, X } from "lucide-react";
 import type { JobFilters } from "@/types";
 
@@ -18,9 +18,16 @@ export function JobFilters({ filters, onChange }: JobFiltersProps) {
   const [showMore, setShowMore] = useState(false);
   const [employmentType, setEmploymentType] = useState(filters.employmentType ?? "");
 
+  /** Avoid firing onChange on mount-only debounce (would clear /jobs?job= deep links in JobBoard). */
+  const skipInitialDebounce = useRef(true);
+
   // Debounced apply
   useEffect(() => {
     const timer = setTimeout(() => {
+      if (skipInitialDebounce.current) {
+        skipInitialDebounce.current = false;
+        return;
+      }
       onChange({
         query: query || undefined,
         location: location || undefined,

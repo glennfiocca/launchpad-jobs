@@ -11,8 +11,21 @@ import { Loader2 } from "lucide-react";
 
 const LIMIT = 20;
 
+function jobFiltersEqual(a: JobFilters, b: JobFilters): boolean {
+  return (
+    (a.query ?? "") === (b.query ?? "") &&
+    (a.location ?? "") === (b.location ?? "") &&
+    (a.department ?? "") === (b.department ?? "") &&
+    (a.company ?? "") === (b.company ?? "") &&
+    !!a.remote === !!b.remote &&
+    (a.employmentType ?? "") === (b.employmentType ?? "")
+  );
+}
+
 function jobMatchesUrlParam(job: JobWithCompany, param: string): boolean {
-  return job.id === param || (!!job.publicJobId && job.publicJobId === param);
+  if (job.id === param) return true;
+  if (!job.publicJobId) return false;
+  return job.publicJobId.toLowerCase() === param.toLowerCase();
 }
 
 export function JobBoard() {
@@ -27,6 +40,8 @@ export function JobBoard() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<JobFilters>({});
+  const filtersSnapshot = useRef(filters);
+  filtersSnapshot.current = filters;
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -186,11 +201,16 @@ export function JobBoard() {
     router.replace("/jobs", { scroll: false });
   }, [router]);
 
-  const handleFiltersChange = (f: JobFilters) => {
-    setFilters(f);
-    setSelected(null);
-    router.replace("/jobs", { scroll: false });
-  };
+  const handleFiltersChange = useCallback(
+    (f: JobFilters) => {
+      if (jobFiltersEqual(filtersSnapshot.current, f)) return;
+      filtersSnapshot.current = f;
+      setFilters(f);
+      setSelected(null);
+      router.replace("/jobs", { scroll: false });
+    },
+    [router]
+  );
 
   return (
     <div className="h-full flex gap-6">

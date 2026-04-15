@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       where,
       select: {
         id: true,
+        publicJobId: true,
         title: true,
         location: true,
         department: true,

@@ -105,6 +105,9 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
               {timeAgo(job.postedAt)}
             </span>
           )}
+          <span className="text-xs font-mono text-zinc-500 tabular-nums tracking-tight">
+            Listing {job.publicJobId ?? job.id}
+          </span>
         </div>
 
         {/* Apply button */}

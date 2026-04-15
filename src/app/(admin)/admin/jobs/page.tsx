@@ -113,6 +113,7 @@ export default function AdminJobsPage() {
                 <tr key={job.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
                   <td className="px-4 py-3">
                     <p className="text-white">{job.title}</p>
+                    <p className="text-[10px] font-mono text-zinc-500 mt-0.5 tabular-nums">{job.publicJobId}</p>
                     {job.department && <p className="text-zinc-500 text-xs">{job.department}</p>}
                   </td>
                   <td className="px-4 py-3 text-zinc-300">{job.company.name}</td>

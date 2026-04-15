@@ -44,6 +44,9 @@ export function JobCard({ job, selected, onClick }: JobCardProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-[10px] font-mono text-zinc-500 tabular-nums tracking-tight">
+              {job.publicJobId}
+            </span>
             {job.location && (
               <span className="flex items-center gap-1 text-xs text-zinc-400">
                 <MapPin className="w-3 h-3 text-zinc-500" />

@@ -159,8 +159,11 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
             <Calendar className="w-3 h-3" />
             Applied {timeAgo(application.appliedAt)}
           </span>
+          <span className="text-[10px] font-mono text-zinc-500 tabular-nums tracking-tight shrink-0">
+            {application.job.publicJobId ?? application.job.id}
+          </span>
           <Link
-            href={`/jobs?job=${encodeURIComponent(application.job.publicJobId)}`}
+            href={`/jobs?job=${encodeURIComponent(application.job.publicJobId ?? application.job.id)}`}
             className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm transition-colors"
           >
             <ExternalLink className="w-3 h-3" />

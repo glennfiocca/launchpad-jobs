@@ -47,14 +47,14 @@ export function UserSidebar() {
   return (
     <aside className="w-64 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0">
       {/* Logo */}
-      <div className="p-6 border-b border-zinc-800">
-        <Link href="/" className="inline-flex">
+      <div className="px-4 py-4 border-b border-zinc-800">
+        <Link href="/" className="flex">
           <Image
             src="/pipeline-logo.png"
             alt="Pipeline"
-            width={160}
-            height={36}
-            className="h-7 w-auto"
+            width={220}
+            height={50}
+            className="w-full h-auto"
             priority
           />
         </Link>

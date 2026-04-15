@@ -2,7 +2,6 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { UserSidebar } from "@/components/layout/user-sidebar";
-import { PageTransition } from "@/components/layout/page-transition";
 
 export default async function DashboardLayout({
   children,
@@ -13,10 +12,10 @@ export default async function DashboardLayout({
   if (!session) redirect("/auth/signin");
 
   return (
-    <div className="min-h-screen bg-black flex">
+    <div className="h-screen bg-black flex overflow-hidden">
       <UserSidebar />
-      <main className="flex-1 p-6 lg:p-8 overflow-auto">
-        <PageTransition>{children}</PageTransition>
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {children}
       </main>
     </div>
   );

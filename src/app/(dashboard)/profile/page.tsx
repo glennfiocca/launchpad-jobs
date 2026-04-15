@@ -13,7 +13,7 @@ export default async function ProfilePage() {
   });
 
   return (
-    <div className="bg-black min-h-screen">
+    <div className="h-full overflow-y-auto bg-black">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-semibold text-white">Your Profile</h1>

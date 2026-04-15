@@ -74,7 +74,7 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
   }, [selected?.id]);
 
   return (
-    <div className="flex flex-col gap-3 h-[calc(100dvh-3rem)] lg:h-[calc(100dvh-4rem)]">
+    <div className="flex flex-col gap-3 h-full">
       {/* Full-width tab bar */}
       <div className="bg-[#0a0a0a] border border-white/8 rounded-xl">
         <div className="flex items-center gap-1 px-3 py-2.5 overflow-x-auto">

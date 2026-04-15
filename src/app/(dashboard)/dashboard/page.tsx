@@ -25,8 +25,9 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <>
-      <div className="border-b border-white/8 bg-black py-4">
+    <div className="flex flex-col h-full">
+      {/* Page header */}
+      <div className="border-b border-white/8 bg-black px-6 lg:px-8 py-4 shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-white text-xl font-semibold">My Applications</h1>
@@ -51,7 +52,8 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="py-4 pb-8">
+      {/* Content */}
+      <div className="flex-1 min-h-0 p-6 lg:p-8">
         {applications.length === 0 ? (
           <div className="text-center py-24 bg-[#0a0a0a] rounded-xl border border-white/8">
             <div className="w-16 h-16 bg-white/8 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -72,6 +74,6 @@ export default async function DashboardPage() {
           <DashboardClient initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]} />
         )}
       </div>
-    </>
+    </div>
   );
 }

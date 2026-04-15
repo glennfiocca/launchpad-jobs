@@ -35,15 +35,17 @@ export default async function BillingPage({
   ]);
 
   return (
-    <BillingClient
-      creditStatus={{
-        ...creditStatus,
-        resetsAt: creditStatus.resetsAt.toISOString(),
-      }}
-      subscriptionStatus={user?.subscriptionStatus ?? "FREE"}
-      periodEnd={user?.subscription?.stripeCurrentPeriodEnd?.toISOString() ?? null}
-      cancelAtPeriodEnd={user?.subscription?.cancelAtPeriodEnd ?? false}
-      justUpgraded={justUpgraded}
-    />
+    <div className="h-full overflow-y-auto">
+      <BillingClient
+        creditStatus={{
+          ...creditStatus,
+          resetsAt: creditStatus.resetsAt.toISOString(),
+        }}
+        subscriptionStatus={user?.subscriptionStatus ?? "FREE"}
+        periodEnd={user?.subscription?.stripeCurrentPeriodEnd?.toISOString() ?? null}
+        cancelAtPeriodEnd={user?.subscription?.cancelAtPeriodEnd ?? false}
+        justUpgraded={justUpgraded}
+      />
+    </div>
   );
 }

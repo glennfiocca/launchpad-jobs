@@ -134,6 +134,8 @@ export interface ProfileFormData {
   requiresSponsorship: boolean;
 }
 
+export * from "./admin"
+
 // Status display config
 export const STATUS_CONFIG: Record<
   ApplicationStatus,

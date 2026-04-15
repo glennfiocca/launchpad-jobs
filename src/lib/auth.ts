@@ -46,15 +46,33 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
+        token.id = user.id
+        const dbUser = await db.user.findUnique({
+          where: { id: user.id },
+          select: { role: true, email: true },
+        })
+        const adminEmails = process.env.ADMIN_EMAILS
+          ?.split(",")
+          .map((e) => e.trim().toLowerCase()) ?? []
+        if (
+          dbUser?.email &&
+          adminEmails.includes(dbUser.email.toLowerCase()) &&
+          dbUser.role !== "ADMIN"
+        ) {
+          await db.user.update({ where: { id: user.id }, data: { role: "ADMIN" } })
+          token.role = "ADMIN"
+        } else {
+          token.role = dbUser?.role ?? "USER"
+        }
       }
-      return token;
+      return token
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
+        session.user.id = token.id as string
+        session.user.role = token.role as string
       }
-      return session;
+      return session
     },
   },
 };
@@ -62,10 +80,18 @@ export const authOptions: NextAuthOptions = {
 declare module "next-auth" {
   interface Session {
     user: {
-      id: string;
-      name?: string | null;
-      email?: string | null;
-      image?: string | null;
-    };
+      id: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+      role: string
+    }
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string
+    role: string
   }
 }

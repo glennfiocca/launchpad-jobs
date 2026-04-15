@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, User, LogOut, LogIn, Zap } from "lucide-react";
+import { LayoutDashboard, User, LogOut, LogIn, Zap, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditsBadge } from "@/components/billing/credits-badge";
 
@@ -92,6 +92,22 @@ export function Navbar() {
                     Pro
                   </Link>
                 </motion.div>
+                {session?.user?.role === "ADMIN" && (
+                  <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>
+                    <Link
+                      href="/admin"
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                        pathname?.startsWith("/admin")
+                          ? "text-violet-400 relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-violet-500 after:rounded-full"
+                          : "text-zinc-400 hover:text-white hover:bg-white/5"
+                      )}
+                    >
+                      <Shield className="w-4 h-4" />
+                      Admin
+                    </Link>
+                  </motion.div>
+                )}
                 <CreditsBadge />
                 <motion.button
                   whileHover={{ y: -1 }}

@@ -53,6 +53,11 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -62,6 +67,8 @@ model User {
   password      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  role      Role     @default(USER)
 
   // Billing
   stripeCustomerId   String?            @unique
@@ -298,4 +305,15 @@ model ApplicationStatusHistory {
   createdAt DateTime @default(now())
 
   @@index([applicationId])
+}
+
+model CompanyBoard {
+  id         String   @id @default(cuid())
+  name       String
+  boardToken String   @unique
+  logoUrl    String?
+  website    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

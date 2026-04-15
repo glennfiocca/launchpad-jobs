@@ -152,9 +152,25 @@ export async function syncGreenhouseBoard(
   return result;
 }
 
+/** Fetch active boards from the database. Use this instead of SEED_BOARDS in production. */
+export async function getActiveBoards(): Promise<
+  Array<{ token: string; name: string; logoUrl?: string; website?: string }>
+> {
+  const boards = await db.companyBoard.findMany({
+    where: { isActive: true },
+    select: { boardToken: true, name: true, logoUrl: true, website: true },
+  })
+  return boards.map((b) => ({
+    token: b.boardToken,
+    name: b.name,
+    ...(b.logoUrl ? { logoUrl: b.logoUrl } : {}),
+    ...(b.website ? { website: b.website } : {}),
+  }))
+}
+
 // Seed a curated list of well-known company board tokens
 // More can be added via an admin UI later
-export const SEED_BOARDS: Array<{ token: string; name: string; logoUrl?: string }> = [
+export const SEED_BOARDS: Array<{ token: string; name: string; logoUrl?: string; website?: string }> = [
   // Original
   { token: "anthropic", name: "Anthropic" },
   { token: "stripe", name: "Stripe" },

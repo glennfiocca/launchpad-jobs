@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { syncGreenhouseBoard, SEED_BOARDS } from "@/lib/greenhouse";
+import { syncGreenhouseBoard, getActiveBoards } from "@/lib/greenhouse";
 import type { ApiResponse } from "@/types";
 
 // Protected by a secret token for cron jobs
@@ -14,10 +14,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const boards = await getActiveBoards();
   const results = [];
   const errors = [];
 
-  for (const board of SEED_BOARDS) {
+  for (const board of boards) {
     try {
       const result = await syncGreenhouseBoard(board.token, board.name, board.logoUrl);
       results.push(result);

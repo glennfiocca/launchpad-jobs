@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ProgressBar } from "@/components/layout/progress-bar";
+import { FeedbackButton } from "@/components/feedback-button";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,7 +21,10 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-black text-white antialiased`}>
         <ProgressBar />
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <FeedbackButton />
+        </Providers>
       </body>
     </html>
   );

@@ -83,6 +83,7 @@ model User {
   profile      UserProfile?
   applications Application[]
   subscription Subscription?
+  feedback     Feedback[]
 }
 
 model Subscription {
@@ -316,4 +317,29 @@ model CompanyBoard {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+enum FeedbackType {
+  BUG
+  FEATURE
+  PRAISE
+  OTHER
+}
+
+model Feedback {
+  id        String       @id @default(cuid())
+  type      FeedbackType
+  rating    Int?
+  message   String       @db.Text
+  pageUrl   String
+  userId    String?
+  userEmail String?
+  userAgent String?
+  createdAt DateTime     @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId])
 }

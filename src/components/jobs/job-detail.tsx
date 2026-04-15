@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap } from "lucide-react";
@@ -21,6 +21,12 @@ function decodeEntities(html: string): string {
 }
 
 export function JobDetail({ job, onClose }: JobDetailProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [job.id]);
+
   const { data: session } = useSession();
   const decodedContent = useMemo(
     () => (job.content ? decodeEntities(job.content) : null),
@@ -134,7 +140,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
       </div>
 
       {/* Job content */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
         {decodedContent ? (
           <div
             className="job-content text-sm"

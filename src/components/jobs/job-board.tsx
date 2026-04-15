@@ -177,7 +177,7 @@ export function JobBoard() {
 
       {/* Right: job detail — height comes from flex stretch, detail handles internal scroll */}
       {selected && (
-        <div className="w-full lg:w-[560px] shrink-0 min-h-0">
+        <div className="w-full lg:w-[560px] shrink-0 min-h-0 h-full">
           <JobDetail job={selected} onClose={() => setSelected(null)} />
         </div>
       )}

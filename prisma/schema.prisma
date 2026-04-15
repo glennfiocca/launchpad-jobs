@@ -46,6 +46,13 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+enum SubscriptionStatus {
+  FREE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -56,10 +63,33 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // Billing
+  stripeCustomerId   String?            @unique
+  subscriptionStatus SubscriptionStatus @default(FREE)
+
+  // Free-tier rolling 24h credit window
+  creditWindowStart DateTime @default(now())
+  creditsUsed       Int      @default(0)
+
   accounts     Account[]
   sessions     Session[]
   profile      UserProfile?
   applications Application[]
+  subscription Subscription?
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeSubscriptionId   String   @unique
+  stripePriceId          String
+  stripeCurrentPeriodEnd DateTime
+  cancelAtPeriodEnd      Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserProfile {

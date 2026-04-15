@@ -89,11 +89,21 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  /** ISO string — present on 402 credit limit responses */
+  resetsAt?: string;
   meta?: {
     total: number;
     page: number;
     limit: number;
   };
+}
+
+// Billing
+export interface CreditStatus {
+  isSubscribed: boolean;
+  creditsUsed: number;
+  creditsRemaining: number;
+  resetsAt: Date;
 }
 
 // Profile form data

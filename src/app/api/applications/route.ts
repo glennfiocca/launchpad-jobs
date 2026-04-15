@@ -7,6 +7,7 @@ import { autoAnswerQuestion } from "@/lib/greenhouse/questions";
 import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
 import { getPresignedGetUrl } from "@/lib/spaces";
+import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { z } from "zod";
 import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion } from "@/types";
 
@@ -76,6 +77,19 @@ export async function POST(request: Request) {
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "You have already applied to this job" },
       { status: 409 }
+    );
+  }
+
+  // Check and consume credit before hitting Greenhouse
+  const creditCheck = await checkAndConsumeCredit(session.user.id);
+  if (!creditCheck.allowed) {
+    return NextResponse.json<ApiResponse<never>>(
+      {
+        success: false,
+        error: `Free tier limit reached (${FREE_TIER_CREDITS} applications per 24 hours). Upgrade for unlimited applications.`,
+        resetsAt: creditCheck.resetsAt.toISOString(),
+      },
+      { status: 402 }
     );
   }
 

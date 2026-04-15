@@ -73,6 +73,18 @@ services:
       - key: NEXT_PUBLIC_APP_NAME
         scope: RUN_AND_BUILD_TIME
         value: Pipeline
+      - key: STRIPE_SECRET_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: STRIPE_PRICE_ID
+        scope: RUN_AND_BUILD_TIME
+        value: price_1TMGWfBmZYNV8HgvnU6JpG0P
+      - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
 
 jobs:
   - name: migrate

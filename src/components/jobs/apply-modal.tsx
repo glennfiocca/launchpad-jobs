@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 import { getUnansweredQuestions, stripHtml } from "@/lib/greenhouse/questions";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 import type { GreenhouseQuestion, GreenhouseQuestionField, JobWithCompany } from "@/types";
 import type { UserProfile } from "@prisma/client";
 
@@ -182,6 +183,7 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
   const [answers, setAnswers] = useState<Record<string, string | number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creditLimitResetsAt, setCreditLimitResetsAt] = useState<Date | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,7 +259,14 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
         success: boolean;
         data?: { applicationId: string; warning?: string };
         error?: string;
+        resetsAt?: string;
       };
+
+      if (res.status === 402 && data.resetsAt) {
+        setCreditLimitResetsAt(new Date(data.resetsAt));
+        setSubmitting(false);
+        return;
+      }
 
       if (data.success && data.data) {
         onApplied(data.data.applicationId, data.data.warning);
@@ -293,6 +302,11 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
 
     await submitApplication(answers);
   };
+
+  // Credit limit hit — swap to upgrade modal
+  if (creditLimitResetsAt) {
+    return <UpgradeModal resetsAt={creditLimitResetsAt} onClose={onClose} />;
+  }
 
   // Spinner state: loading initial data OR auto-submitting (no questions)
   if (loading || (submitting && unanswered.length === 0)) {

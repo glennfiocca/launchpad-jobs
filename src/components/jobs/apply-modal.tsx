@@ -311,7 +311,7 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
   // Spinner state: loading initial data OR auto-submitting (no questions)
   if (loading || (submitting && unanswered.length === 0)) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center">
         <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-lg mx-4 p-8 flex flex-col items-center gap-4 shadow-2xl">
           <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
           <p className="text-sm text-zinc-500">
@@ -323,7 +323,7 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center">
       <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 bg-[#0a0a0a] border-b border-white/8 px-6 py-4 rounded-t-2xl flex items-start justify-between gap-4">

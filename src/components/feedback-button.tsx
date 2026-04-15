@@ -129,10 +129,10 @@ export function FeedbackButton() {
         {/* Slide-out panel */}
         <div
           className={[
-            "transition-all duration-300 ease-in-out origin-right",
+            "transition-all duration-300 ease-in-out origin-right overflow-hidden",
             open
-              ? "opacity-100 translate-x-0 pointer-events-auto"
-              : "opacity-0 translate-x-4 pointer-events-none",
+              ? "opacity-100 translate-x-0 pointer-events-auto max-w-[20rem]"
+              : "opacity-0 translate-x-4 pointer-events-none max-w-0 min-w-0",
           ].join(" ")}
         >
           <div className="bg-zinc-900 border border-zinc-700 rounded-l-2xl shadow-2xl w-80 overflow-hidden">

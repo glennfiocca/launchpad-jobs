@@ -43,6 +43,12 @@ body {
 
 /* Job content HTML from Greenhouse */
 
+.job-content {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+}
+
 /*
  * CONTAINMENT: Prevent any employer HTML element from becoming a competing
  * scroll container. All overflow must flow through the outer overflow-y-auto

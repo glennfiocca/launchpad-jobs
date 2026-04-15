@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
+import { sanitizeEmployerJobHtml } from "@/lib/sanitize-job-html";
 import { ApplyModal } from "@/components/jobs/apply-modal";
 import { CompanyLogo } from "@/components/company-logo";
 import type { JobWithCompany } from "@/types";
@@ -26,20 +27,26 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Immediate reset on job change
     el.scrollTo({ top: 0, behavior: "instant" });
-    // Double rAF: fires after paint + after layout stabilizes (fonts, images)
-    let rafId = requestAnimationFrame(() => {
-      rafId = requestAnimationFrame(() => {
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
         el.scrollTo({ top: 0, behavior: "instant" });
       });
     });
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, [job.id]);
 
   const { data: session } = useSession();
   const decodedContent = useMemo(
-    () => (job.content ? decodeEntities(job.content) : null),
+    () =>
+      job.content
+        ? sanitizeEmployerJobHtml(decodeEntities(job.content))
+        : null,
     [job.content]
   );
   const [showModal, setShowModal] = useState(false);
@@ -150,9 +157,19 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
       </div>
 
       {/* Job content */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
+      <div
+        ref={scrollRef}
+        tabIndex={-1}
+        onPointerDown={(e) => {
+          if (e.currentTarget.contains(e.target as Node)) {
+            e.currentTarget.focus({ preventScroll: true });
+          }
+        }}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 outline-none focus-visible:ring-2 focus-visible:ring-white/15 rounded-b-xl"
+      >
         {decodedContent ? (
           <div
+            key={job.id}
             className="job-content text-sm"
             dangerouslySetInnerHTML={{ __html: decodedContent }}
           />

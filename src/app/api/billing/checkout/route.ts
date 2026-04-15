@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { stripe, getOrCreateStripeCustomer, STRIPE_PRICE_ID } from "@/lib/stripe";
+import { getStripe, getOrCreateStripeCustomer, STRIPE_PRICE_ID } from "@/lib/stripe";
 import type { ApiResponse } from "@/types";
 
 export async function POST() {
@@ -20,7 +20,7 @@ export async function POST() {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
+  const checkoutSession = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import {
   handleSubscriptionUpsert,
   handleSubscriptionDeleted,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       rawBody,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET

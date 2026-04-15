@@ -21,6 +21,7 @@ export function PageTransition({ children }: PageTransitionProps) {
           duration: 0.3,
           ease: "easeOut",
         }}
+        className="h-full"
         style={{ willChange: "opacity, transform" }}
       >
         {children}

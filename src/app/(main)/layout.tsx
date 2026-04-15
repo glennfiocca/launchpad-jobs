@@ -5,7 +5,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-black flex">
       <UserSidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-hidden">
         <PageTransition>{children}</PageTransition>
       </main>
     </div>

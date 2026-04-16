@@ -6,10 +6,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="h-screen bg-black flex overflow-hidden">
       <UserSidebar />
-      <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-auto">
-          <PageTransition>{children}</PageTransition>
-        </div>
+      <main className="flex-1 overflow-hidden">
+        <PageTransition>{children}</PageTransition>
         <CompactSiteFooter />
       </main>
     </div>

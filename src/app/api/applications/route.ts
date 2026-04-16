@@ -6,6 +6,7 @@ import { applyToGreenhouseJob } from "@/lib/greenhouse";
 import { autoAnswerQuestion } from "@/lib/greenhouse/questions";
 import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
+import { createNotification } from "@/lib/notifications";
 import { getPresignedGetUrl } from "@/lib/spaces";
 import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { z } from "zod";
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
     },
   });
 
-  // Fire confirmation email (non-blocking)
+  // Fire confirmation email and in-app notification (non-blocking)
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (user?.email) {
     sendApplyConfirmation({
@@ -179,6 +180,29 @@ export async function POST(request: Request) {
       appUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard`,
     });
   }
+
+  // In-app notification (email suppressed — confirmation email already sent above)
+  createNotification({
+    userId: session.user.id,
+    type: "APPLIED",
+    title: `Applied to ${job.title} at ${job.company.name}`,
+    body: "Your application was submitted successfully.",
+    ctaUrl: "/dashboard",
+    ctaLabel: "View Dashboard",
+    applicationId: application.id,
+    jobId: job.id,
+    data: {
+      type: "APPLIED",
+      applicationId: application.id,
+      jobId: job.id,
+      jobTitle: job.title,
+      companyName: job.company.name,
+    },
+    dedupeKey: `APPLIED:${application.id}`,
+    suppressEmail: true, // confirmation email already sent
+  }).catch((err: unknown) => {
+    console.error("[notifications] APPLIED notification failed:", err);
+  });
 
   if (!applyResult.success) {
     // Return partial success: we tracked it but Greenhouse submission failed

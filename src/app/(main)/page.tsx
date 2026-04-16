@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   return (
-    <div className="bg-black min-h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto bg-black">
       {/* Hero */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Subtle radial glow behind hero text */}

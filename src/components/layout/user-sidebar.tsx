@@ -14,6 +14,7 @@ import {
   LogIn,
 } from "lucide-react"
 import { CreditsBadge } from "@/components/billing/credits-badge"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 const publicNavItems = [
   { href: "/jobs", label: "Browse Jobs", icon: Briefcase },
@@ -83,8 +84,9 @@ export function UserSidebar() {
       <div className="p-4 border-t border-zinc-800 space-y-2">
         {session ? (
           <>
-            <div className="px-3 py-1">
+            <div className="px-3 py-1 flex items-center gap-2">
               <CreditsBadge />
+              <NotificationBell />
             </div>
             <div className="px-3 py-1">
               <p className="text-xs text-zinc-500 truncate">{session.user.email}</p>

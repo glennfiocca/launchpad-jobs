@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default function JobsPage() {
   return (
-    <div className="h-screen overflow-hidden bg-black flex flex-col">
+    <div className="h-full overflow-hidden bg-black flex flex-col">
       {/* Page header — fixed height, does not scroll */}
       <div className="px-4 sm:px-6 lg:px-8 pt-8 pb-4 shrink-0">
         <h1 className="text-2xl font-bold text-white">Browse Jobs</h1>

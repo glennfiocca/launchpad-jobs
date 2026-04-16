@@ -89,7 +89,14 @@ export function JobBoard() {
       const res = await fetch(`/api/jobs?${params}`);
       const data: ApiResponse<JobWithCompany[]> = await res.json();
       if (data.success && data.data) {
-        setJobs(prev => replace ? data.data! : [...prev, ...data.data!]);
+        if (replace) {
+          setJobs(data.data);
+        } else {
+          setJobs(prev => {
+            const existingIds = new Set(prev.map(j => j.id));
+            return [...prev, ...data.data!.filter(j => !existingIds.has(j.id))];
+          });
+        }
         setTotal(data.meta?.total ?? 0);
       }
     } catch {

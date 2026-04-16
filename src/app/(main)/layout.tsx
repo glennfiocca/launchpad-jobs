@@ -4,7 +4,7 @@ import { CompactSiteFooter } from "@/components/layout/footer";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-black flex">
+    <div className="h-screen bg-black flex overflow-hidden">
       <UserSidebar />
       <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
         <div className="min-h-0 flex-1 overflow-auto">

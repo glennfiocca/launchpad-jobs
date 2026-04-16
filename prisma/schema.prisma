@@ -78,12 +78,14 @@ model User {
   creditWindowStart DateTime @default(now())
   creditsUsed       Int      @default(0)
 
-  accounts     Account[]
-  sessions     Session[]
-  profile      UserProfile?
-  applications Application[]
-  subscription Subscription?
-  feedback     Feedback[]
+  accounts               Account[]
+  sessions               Session[]
+  profile                UserProfile?
+  applications           Application[]
+  subscription           Subscription?
+  feedback               Feedback[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
 }
 
 model Subscription {
@@ -217,7 +219,8 @@ model Job {
   isActive Boolean   @default(true)
   postedAt DateTime?
 
-  applications Application[]
+  applications  Application[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -264,6 +267,7 @@ model Application {
 
   emails        ApplicationEmail[]
   statusHistory ApplicationStatusHistory[]
+  notifications Notification[]
 
   @@unique([userId, jobId])
   @@index([userId])
@@ -400,4 +404,95 @@ model SyncBoardResult {
   durationMs  Int?
 
   @@index([syncLogId])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+enum NotificationType {
+  APPLIED
+  APPLICATION_STATUS_CHANGE
+  APPLICATION_OFFER
+  APPLICATION_INTERVIEW
+  APPLICATION_REJECTED
+  EMAIL_RECEIVED
+  LISTING_REMOVED
+  APPLY_FAILED
+  TEAM_MESSAGE
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum EmailFrequency {
+  INSTANT
+  DAILY
+  NEVER
+}
+
+model Notification {
+  id       String               @id @default(cuid())
+  userId   String
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type     NotificationType
+  priority NotificationPriority @default(NORMAL)
+
+  // Pre-rendered content for fast reads
+  title    String
+  body     String?  @db.Text
+  ctaUrl   String?
+  ctaLabel String?
+
+  // Typed payload (validated by Zod at write time)
+  data Json?
+
+  // Optional FK links — cascade keeps history clean
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  jobId         String?
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  emailSent   Boolean   @default(false)
+  emailSentAt DateTime?
+
+  // Prevents duplicate notifications for the same event
+  dedupeKey String? @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([applicationId])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailFrequency EmailFrequency @default(INSTANT)
+
+  // Per-type email toggles (in-app is always on)
+  emailOnOffer          Boolean @default(true)
+  emailOnInterview      Boolean @default(true)
+  emailOnStatusChange   Boolean @default(true)
+  emailOnEmailReceived  Boolean @default(false) // too chatty by default
+  emailOnListingRemoved Boolean @default(true)
+  emailOnTeamMessage    Boolean @default(true)
+  emailOnSystem         Boolean @default(true)
+  emailOnApplyFailed    Boolean @default(true)
+
+  // Throttle digest emails
+  lastDigestSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

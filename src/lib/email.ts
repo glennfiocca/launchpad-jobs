@@ -65,6 +65,112 @@ export async function sendApplicationConfirmation({
   });
 }
 
+// Escape HTML entities to prevent XSS in email templates
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Send an immediate single-notification email (for OFFER, INTERVIEW, HIGH priority)
+export async function sendInstantNotificationEmail({
+  to,
+  userName,
+  title,
+  body,
+  ctaUrl,
+  ctaLabel = "View Dashboard",
+}: {
+  to: string;
+  userName: string;
+  title: string;
+  body?: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const dest = ctaUrl ?? `${appUrl}/dashboard`;
+
+  // Strip CRLF from subject to prevent SMTP header injection
+  const safeSubject = title.replace(/[\r\n]+/g, " ");
+
+  return getResend().emails.send({
+    from: FROM_ADDRESS,
+    to,
+    subject: safeSubject,
+    html: `
+      <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #0f172a;">
+        <div style="margin-bottom: 24px;">
+          <div style="font-weight: 700; font-size: 18px; color: #0f172a;">🚀 Pipeline</div>
+        </div>
+        <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">${escapeHtml(title)}</h1>
+        ${body ? `<p style="color: #475569; margin-bottom: 24px;">${escapeHtml(body)}</p>` : ""}
+        <a href="${escapeHtml(dest)}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          ${escapeHtml(ctaLabel)} →
+        </a>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">
+          You can manage your notification preferences in your <a href="${appUrl}/settings/notifications" style="color: #94a3b8;">account settings</a>.
+        </p>
+      </div>
+    `,
+  });
+}
+
+// Send a digest email summarising unread notifications
+export async function sendNotificationDigest({
+  to,
+  userName,
+  unreadCount,
+  preview,
+  dashboardUrl,
+}: {
+  to: string;
+  userName: string;
+  unreadCount: number;
+  preview: Array<{ title: string; body?: string }>;
+  dashboardUrl: string;
+}) {
+  const previewHtml = preview
+    .map(
+      (n) => `
+        <div style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
+          <p style="font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 4px;">${escapeHtml(n.title)}</p>
+          ${n.body ? `<p style="font-size: 13px; color: #64748b; margin: 0;">${escapeHtml(n.body)}</p>` : ""}
+        </div>`
+    )
+    .join("");
+
+  return getResend().emails.send({
+    from: FROM_ADDRESS,
+    to,
+    subject: `You have ${unreadCount} new notification${unreadCount === 1 ? "" : "s"} on Pipeline`,
+    html: `
+      <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #0f172a;">
+        <div style="margin-bottom: 24px;">
+          <div style="font-weight: 700; font-size: 18px; color: #0f172a;">🚀 Pipeline</div>
+        </div>
+        <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">
+          Hi ${escapeHtml(userName)}, you have ${unreadCount} new update${unreadCount === 1 ? "" : "s"}
+        </h1>
+        <p style="color: #475569; margin-bottom: 24px;">Here's what's happened with your applications:</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+          ${previewHtml}
+        </div>
+        <a href="${dashboardUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          View all updates →
+        </a>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">
+          Pipeline — One-click job applications<br>
+          <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/settings/notifications" style="color: #94a3b8;">Manage notification preferences</a>
+        </p>
+      </div>
+    `,
+  });
+}
+
 // Send status update notification
 export async function sendStatusUpdate({
   to,

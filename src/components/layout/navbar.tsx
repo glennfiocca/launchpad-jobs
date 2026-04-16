@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, User, LogOut, LogIn, Zap, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditsBadge } from "@/components/billing/credits-badge";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function Navbar() {
   const { data: session } = useSession();
@@ -109,6 +110,7 @@ export function Navbar() {
                   </motion.div>
                 )}
                 <CreditsBadge />
+                <NotificationBell />
                 <motion.button
                   whileHover={{ y: -1 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}

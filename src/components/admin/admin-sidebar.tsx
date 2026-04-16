@@ -15,6 +15,7 @@ import {
   MessageSquare,
   RefreshCw,
   FileText,
+  Bell,
 } from "lucide-react"
 
 interface AdminSidebarProps {
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/admin/companies", label: "Companies", icon: Building2 },
   { href: "/admin/stats", label: "Stats", icon: BarChart3 },
   { href: "/admin/feedback", label: "Feedback", icon: MessageSquare },
+  { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/sync", label: "Sync Logs", icon: RefreshCw },
 ]
 

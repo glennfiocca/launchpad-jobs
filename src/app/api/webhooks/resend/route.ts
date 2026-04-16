@@ -4,8 +4,16 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { classifyRecruitingEmail, shouldUpdateStatus } from "@/lib/ai";
 import { sendStatusUpdate } from "@/lib/email";
-import type { ApplicationStatus } from "@prisma/client";
+import { createNotification } from "@/lib/notifications";
+import type { ApplicationStatus, NotificationType } from "@prisma/client";
 import { STATUS_CONFIG } from "@/types";
+
+function statusToNotificationType(status: string): NotificationType {
+  if (status === "OFFER") return "APPLICATION_OFFER";
+  if (status === "PHONE_SCREEN" || status === "INTERVIEWING") return "APPLICATION_INTERVIEW";
+  if (status === "REJECTED") return "APPLICATION_REJECTED";
+  return "APPLICATION_STATUS_CHANGE";
+}
 
 const resendWebhookSchema = z.object({
   type: z.string(),
@@ -75,6 +83,28 @@ export async function POST(request: Request) {
     },
   });
 
+  // In-app notification for received email (fire-and-forget, webhook must not fail)
+  createNotification({
+    userId: application.userId,
+    type: "EMAIL_RECEIVED",
+    title: `New email from ${application.job.company.name}`,
+    body: data.subject || "New recruiting email received",
+    ctaUrl: `/dashboard`,
+    ctaLabel: "View Application",
+    applicationId: application.id,
+    jobId: application.jobId,
+    data: {
+      type: "EMAIL_RECEIVED",
+      applicationId: application.id,
+      emailId: emailRecord.id,
+      subject: data.subject,
+      from: data.from,
+      jobTitle: application.job.title,
+      companyName: application.job.company.name,
+    },
+    dedupeKey: `EMAIL_RECEIVED:${emailRecord.id}`,
+  }).catch(() => undefined);
+
   // Skip AI classification if body is empty (content unavailable)
   if (!textBody) {
     return NextResponse.json({ received: true, matched: true });
@@ -130,6 +160,29 @@ export async function POST(request: Request) {
         console.error("Failed to send status update email:", err);
       });
     }
+
+    // In-app status change notification (email suppressed — sendStatusUpdate handles it above)
+    const notifType = statusToNotificationType(classification.status);
+    createNotification({
+      userId: application.userId,
+      type: notifType,
+      title: `Application update: ${application.job.title} at ${application.job.company.name}`,
+      body: `Status changed to ${classification.status.replace(/_/g, " ").toLowerCase()}.`,
+      ctaUrl: `/dashboard`,
+      ctaLabel: "View Application",
+      applicationId: application.id,
+      jobId: application.jobId,
+      data: {
+        type: notifType as "APPLICATION_STATUS_CHANGE",
+        applicationId: application.id,
+        fromStatus: prevStatus,
+        toStatus: classification.status as "OFFER",
+        jobTitle: application.job.title,
+        companyName: application.job.company.name,
+      },
+      dedupeKey: `${notifType}:${application.id}:${classification.status}`,
+      suppressEmail: true, // sendStatusUpdate already sent it
+    }).catch(() => undefined);
   }
 
   return NextResponse.json({ received: true, matched: true });

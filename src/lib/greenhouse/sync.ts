@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { generateUniquePublicJobId } from "@/lib/public-job-id";
 import { createGreenhouseClient, isRemoteJob, extractDepartment } from "./client";
+import { createNotification } from "@/lib/notifications";
 import { decode } from "html-entities";
 
 interface SyncResult {
@@ -131,7 +132,7 @@ export async function syncGreenhouseBoard(
         jobId: { in: removedJobIds },
         status: { notIn: ["REJECTED", "WITHDRAWN", "LISTING_REMOVED", "OFFER"] },
       },
-      select: { id: true, status: true },
+      include: { job: { include: { company: true } } },
     });
 
     for (const app of affectedApplications) {
@@ -150,6 +151,27 @@ export async function syncGreenhouseBoard(
             triggeredBy: "system",
           },
         });
+
+        // Notify the applicant (fire-and-forget — sync must not fail because of this)
+        createNotification({
+          userId: app.userId,
+          type: "LISTING_REMOVED",
+          title: `Listing removed: ${app.job.title} at ${app.job.company.name}`,
+          body: "The employer has removed this job listing. Your application history is preserved.",
+          ctaUrl: `/dashboard`,
+          ctaLabel: "View Dashboard",
+          applicationId: app.id,
+          jobId: app.jobId,
+          data: {
+            type: "LISTING_REMOVED",
+            applicationId: app.id,
+            jobId: app.jobId,
+            jobTitle: app.job.title,
+            companyName: app.job.company.name,
+          },
+          dedupeKey: `LISTING_REMOVED:${app.id}`,
+        }).catch(() => undefined);
+
         result.applicationsUpdated++;
       } catch (err) {
         result.errors.push(

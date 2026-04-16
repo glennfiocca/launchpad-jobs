@@ -118,24 +118,23 @@ export function FeedbackButton() {
 
   return (
     <>
-      {/* Invisible backdrop to catch outside clicks (panel ref handles this) */}
       {open && <div className="fixed inset-0 z-40" aria-hidden="true" />}
 
-      {/* Panel + trigger — pinned to right edge, vertically centered */}
+      {/* FAB + panel — anchored to bottom-right corner */}
       <div
         ref={panelRef}
-        className="fixed right-0 bottom-8 z-50 flex items-center"
+        className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
       >
-        {/* Slide-out panel */}
+        {/* Panel — scales in/out from bottom-right origin */}
         <div
           className={[
-            "transition-all duration-300 ease-in-out origin-right overflow-hidden",
+            "transition-all duration-200 ease-out origin-bottom-right",
             open
-              ? "opacity-100 translate-x-0 pointer-events-auto max-w-[20rem]"
-              : "opacity-0 translate-x-4 pointer-events-none max-w-0 min-w-0",
+              ? "opacity-100 scale-100 pointer-events-auto"
+              : "opacity-0 scale-95 pointer-events-none",
           ].join(" ")}
         >
-          <div className="bg-zinc-900 border border-zinc-700 rounded-l-2xl shadow-2xl w-80 overflow-hidden">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-80 overflow-hidden">
             {submitted ? (
               <div className="p-6 text-center space-y-3">
                 <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
@@ -248,15 +247,16 @@ export function FeedbackButton() {
           </div>
         </div>
 
-        {/* Trigger tab */}
+        {/* FAB trigger — small round button, icon only */}
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Open feedback form"
-          className="flex items-center gap-2 px-2.5 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium shadow-lg transition-all duration-200 rounded-l-xl"
-          style={{ writingMode: "vertical-rl" as const, transform: "rotate(180deg)" }}
+          className="w-11 h-11 flex items-center justify-center rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg hover:shadow-violet-500/30 transition-all duration-200"
         >
-          <MessageSquare className="w-4 h-4" />
-          Feedback
+          {open
+            ? <X className="w-5 h-5" />
+            : <MessageSquare className="w-5 h-5" />
+          }
         </button>
       </div>
     </>

@@ -72,8 +72,13 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Resume state
-  const [resumeUrl, setResumeUrl] = useState<string>(initialData?.resumeUrl ?? "");
+  // Resume state — tracked independently from profile form save.
+  // resumeExists: true if a resume is on file (real Spaces URL or just uploaded this session).
+  // resumeFileName: display name only.
+  // Never write these back via PUT /api/profile — the dedicated /api/profile/resume endpoint owns them.
+  const [resumeExists, setResumeExists] = useState<boolean>(
+    !!(initialData?.resumeUrl?.startsWith("https://"))
+  );
   const [resumeFileName, setResumeFileName] = useState<string>(initialData?.resumeFileName ?? "");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,10 +102,16 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
       setUploadError(json.error ?? "Upload failed");
     } else {
       setResumeFileName(file.name);
-      setResumeUrl("/api/profile/resume"); // preview via our own endpoint
+      setResumeExists(true);
       setUploadError(null);
     }
     setIsUploading(false);
+  };
+
+  const handleRemoveResume = async () => {
+    await fetch("/api/profile/resume", { method: "DELETE" });
+    setResumeExists(false);
+    setResumeFileName("");
   };
 
   const set = (field: keyof FormState, value: string | boolean) =>
@@ -121,8 +132,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
       linkedinUrl: form.linkedinUrl || undefined,
       githubUrl: form.githubUrl || undefined,
       portfolioUrl: form.portfolioUrl || undefined,
-      resumeUrl: resumeUrl || undefined,
-      resumeFileName: resumeFileName || undefined,
+      // resumeUrl/resumeFileName are owned by /api/profile/resume — never written here
     };
 
     const res = await fetch("/api/profile", {
@@ -215,7 +225,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           Your resume is attached automatically when you apply. PDF only, max 8MB.
         </p>
 
-        {resumeUrl ? (
+        {resumeExists ? (
           <div className="flex items-center justify-between bg-[#111111] border border-white/8 rounded-xl px-4 py-3">
             <div className="flex items-center gap-3">
               <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
@@ -227,7 +237,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
                 </a>
               </div>
             </div>
-            <button type="button" onClick={() => { setResumeUrl(""); setResumeFileName(""); }}
+            <button type="button" onClick={handleRemoveResume}
               className="text-zinc-600 hover:text-zinc-400 transition-colors">
               <X className="w-4 h-4" />
             </button>

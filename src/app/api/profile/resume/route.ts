@@ -107,21 +107,26 @@ export async function GET(request: Request) {
   }
 
   // Serve from DO Spaces via presigned URL (private bucket)
-  if (profile.resumeUrl) {
+  if (profile.resumeUrl?.startsWith("https://")) {
     const spaces = getSpacesClient();
     if (spaces) {
       const key = profile.resumeUrl.split(".digitaloceanspaces.com/")[1];
-      const signedUrl = await getSignedUrl(
-        spaces,
-        new GetObjectCommand({
-          Bucket: SPACES_BUCKET,
-          Key: key,
-          ResponseContentDisposition: `inline; filename="${profile.resumeFileName ?? "resume.pdf"}"`,
-          ResponseContentType: profile.resumeMimeType ?? "application/pdf",
-        }),
-        { expiresIn: 900 } // 15 minutes
-      );
-      return NextResponse.redirect(signedUrl);
+      if (!key) return new NextResponse("Resume URL is invalid", { status: 404 });
+      try {
+        const signedUrl = await getSignedUrl(
+          spaces,
+          new GetObjectCommand({
+            Bucket: SPACES_BUCKET,
+            Key: key,
+            ResponseContentDisposition: `inline; filename="${profile.resumeFileName ?? "resume.pdf"}"`,
+            ResponseContentType: profile.resumeMimeType ?? "application/pdf",
+          }),
+          { expiresIn: 900 } // 15 minutes
+        );
+        return NextResponse.redirect(signedUrl);
+      } catch {
+        return new NextResponse("Failed to generate resume link", { status: 502 });
+      }
     }
   }
 

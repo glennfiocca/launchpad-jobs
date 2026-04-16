@@ -56,10 +56,14 @@ export async function POST(
     }
   }
 
+  // Use the application's tracking email so recruiter replies route correctly
+  const trackingEmail = app.trackingEmail ?? profile.email
+
   const applyResult = await applyToGreenhouseJob({
     boardToken: app.job.boardToken,
     jobId: app.job.externalId,
     profile,
+    trackingEmail,
     resumeBuffer,
     resumeFileName: profile.resumeFileName ?? "resume.pdf",
   })

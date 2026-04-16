@@ -5,14 +5,12 @@ export async function sendApplyConfirmation({
   userName,
   jobTitle,
   companyName,
-  trackingEmail,
   appUrl,
 }: {
   userEmail: string;
   userName: string;
   jobTitle: string;
   companyName: string;
-  trackingEmail: string;
   appUrl: string;
 }) {
   await sendApplicationConfirmation({
@@ -20,7 +18,6 @@ export async function sendApplyConfirmation({
     userName,
     jobTitle,
     companyName,
-    trackingEmail,
     dashboardUrl: appUrl,
   }).catch((err) => {
     console.error("Failed to send application confirmation:", err);

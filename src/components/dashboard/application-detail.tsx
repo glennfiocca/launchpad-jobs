@@ -17,7 +17,7 @@ interface ApplicationDetailProps {
   onApplicationUpdate?: (updated: ApplicationWithJob) => void;
 }
 
-type Tab = "overview" | "emails" | "timeline";
+type Tab = "overview" | "messages" | "timeline";
 
 const TERMINAL_STATUSES: ApplicationStatus[] = ["WITHDRAWN", "LISTING_REMOVED", "REJECTED", "OFFER"];
 
@@ -176,7 +176,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
 
       {/* Tabs */}
       <div className="flex border-b border-white/8 px-6">
-        {(["overview", "emails", "timeline"] as Tab[]).map((t) => (
+        {(["overview", "messages", "timeline"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -188,7 +188,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
             )}
           >
             {t}
-            {t === "emails" && application.emails.length > 0 && (
+            {t === "messages" && application.emails.length > 0 && (
               <span className="ml-1 bg-white/10 text-zinc-300 text-xs rounded-full px-1.5 py-0.5">
                 {application.emails.length}
               </span>
@@ -201,15 +201,14 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
       <div className="p-5">
         {tab === "overview" && (
           <div className="space-y-5">
-            <div>
-              <h3 className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Tracking Email</h3>
-              <div className="bg-black border border-white/10 rounded-xl p-3 font-mono text-zinc-300 text-sm break-all">
-                {application.trackingEmail ?? "Not assigned"}
+            {application.emails.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs text-emerald-300/80">
+                  {application.emails.length} message{application.emails.length !== 1 ? "s" : ""} captured
+                </span>
               </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                Forward recruiting emails here to auto-track status.
-              </p>
-            </div>
+            )}
             {application.userNotes && (
               <div>
                 <h3 className="text-xs text-zinc-500 uppercase tracking-wide font-medium mb-2">Notes</h3>
@@ -225,7 +224,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
           </div>
         )}
 
-        {tab === "emails" && (
+        {tab === "messages" && (
           <EmailThread
             applicationId={application.id}
             initialEmails={application.emails}

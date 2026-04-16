@@ -8,6 +8,7 @@ export interface ApplyOptions {
   boardToken: string;
   jobId: string;
   profile: UserProfile;
+  trackingEmail: string;
   resumeBuffer?: Buffer;
   resumeFileName?: string;
   coverLetter?: string;
@@ -24,7 +25,7 @@ export interface ApplyResult {
 export async function applyToGreenhouseJob(
   options: ApplyOptions
 ): Promise<ApplyResult> {
-  const { boardToken, jobId, profile, resumeBuffer, resumeFileName, coverLetter, questionAnswers } = options;
+  const { boardToken, jobId, profile, trackingEmail, resumeBuffer, resumeFileName, coverLetter, questionAnswers } = options;
 
   const url = `${GREENHOUSE_BASE_URL}/${boardToken}/jobs/${jobId}`;
 
@@ -33,7 +34,8 @@ export async function applyToGreenhouseJob(
   // Core required fields
   formData.append("first_name", profile.firstName);
   formData.append("last_name", profile.lastName);
-  formData.append("email", profile.email);
+  // Use tracking email so recruiter replies route back through our inbound handler
+  formData.append("email", trackingEmail);
   if (profile.phone) formData.append("phone", profile.phone);
   if (profile.location) formData.append("location", profile.location);
 

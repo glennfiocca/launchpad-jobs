@@ -14,14 +14,12 @@ export async function sendApplicationConfirmation({
   userName,
   jobTitle,
   companyName,
-  trackingEmail,
   dashboardUrl,
 }: {
   to: string;
   userName: string;
   jobTitle: string;
   companyName: string;
-  trackingEmail: string;
   dashboardUrl: string;
 }) {
   return getResend().emails.send({
@@ -41,16 +39,9 @@ export async function sendApplicationConfirmation({
           Hi ${userName}, your application for <strong>${jobTitle}</strong> at <strong>${companyName}</strong> has been submitted.
         </p>
 
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
-          <p style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
-            Your Tracking Email
-          </p>
-          <p style="font-family: monospace; font-size: 13px; color: #1e293b; background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; word-break: break-all;">
-            ${trackingEmail}
-          </p>
-          <p style="font-size: 12px; color: #94a3b8;">
-            Forward any recruiting emails from ${companyName} to this address. We'll automatically track your application status.
-          </p>
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+          <p style="font-size: 14px; font-weight: 600; color: #166534; margin-bottom: 4px;">All set!</p>
+          <p style="font-size: 13px; color: #15803d;">We'll automatically track recruiter replies and update your dashboard in real time. No action needed.</p>
         </div>
 
         <a href="${dashboardUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;">

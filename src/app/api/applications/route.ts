@@ -98,6 +98,24 @@ export async function POST(request: Request) {
     );
   }
 
+  // Step 1: Create Application record to get the real ID
+  const application = await db.application.create({
+    data: {
+      userId: session.user.id,
+      jobId: job.id,
+      status: "APPLIED",
+      externalApplicationId: null,
+      trackingEmail: generateTrackingEmail(`${session.user.id.slice(0, 8)}-${job.id.slice(0, 8)}`),
+    },
+  });
+
+  // Step 2: Generate tracking email from real ID and persist immediately
+  const trackingEmail = generateTrackingEmail(application.id);
+  await db.application.update({
+    where: { id: application.id },
+    data: { trackingEmail },
+  });
+
   // Resolve resume: DB bytes (current) or DO Spaces URL (production)
   let resumeBuffer: Buffer | undefined;
   if (profile.resumeData) {
@@ -127,36 +145,24 @@ export async function POST(request: Request) {
   }
   Object.assign(questionAnswers, parsed.data.additionalAnswers ?? {});
 
-  // Submit to Greenhouse
+  // Step 3: Submit to Greenhouse using the tracking email so recruiter replies route back
   const applyResult = await applyToGreenhouseJob({
     boardToken: job.boardToken,
     jobId: job.externalId,
     profile,
+    trackingEmail,
     resumeBuffer,
     resumeFileName: profile.resumeFileName ?? "resume.pdf",
     questionAnswers,
   });
 
-  // Create application record regardless of Greenhouse result
-  // (Greenhouse may reject duplicate applications but we still track intent)
-  const application = await db.application.create({
-    data: {
-      userId: session.user.id,
-      jobId: job.id,
-      status: "APPLIED",
-      externalApplicationId: applyResult.applicationId ?? null,
-      trackingEmail: generateTrackingEmail(
-        // We'll update with real ID after creation
-        `${session.user.id.slice(0, 8)}-${job.id.slice(0, 8)}`
-      ),
-    },
-  });
-
-  // Update tracking email with real application ID
-  await db.application.update({
-    where: { id: application.id },
-    data: { trackingEmail: generateTrackingEmail(application.id) },
-  });
+  // Step 4: Update record with Greenhouse application ID if available
+  if (applyResult.applicationId) {
+    await db.application.update({
+      where: { id: application.id },
+      data: { externalApplicationId: applyResult.applicationId },
+    });
+  }
 
   // Create initial status history entry
   await db.applicationStatusHistory.create({
@@ -176,7 +182,6 @@ export async function POST(request: Request) {
       userName: user.name ?? profile.firstName,
       jobTitle: job.title,
       companyName: job.company.name,
-      trackingEmail: generateTrackingEmail(application.id),
       appUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard`,
     });
   }

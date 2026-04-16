@@ -16,7 +16,7 @@ export default async function DashboardLayout({
     <div className="h-screen bg-black flex overflow-hidden">
       <UserSidebar />
       <main className="flex-1 overflow-hidden grid grid-rows-[1fr_auto]">
-        <div className="overflow-hidden min-h-0">{children}</div>
+        <div className="h-full overflow-hidden min-h-0">{children}</div>
         <CompactSiteFooter />
       </main>
     </div>

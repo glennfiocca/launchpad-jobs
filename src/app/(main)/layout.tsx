@@ -7,7 +7,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <div className="h-screen bg-black flex overflow-hidden">
       <UserSidebar />
       <main className="flex-1 overflow-hidden grid grid-rows-[1fr_auto]">
-        <div className="overflow-hidden min-h-0">
+        <div className="h-full overflow-hidden min-h-0">
           <PageTransition>{children}</PageTransition>
         </div>
         <CompactSiteFooter />

@@ -79,7 +79,7 @@ export function UserSidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
+      {/* Account */}
       <div className="p-4 border-t border-zinc-800 space-y-2">
         {session ? (
           <>

@@ -94,3 +94,59 @@ export function Footer() {
     </footer>
   );
 }
+
+const compactLinkClass =
+  "text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 rounded-sm";
+
+export function CompactSiteFooter() {
+  const { data: session } = useSession();
+
+  return (
+    <footer className="shrink-0 border-t border-zinc-800 bg-black px-4 py-3 sm:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link
+            href="/"
+            className="inline-flex shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 rounded-sm"
+          >
+            <Image
+              src="/pipeline-logo.png"
+              alt="Pipeline"
+              width={140}
+              height={32}
+              className="h-5 w-auto opacity-90"
+            />
+          </Link>
+          <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <Link href="/jobs" className={compactLinkClass}>
+              Browse jobs
+            </Link>
+            {session ? (
+              <>
+                <Link href="/dashboard" className={compactLinkClass}>
+                  Dashboard
+                </Link>
+                <Link href="/profile" className={compactLinkClass}>
+                  Profile
+                </Link>
+              </>
+            ) : (
+              <Link href="/auth/signin" className={compactLinkClass}>
+                Sign in
+              </Link>
+            )}
+          </nav>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 text-xs text-zinc-600">
+          <p>© {new Date().getFullYear()} Pipeline. All rights reserved.</p>
+          <a
+            href="https://logo.dev"
+            className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"
+          >
+            Logos provided by Logo.dev
+          </a>
+        </div>
+      </div>
+    </footer>
+  );
+}

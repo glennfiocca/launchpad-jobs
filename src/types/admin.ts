@@ -1,5 +1,62 @@
 import type { ApplicationStatus, SubscriptionStatus, Role } from "@prisma/client"
 
+export type DispatchStatus = "DISPATCHED" | "FAILED" | "PENDING"
+
+export interface AdminApplication {
+  id: string
+  status: ApplicationStatus
+  externalApplicationId: string | null
+  trackingEmail: string | null
+  appliedAt: Date
+  updatedAt: Date
+  dispatchStatus: DispatchStatus
+  user: { id: string; email: string | null; name: string | null }
+  job: {
+    id: string
+    title: string
+    publicJobId: string
+    boardToken: string
+    externalId: string
+    company: { id: string; name: string; logoUrl: string | null }
+  }
+  _count: { emails: number; statusHistory: number }
+}
+
+export interface AdminApplicationDetail extends AdminApplication {
+  userNotes: string | null
+  emails: Array<{
+    id: string
+    fromEmail: string
+    toEmail: string
+    subject: string
+    body: string
+    direction: string
+    aiClassification: string | null
+    aiConfidence: number | null
+    aiReasoning: string | null
+    sentAt: Date
+  }>
+  statusHistory: Array<{
+    id: string
+    fromStatus: ApplicationStatus | null
+    toStatus: ApplicationStatus
+    reason: string | null
+    triggeredBy: string
+    createdAt: Date
+  }>
+}
+
+export interface AdminApplicationStats {
+  total: number
+  dispatched: number
+  failedDispatch: number
+  dispatchRate: number
+  last7d: number
+  last30d: number
+  byStatus: Array<{ status: ApplicationStatus; count: number }>
+  failedDispatchLast24h: number
+}
+
 export interface AdminStats {
   totalUsers: number
   totalApplications: number

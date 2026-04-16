@@ -25,3 +25,37 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
 })
+
+export const ALL_APPLICATION_STATUSES = [
+  "APPLIED",
+  "REVIEWING",
+  "PHONE_SCREEN",
+  "INTERVIEWING",
+  "OFFER",
+  "REJECTED",
+  "WITHDRAWN",
+  "LISTING_REMOVED",
+] as const
+
+export const applicationsQuerySchema = paginationSchema.extend({
+  status: z.enum(ALL_APPLICATION_STATUSES).optional(),
+  dispatchStatus: z.enum(["DISPATCHED", "FAILED", "PENDING"]).optional(),
+  companyId: z.string().optional(),
+  userId: z.string().optional(),
+  search: z.string().optional(),
+  sortBy: z.enum(["appliedAt", "updatedAt", "status"]).default("appliedAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+})
+
+export const adminUpdateApplicationSchema = z.object({
+  status: z.enum(ALL_APPLICATION_STATUSES).optional(),
+  userNotes: z.string().max(10000).optional().nullable(),
+  reason: z.string().max(500).optional(),
+})
+
+export const bulkApplicationActionSchema = z.object({
+  action: z.enum(["retry-dispatch", "export-csv"]),
+  ids: z.array(z.string()).min(1).max(500),
+})

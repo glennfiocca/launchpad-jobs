@@ -58,7 +58,7 @@ export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps)
   return (
     <div className="bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col h-full">
       {/* Header */}
-      <div className="p-6 border-b border-white/8">
+      <div className="p-6 border-b border-white/8 shrink-0">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-white/8 flex items-center justify-center text-white font-bold overflow-hidden">
@@ -175,32 +175,33 @@ export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps)
             e.currentTarget.focus({ preventScroll: true });
           }
         }}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 outline-none focus-visible:ring-2 focus-visible:ring-white/15"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain outline-none focus-visible:ring-2 focus-visible:ring-white/15"
       >
-        {decodedContent ? (
-          <div
-            key={job.id}
-            className="job-content text-sm"
-            dangerouslySetInnerHTML={{ __html: decodedContent }}
-          />
-        ) : (
-          <p className="text-zinc-500 text-sm">No description available.</p>
+        <div className="p-6">
+          {decodedContent ? (
+            <div
+              key={job.id}
+              className="job-content text-sm"
+              dangerouslySetInnerHTML={{ __html: decodedContent }}
+            />
+          ) : (
+            <p className="text-zinc-500 text-sm">No description available.</p>
+          )}
+        </div>
+        {job.absoluteUrl && (
+          <div className="border-t border-white/8 px-6 py-2.5 flex justify-end">
+            <a
+              href={job.absoluteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+              Original listing
+            </a>
+          </div>
         )}
       </div>
-
-      {job.absoluteUrl && (
-        <div className="shrink-0 border-t border-white/8 px-6 py-2.5 flex justify-end rounded-b-xl">
-          <a
-            href={job.absoluteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
-          >
-            <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
-            Original listing
-          </a>
-        </div>
-      )}
     </div>
   );
 }

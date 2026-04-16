@@ -74,8 +74,12 @@ export async function POST(request: Request) {
     where: { userId_jobId: { userId: session.user.id, jobId: job.id } },
   });
   if (existing) {
+    const duplicateMessage =
+      existing.status === "WITHDRAWN"
+        ? "You withdrew this application and cannot re-apply to this job."
+        : "You have already applied to this job";
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "You have already applied to this job" },
+      { success: false, error: duplicateMessage },
       { status: 409 }
     );
   }

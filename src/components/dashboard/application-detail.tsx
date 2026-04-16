@@ -36,7 +36,7 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
     INTERVIEWING: "You're in the interview process! Prep thoroughly and send thank-you notes.",
     OFFER: "Review the offer carefully. Negotiate if needed. Respond within the deadline.",
     REJECTED: "Don't be discouraged. Request feedback and keep applying.",
-    WITHDRAWN: "You've withdrawn from this opportunity.",
+    WITHDRAWN: "You've withdrawn from this opportunity and cannot re-apply to this job.",
   };
 
   const isTerminal = TERMINAL_STATUSES.includes(application.status);
@@ -122,7 +122,9 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
               </button>
             ) : (
               <>
-                <span className="text-xs text-zinc-400">Are you sure?</span>
+                <span className="text-xs text-zinc-400">
+                  This is final. You will not be able to re-apply to this job.
+                </span>
                 <button
                   onClick={handleWithdraw}
                   disabled={isWithdrawing}

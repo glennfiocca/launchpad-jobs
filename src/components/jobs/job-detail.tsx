@@ -12,6 +12,7 @@ import type { JobWithCompany } from "@/types";
 
 interface JobDetailProps {
   job: JobWithCompany;
+  hasPriorApplication: boolean;
   onClose: () => void;
 }
 
@@ -21,7 +22,7 @@ function decodeEntities(html: string): string {
   return textarea.value;
 }
 
-export function JobDetail({ job, onClose }: JobDetailProps) {
+export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -52,6 +53,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
   const [showModal, setShowModal] = useState(false);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isApplyDisabled = applied || hasPriorApplication;
 
   return (
     <div className="bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden flex flex-col h-full">
@@ -115,11 +117,27 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
           <div className="w-full py-3 px-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 font-semibold text-sm text-center">
             Applied! Check your dashboard to track progress.
           </div>
+        ) : session && hasPriorApplication ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled
+              className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-zinc-800 text-zinc-500 font-semibold text-sm cursor-not-allowed border border-white/10"
+            >
+              <Zap className="w-4 h-4" />
+              One-Click Apply
+            </button>
+            <p className="text-xs text-zinc-500 text-center">
+              You cannot re-apply to this job once an application exists.
+            </p>
+          </div>
         ) : session ? (
           <div className="space-y-2">
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button
+              type="button"
               onClick={() => setShowModal(true)}
+              disabled={isApplyDisabled}
               className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-white text-black font-semibold text-sm hover:bg-zinc-100 transition-colors"
             >
               <Zap className="w-4 h-4" />

@@ -2,11 +2,12 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
 import { JobDetail } from "./job-detail";
-import type { JobWithCompany, JobFilters, ApiResponse } from "@/types";
+import type { JobWithCompany, JobFilters, ApiResponse, ApplicationWithJob } from "@/types";
 import { Loader2 } from "lucide-react";
 
 const LIMIT = 20;
@@ -31,9 +32,11 @@ function jobMatchesUrlParam(job: JobWithCompany, param: string): boolean {
 export function JobBoard() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status: sessionStatus } = useSession();
   const jobIdFromUrl = searchParams.get("job");
 
   const [jobs, setJobs] = useState<JobWithCompany[]>([]);
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<JobWithCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -142,6 +145,33 @@ export function JobBoard() {
       setSelected(null);
     }
   }, [jobIdFromUrl]);
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !session?.user?.id) {
+      setAppliedJobIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/applications");
+        const data: ApiResponse<ApplicationWithJob[]> = await res.json();
+        if (!cancelled && data.success && data.data) {
+          setAppliedJobIds(new Set(data.data.map((application) => application.jobId)));
+        }
+      } catch {
+        if (!cancelled) {
+          setAppliedJobIds(new Set());
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, sessionStatus]);
 
   // Prefer list row when the job appears in the loaded list (infinite scroll)
   useEffect(() => {
@@ -275,7 +305,11 @@ export function JobBoard() {
       {/* Right: job detail — height comes from flex stretch, detail handles internal scroll */}
       {selected && (
         <div className="w-full lg:w-[560px] shrink-0 min-h-0 h-full">
-          <JobDetail job={selected} onClose={closeDetail} />
+          <JobDetail
+            job={selected}
+            hasPriorApplication={appliedJobIds.has(selected.id)}
+            onClose={closeDetail}
+          />
         </div>
       )}
     </div>

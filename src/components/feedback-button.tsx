@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { usePathname } from "next/navigation"
 import { MessageSquare, X, Star, Bug, Lightbulb, Heart, HelpCircle } from "lucide-react"
 
@@ -43,8 +43,19 @@ export function FeedbackButton() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tooltipVisible, setTooltipVisible] = useState(false)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
+
+  const showTooltip = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    setTooltipVisible(true)
+  }, [])
+
+  const hideTooltip = useCallback(() => {
+    hideTimer.current = setTimeout(() => setTooltipVisible(false), 150)
+  }, [])
 
   // Close on ESC
   useEffect(() => {
@@ -123,7 +134,7 @@ export function FeedbackButton() {
       {/* FAB + panel — anchored to bottom-right corner */}
       <div
         ref={panelRef}
-        className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
+        className="fixed bottom-16 right-6 z-50 flex flex-col items-end gap-3"
       >
         {/* Panel — scales in/out from bottom-right origin */}
         <div
@@ -247,17 +258,25 @@ export function FeedbackButton() {
           </div>
         </div>
 
-        {/* FAB trigger — small round button, icon only */}
-        <button
-          onClick={() => setOpen((o) => !o)}
-          aria-label="Open feedback form"
-          className="w-11 h-11 flex items-center justify-center rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg hover:shadow-violet-500/30 transition-all duration-200"
-        >
-          {open
-            ? <X className="w-5 h-5" />
-            : <MessageSquare className="w-5 h-5" />
-          }
-        </button>
+        {/* FAB trigger — small round button with tooltip */}
+        <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>
+          {tooltipVisible && !open && (
+            <div className="absolute bottom-full right-0 mb-2 whitespace-nowrap bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-zinc-300 shadow-xl pointer-events-none">
+              Leave feedback
+              <div className="absolute -bottom-1.5 right-3.5 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45" />
+            </div>
+          )}
+          <button
+            onClick={() => { setOpen((o) => !o); setTooltipVisible(false) }}
+            aria-label="Leave feedback"
+            className="w-11 h-11 flex items-center justify-center rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg hover:shadow-violet-500/30 transition-all duration-200"
+          >
+            {open
+              ? <X className="w-5 h-5" />
+              : <MessageSquare className="w-5 h-5" />
+            }
+          </button>
+        </div>
       </div>
     </>
   )

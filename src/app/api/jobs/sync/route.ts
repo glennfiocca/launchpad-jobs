@@ -1,38 +1,23 @@
-import { NextResponse } from "next/server";
-import { syncGreenhouseBoard, getActiveBoards } from "@/lib/greenhouse";
-import type { ApiResponse } from "@/types";
+import { NextResponse } from "next/server"
+import { runSync } from "@/lib/sync-runner"
+import type { ApiResponse } from "@/types"
 
 // Protected by a secret token for cron jobs
 export async function POST(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization")
+  const cronSecret = process.env.CRON_SECRET
 
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Unauthorized" },
       { status: 401 }
-    );
+    )
   }
 
-  const boards = await getActiveBoards();
-  const results = [];
-  const errors = [];
-
-  for (const board of boards) {
-    try {
-      const result = await syncGreenhouseBoard(board.token, board.name, board.logoUrl);
-      results.push(result);
-    } catch (err) {
-      errors.push({
-        board: board.name,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  return NextResponse.json<ApiResponse<typeof results>>({
+  const result = await runSync("cron")
+  return NextResponse.json<ApiResponse<typeof result>>({
     success: true,
-    data: results,
-    ...(errors.length > 0 && { error: `${errors.length} boards failed` }),
-  });
+    data: result,
+    ...(result.boardsFailed > 0 && { error: `${result.boardsFailed} boards failed` }),
+  })
 }

@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { db } from "@/lib/db"
 import { StatCard } from "@/components/admin/stat-card"
 import { STATUS_CONFIG } from "@/types"
@@ -16,6 +17,7 @@ export default async function AdminDashboardPage() {
     activeBoards,
     recentApplications,
     applicationsByStatus,
+    lastSync,
   ] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
@@ -32,6 +34,7 @@ export default async function AdminDashboardPage() {
       },
     }),
     db.application.groupBy({ by: ["status"], _count: { status: true } }),
+    db.syncLog.findFirst({ orderBy: { startedAt: "desc" } }),
   ])
 
   return (
@@ -49,6 +52,38 @@ export default async function AdminDashboardPage() {
         <StatCard label="Active Boards" value={activeBoards} />
         <StatCard label="New Signups (30d)" value={newSignups30d} />
         <StatCard label="Applications (30d)" value={applications30d} />
+      </div>
+
+      {/* Last Sync widget */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-zinc-400">Last Sync</p>
+          {lastSync ? (
+            <>
+              <p className="text-white font-medium mt-1">
+                {new Intl.DateTimeFormat("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                }).format(lastSync.startedAt)}
+              </p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {lastSync.status.replace("_", " ")} &middot;{" "}
+                {lastSync.totalAdded + lastSync.totalUpdated + lastSync.totalDeactivated} changes
+              </p>
+            </>
+          ) : (
+            <p className="text-zinc-500 text-sm mt-1">No syncs yet</p>
+          )}
+        </div>
+        <Link
+          href="/admin/sync"
+          className="text-xs text-violet-400 hover:text-violet-300 hover:underline shrink-0"
+        >
+          View all syncs →
+        </Link>
       </div>
 
       {/* Applications by status */}

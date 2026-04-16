@@ -46,3 +46,36 @@ export interface AdminCompanyBoard {
   createdAt: Date
   jobCount: number
 }
+
+export interface AdminSyncBoardResult {
+  id: string
+  boardToken: string
+  boardName: string
+  status: "SUCCESS" | "FAILURE" | "SKIPPED"
+  added: number
+  updated: number
+  deactivated: number
+  applicationsUpdated: number
+  errors: string[]
+  startedAt: string
+  completedAt: string | null
+  durationMs: number | null
+}
+
+export interface AdminSyncLog {
+  id: string
+  triggeredBy: string
+  startedAt: string
+  completedAt: string | null
+  status: "RUNNING" | "SUCCESS" | "PARTIAL_FAILURE" | "FAILURE"
+  totalBoards: number
+  boardsSynced: number
+  boardsFailed: number
+  totalAdded: number
+  totalUpdated: number
+  totalDeactivated: number
+  totalApplicationsUpdated: number
+  durationMs: number | null
+  errorSummary: string | null
+  boardResults?: AdminSyncBoardResult[]
+}

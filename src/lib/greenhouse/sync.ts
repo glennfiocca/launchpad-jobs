@@ -9,6 +9,7 @@ interface SyncResult {
   jobsAdded: number;
   jobsUpdated: number;
   jobsDeactivated: number;
+  applicationsUpdated: number;
   errors: string[];
 }
 
@@ -24,6 +25,7 @@ export async function syncGreenhouseBoard(
     jobsAdded: 0,
     jobsUpdated: 0,
     jobsDeactivated: 0,
+    applicationsUpdated: 0,
     errors: [],
   };
 
@@ -148,6 +150,7 @@ export async function syncGreenhouseBoard(
             triggeredBy: "system",
           },
         });
+        result.applicationsUpdated++;
       } catch (err) {
         result.errors.push(
           `Application ${app.id} LISTING_REMOVED update: ${err instanceof Error ? err.message : String(err)}`

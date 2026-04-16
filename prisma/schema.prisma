@@ -345,3 +345,57 @@ model Feedback {
   @@index([createdAt])
   @@index([userId])
 }
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL_FAILURE
+  FAILURE
+}
+
+enum SyncBoardStatus {
+  SUCCESS
+  FAILURE
+  SKIPPED
+}
+
+model SyncLog {
+  id           String     @id @default(cuid())
+  triggeredBy  String     // "cron" | "admin:<email>" | "api"
+  startedAt    DateTime   @default(now())
+  completedAt  DateTime?
+  status       SyncStatus @default(RUNNING)
+  totalBoards  Int        @default(0)
+  boardsSynced Int        @default(0)
+  boardsFailed Int        @default(0)
+  totalAdded   Int        @default(0)
+  totalUpdated Int        @default(0)
+  totalDeactivated         Int @default(0)
+  totalApplicationsUpdated Int @default(0)
+  durationMs   Int?
+  errorSummary String?    @db.Text
+
+  boardResults SyncBoardResult[]
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+model SyncBoardResult {
+  id          String          @id @default(cuid())
+  syncLogId   String
+  syncLog     SyncLog         @relation(fields: [syncLogId], references: [id], onDelete: Cascade)
+  boardToken  String
+  boardName   String
+  status      SyncBoardStatus
+  added       Int             @default(0)
+  updated     Int             @default(0)
+  deactivated Int             @default(0)
+  applicationsUpdated Int     @default(0)
+  errors      String[]        @default([])
+  startedAt   DateTime
+  completedAt DateTime?
+  durationMs  Int?
+
+  @@index([syncLogId])
+}

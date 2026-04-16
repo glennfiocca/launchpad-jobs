@@ -169,13 +169,9 @@ export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps)
       {/* Job content */}
       <div
         ref={scrollRef}
-        tabIndex={-1}
-        onPointerDown={(e) => {
-          if (e.currentTarget.contains(e.target as Node)) {
-            e.currentTarget.focus({ preventScroll: true });
-          }
-        }}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain outline-none focus-visible:ring-2 focus-visible:ring-white/15"
+        role="region"
+        aria-label="Job description"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
         <div className="p-6">
           {decodedContent ? (

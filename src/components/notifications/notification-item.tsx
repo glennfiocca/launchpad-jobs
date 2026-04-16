@@ -89,11 +89,11 @@ export function NotificationItem({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white leading-snug truncate">
+        <p className="text-sm font-medium text-white leading-snug break-words">
           {notification.title}
         </p>
         {notification.body && (
-          <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">
+          <p className="text-xs text-zinc-400 mt-0.5 line-clamp-3">
             {notification.body}
           </p>
         )}

@@ -124,7 +124,7 @@ export function FeedbackButton() {
       {/* Panel + trigger — pinned to right edge, vertically centered */}
       <div
         ref={panelRef}
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-50 flex items-center"
+        className="fixed right-0 bottom-8 z-50 flex items-center"
       >
         {/* Slide-out panel */}
         <div
@@ -252,10 +252,10 @@ export function FeedbackButton() {
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Open feedback form"
-          className="flex items-center gap-2 px-3 py-4 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium shadow-lg transition-all duration-200 rounded-l-xl"
+          className="flex items-center gap-2 px-2.5 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium shadow-lg transition-all duration-200 rounded-l-xl"
           style={{ writingMode: "vertical-rl" as const, transform: "rotate(180deg)" }}
         >
-          <MessageSquare className="w-4 h-4" style={{ transform: "rotate(180deg)" }} />
+          <MessageSquare className="w-4 h-4" />
           Feedback
         </button>
       </div>

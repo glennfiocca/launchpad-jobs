@@ -158,7 +158,7 @@ export async function syncGreenhouseBoard(
           type: "LISTING_REMOVED",
           title: `Listing removed: ${app.job.title} at ${app.job.company.name}`,
           body: "The employer has removed this job listing. Your application history is preserved.",
-          ctaUrl: `/dashboard`,
+          ctaUrl: `/dashboard?app=${app.id}`,
           ctaLabel: "View Dashboard",
           applicationId: app.id,
           jobId: app.jobId,

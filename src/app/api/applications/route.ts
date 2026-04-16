@@ -187,7 +187,7 @@ export async function POST(request: Request) {
     type: "APPLIED",
     title: `Applied to ${job.title} at ${job.company.name}`,
     body: "Your application was submitted successfully.",
-    ctaUrl: "/dashboard",
+    ctaUrl: `/dashboard?app=${application.id}`,
     ctaLabel: "View Dashboard",
     applicationId: application.id,
     jobId: job.id,

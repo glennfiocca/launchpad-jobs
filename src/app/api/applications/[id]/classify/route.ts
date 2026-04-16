@@ -81,7 +81,7 @@ export async function POST(
         type: notifType,
         title: `Application update: ${appWithJob.job.title} at ${appWithJob.job.company.name}`,
         body: `Status changed to ${classification.status.replace(/_/g, " ").toLowerCase()}.`,
-        ctaUrl: `/dashboard`,
+        ctaUrl: `/dashboard?app=${id}`,
         ctaLabel: "View Application",
         applicationId: id,
         jobId: appWithJob.jobId,

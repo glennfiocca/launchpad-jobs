@@ -221,9 +221,9 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
               <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-green-400">{resumeFileName || "resume.pdf"}</p>
-                <a href={resumeUrl} target="_blank" rel="noopener noreferrer"
+                <a href="/api/profile/resume" target="_blank" rel="noopener noreferrer"
                   className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                  Preview
+                  View Resume
                 </a>
               </div>
             </div>

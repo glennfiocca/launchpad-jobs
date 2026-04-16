@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import type { ApplicationWithJob } from "@/types";
 import { ApplicationCard } from "./application-card";
 import { ApplicationDetail } from "./application-detail";
@@ -39,6 +40,16 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
   const [applications, setApplications] = useState(initialApplications);
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
   const [selected, setSelected] = useState<ApplicationWithJob | null>(null);
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const appId = searchParams.get("app");
+    if (appId && applications.length > 0) {
+      const match = applications.find((a) => a.id === appId);
+      if (match) setSelected(match);
+    }
+  }, [searchParams, applications]);
 
   const filtered =
     activeTab === "ALL"

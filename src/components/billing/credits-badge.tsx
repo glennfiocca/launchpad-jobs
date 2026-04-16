@@ -60,10 +60,11 @@ export function CreditsBadge() {
           <div
             onMouseEnter={showTooltip}
             onMouseLeave={hideTooltip}
-            className="absolute top-full right-0 mt-2 w-48 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed z-50 shadow-xl"
+            className="absolute bottom-full right-0 mb-2 w-48 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed z-50 shadow-xl"
           >
             <p className="text-white font-medium mb-1">Pro Plan</p>
             <p>Unlimited applications — no daily cap.</p>
+            <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45" />
           </div>
         )}
       </div>
@@ -93,7 +94,7 @@ export function CreditsBadge() {
         <div
           onMouseEnter={showTooltip}
           onMouseLeave={hideTooltip}
-          className="absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed z-50 shadow-xl"
+          className="absolute bottom-full right-0 mb-2 w-56 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-400 leading-relaxed z-50 shadow-xl"
         >
           <p className={cn("font-medium mb-1", isLow ? "text-amber-400" : "text-white")}>
             Free tier
@@ -106,6 +107,7 @@ export function CreditsBadge() {
           >
             Upgrade for unlimited →
           </Link>
+          <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45" />
         </div>
       )}
     </div>

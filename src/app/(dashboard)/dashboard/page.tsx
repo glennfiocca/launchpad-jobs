@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import Link from "next/link";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,9 @@ export default async function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <DashboardClient initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]} />
+          <Suspense fallback={null}>
+            <DashboardClient initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]} />
+          </Suspense>
         )}
       </div>
     </div>

@@ -59,10 +59,11 @@ export function NotificationItem({
 
   function handleClick() {
     if (!notification.isRead) onMarkRead(notification.id);
-    if (notification.ctaUrl) {
-      router.push(notification.ctaUrl);
-      onClose();
-    }
+    const dest = notification.applicationId
+      ? `/dashboard?app=${notification.applicationId}`
+      : (notification.ctaUrl ?? "/dashboard");
+    router.push(dest);
+    onClose();
   }
 
   return (

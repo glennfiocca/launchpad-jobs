@@ -34,7 +34,12 @@ const TYPE_PROMPT: Record<FeedbackType, string> = {
   OTHER: "What's on your mind?",
 }
 
-export function FeedbackButton() {
+interface FeedbackButtonProps {
+  /** "fab" renders a fixed floating action button (default). "sidebar" renders a sidebar nav item. */
+  variant?: "fab" | "sidebar"
+}
+
+export function FeedbackButton({ variant = "fab" }: FeedbackButtonProps) {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<FeedbackType>("OTHER")
   const [rating, setRating] = useState<number | null>(null)
@@ -127,6 +132,157 @@ export function FeedbackButton() {
 
   const displayRating = hoverRating ?? rating
 
+  const panel = (
+    <div
+      className={[
+        "transition-all duration-200 ease-out",
+        variant === "sidebar" ? "origin-bottom-left" : "origin-bottom-right",
+        open
+          ? "opacity-100 scale-100 pointer-events-auto"
+          : "opacity-0 scale-95 pointer-events-none",
+      ].join(" ")}
+    >
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-80 overflow-hidden">
+        {submitted ? (
+          <div className="p-6 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+              <Heart className="w-6 h-6 text-green-400" />
+            </div>
+            <p className="text-white font-semibold">Thanks for the feedback!</p>
+            <p className="text-zinc-400 text-sm">We read every submission.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-violet-400" />
+                <span className="text-sm font-semibold text-white">Share feedback</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-zinc-500 hover:text-white transition-colors"
+                aria-label="Close feedback form"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Type selector */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setType(t.value)}
+                    className={[
+                      "flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all",
+                      type === t.value
+                        ? "border-violet-500/50 bg-violet-500/10 text-white"
+                        : "border-zinc-700 bg-transparent text-zinc-400 hover:border-zinc-500 hover:text-white",
+                    ].join(" ")}
+                  >
+                    <span className={type === t.value ? "text-violet-400" : t.color}>
+                      {t.icon}
+                    </span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Star rating */}
+              <div>
+                <p className="text-xs text-zinc-500 mb-2">
+                  How would you rate your experience?{" "}
+                  <span className="text-zinc-600">(optional)</span>
+                </p>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(rating === star ? null : star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(null)}
+                      className="transition-transform hover:scale-110"
+                      aria-label={`Rate ${star} out of 5`}
+                    >
+                      <Star
+                        className={[
+                          "w-6 h-6 transition-colors",
+                          (displayRating ?? 0) >= star
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-zinc-600",
+                        ].join(" ")}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Message */}
+              <div>
+                <p className="text-xs text-zinc-500 mb-2">{TYPE_PROMPT[type]}</p>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  required
+                  rows={4}
+                  placeholder={TYPE_PLACEHOLDER[type]}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+
+              {/* Current page context */}
+              <p className="text-xs text-zinc-600 truncate" title={pathname ?? ""}>
+                Page: {pathname}
+              </p>
+
+              {error && <p className="text-xs text-red-400">{error}</p>}
+
+              <button
+                type="submit"
+                disabled={submitting || !message.trim()}
+                className="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {submitting ? "Sending..." : "Send feedback"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+
+  if (variant === "sidebar") {
+    return (
+      <div ref={panelRef} className="relative">
+        {/* Panel — floats above the trigger, aligned to the left edge */}
+        <div className="absolute bottom-full left-0 mb-3 z-50">
+          {panel}
+        </div>
+
+        {/* Sidebar trigger */}
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Leave feedback"
+          className={[
+            "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+            open
+              ? "bg-violet-500/20 border border-violet-500/30 text-violet-300"
+              : "bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500/20 hover:text-violet-300",
+          ].join(" ")}
+        >
+          <MessageSquare className="w-4 h-4 shrink-0" />
+          <span>Share Feedback</span>
+        </button>
+      </div>
+    )
+  }
+
+  // FAB variant (original behavior)
   return (
     <>
       {open && <div className="fixed inset-0 z-40" aria-hidden="true" />}
@@ -136,127 +292,7 @@ export function FeedbackButton() {
         ref={panelRef}
         className="fixed bottom-16 right-6 z-50 flex flex-col items-end gap-3"
       >
-        {/* Panel — scales in/out from bottom-right origin */}
-        <div
-          className={[
-            "transition-all duration-200 ease-out origin-bottom-right",
-            open
-              ? "opacity-100 scale-100 pointer-events-auto"
-              : "opacity-0 scale-95 pointer-events-none",
-          ].join(" ")}
-        >
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-80 overflow-hidden">
-            {submitted ? (
-              <div className="p-6 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
-                  <Heart className="w-6 h-6 text-green-400" />
-                </div>
-                <p className="text-white font-semibold">Thanks for the feedback!</p>
-                <p className="text-zinc-400 text-sm">We read every submission.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit}>
-                {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-violet-400" />
-                    <span className="text-sm font-semibold text-white">Share feedback</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    className="text-zinc-500 hover:text-white transition-colors"
-                    aria-label="Close feedback form"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="p-4 space-y-4">
-                  {/* Type selector */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {TYPES.map((t) => (
-                      <button
-                        key={t.value}
-                        type="button"
-                        onClick={() => setType(t.value)}
-                        className={[
-                          "flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all",
-                          type === t.value
-                            ? "border-violet-500/50 bg-violet-500/10 text-white"
-                            : "border-zinc-700 bg-transparent text-zinc-400 hover:border-zinc-500 hover:text-white",
-                        ].join(" ")}
-                      >
-                        <span className={type === t.value ? "text-violet-400" : t.color}>
-                          {t.icon}
-                        </span>
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Star rating */}
-                  <div>
-                    <p className="text-xs text-zinc-500 mb-2">
-                      How would you rate your experience?{" "}
-                      <span className="text-zinc-600">(optional)</span>
-                    </p>
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          type="button"
-                          onClick={() => setRating(rating === star ? null : star)}
-                          onMouseEnter={() => setHoverRating(star)}
-                          onMouseLeave={() => setHoverRating(null)}
-                          className="transition-transform hover:scale-110"
-                          aria-label={`Rate ${star} out of 5`}
-                        >
-                          <Star
-                            className={[
-                              "w-6 h-6 transition-colors",
-                              (displayRating ?? 0) >= star
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-zinc-600",
-                            ].join(" ")}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Message */}
-                  <div>
-                    <p className="text-xs text-zinc-500 mb-2">{TYPE_PROMPT[type]}</p>
-                    <textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      required
-                      rows={4}
-                      placeholder={TYPE_PLACEHOLDER[type]}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-violet-500"
-                    />
-                  </div>
-
-                  {/* Current page context */}
-                  <p className="text-xs text-zinc-600 truncate" title={pathname ?? ""}>
-                    Page: {pathname}
-                  </p>
-
-                  {error && <p className="text-xs text-red-400">{error}</p>}
-
-                  <button
-                    type="submit"
-                    disabled={submitting || !message.trim()}
-                    className="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {submitting ? "Sending..." : "Send feedback"}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
+        {panel}
 
         {/* FAB trigger — small round button with tooltip */}
         <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>

@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { CreditsBadge } from "@/components/billing/credits-badge"
 import { NotificationBell } from "@/components/notifications/notification-bell"
+import { FeedbackButton } from "@/components/feedback-button"
 
 const publicNavItems = [
   { href: "/jobs", label: "Browse Jobs", icon: Briefcase },
@@ -79,6 +80,11 @@ export function UserSidebar() {
           </Link>
         ))}
       </nav>
+
+      {/* Feedback */}
+      <div className="px-4 pb-2">
+        <FeedbackButton variant="sidebar" />
+      </div>
 
       {/* Account */}
       <div className="p-4 border-t border-zinc-800 space-y-2">

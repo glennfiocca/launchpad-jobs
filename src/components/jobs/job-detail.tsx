@@ -185,15 +185,15 @@ export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps)
           )}
         </div>
         {job.absoluteUrl && (
-          <div className="border-t border-white/8 px-6 py-2.5 flex justify-end">
+          <div className="border-t border-white/8 px-6 py-3 flex justify-end">
             <a
               href={job.absoluteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors"
             >
-              <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
-              Original listing
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              View original listing
             </a>
           </div>
         )}

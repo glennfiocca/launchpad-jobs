@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY prisma/ ./prisma/
+# Increment CACHE_BUST to force a fresh npm ci layer when DO's kaniko cache is corrupted
+ARG CACHE_BUST=2
 RUN npm ci
 
 # Install Chromium browser + all required system libraries into the image

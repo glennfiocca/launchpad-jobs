@@ -40,18 +40,28 @@ export async function POST() {
       );
     }
 
-    let invoice = await getStripe().invoices.retrieve(invoiceId);
+    // In the 2026-03-25.dahlia API, the client_secret lives on the PaymentIntent
+    // referenced by the invoice's default InvoicePayment object.
+    const payments = await getStripe().invoicePayments.list({ invoice: invoiceId });
+    const defaultPayment = payments.data.find((p) => p.is_default);
 
-    // confirmation_secret is only present on a finalized invoice.
-    // With default_incomplete, the invoice may still be in draft state.
-    if (invoice.status === "draft") {
-      invoice = await getStripe().invoices.finalizeInvoice(invoiceId);
+    const paymentIntentId =
+      typeof defaultPayment?.payment.payment_intent === "string"
+        ? defaultPayment.payment.payment_intent
+        : defaultPayment?.payment.payment_intent?.id;
+
+    if (!paymentIntentId) {
+      console.error("No PaymentIntent found for invoice", invoiceId, "payments:", JSON.stringify(payments.data));
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Could not initialize payment. Please try again." },
+        { status: 500 }
+      );
     }
 
-    const clientSecret = invoice.confirmation_secret?.client_secret ?? null;
+    const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId);
+    const clientSecret = paymentIntent.client_secret;
 
     if (!clientSecret) {
-      console.error("No client_secret found. Invoice status:", invoice.status, "confirmation_secret:", invoice.confirmation_secret);
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Could not initialize payment. Please try again." },
         { status: 500 }

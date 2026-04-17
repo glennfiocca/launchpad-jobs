@@ -21,22 +21,27 @@ function formatTimeRemaining(resetsAt: Date): string {
 
 export function UpgradeModal({ resetsAt, onClose }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   async function handleUpgrade() {
     setLoading(true);
+    setUpgradeError(null);
     try {
       const res = await fetch("/api/billing/subscription", { method: "POST" });
       const data = (await res.json()) as {
         success: boolean;
         data?: { clientSecret: string; subscriptionId: string };
+        error?: string;
       };
       if (data.success && data.data?.clientSecret) {
         setClientSecret(data.data.clientSecret);
       } else {
+        setUpgradeError(data.error ?? "Something went wrong. Please try again.");
         setLoading(false);
       }
     } catch {
+      setUpgradeError("Network error. Please try again.");
       setLoading(false);
     }
   }
@@ -97,6 +102,12 @@ export function UpgradeModal({ resetsAt, onClose }: UpgradeModalProps) {
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Apply to as many jobs as you want, every day, with no caps.
               </p>
+              {upgradeError && (
+                <p className="text-sm text-red-400 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+                  {upgradeError}
+                </p>
+              )}
+
               <button
                 onClick={handleUpgrade}
                 disabled={loading}

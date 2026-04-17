@@ -19,32 +19,46 @@ export async function POST() {
     );
   }
 
-  const customerId = await getOrCreateStripeCustomer(
-    session.user.id,
-    session.user.email
-  );
+  try {
+    const customerId = await getOrCreateStripeCustomer(
+      session.user.id,
+      session.user.email
+    );
 
-  const subscription = await getStripe().subscriptions.create({
-    customer: customerId,
-    items: [{ price: STRIPE_PRICE_ID }],
-    payment_behavior: "default_incomplete",
-    payment_settings: { save_default_payment_method: "on_subscription" },
-    expand: ["latest_invoice.payment_intent"],
-    metadata: { userId: session.user.id },
-  });
+    const subscription = await getStripe().subscriptions.create({
+      customer: customerId,
+      items: [{ price: STRIPE_PRICE_ID }],
+      payment_behavior: "default_incomplete",
+      payment_settings: { save_default_payment_method: "on_subscription" },
+      expand: ["latest_invoice.payment_intent"],
+      metadata: { userId: session.user.id },
+    });
 
-  const invoice = subscription.latest_invoice as ExpandedInvoice;
-  const clientSecret = invoice.payment_intent.client_secret;
+    const invoice = subscription.latest_invoice as ExpandedInvoice | null;
+    if (!invoice) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Subscription created but no invoice was generated" },
+        { status: 500 }
+      );
+    }
 
-  if (clientSecret === null) {
+    const clientSecret = invoice.payment_intent.client_secret;
+    if (clientSecret === null) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Payment intent has no client secret" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json<ApiResponse<{ clientSecret: string; subscriptionId: string }>>({
+      success: true,
+      data: { clientSecret, subscriptionId: subscription.id },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to create subscription";
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Failed to retrieve payment intent client secret" },
+      { success: false, error: message },
       { status: 500 }
     );
   }
-
-  return NextResponse.json<ApiResponse<{ clientSecret: string; subscriptionId: string }>>({
-    success: true,
-    data: { clientSecret, subscriptionId: subscription.id },
-  });
 }

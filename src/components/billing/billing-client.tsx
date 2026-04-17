@@ -47,6 +47,7 @@ export function BillingClient({
 }: Props) {
   const router = useRouter();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
 
@@ -55,18 +56,22 @@ export function BillingClient({
 
   async function handleUpgrade() {
     setCheckoutLoading(true);
+    setCheckoutError(null);
     try {
       const res = await fetch("/api/billing/subscription", { method: "POST" });
       const data = (await res.json()) as {
         success: boolean;
         data?: { clientSecret: string; subscriptionId: string };
+        error?: string;
       };
       if (data.success && data.data?.clientSecret) {
         setCheckoutClientSecret(data.data.clientSecret);
       } else {
+        setCheckoutError(data.error ?? "Something went wrong. Please try again.");
         setCheckoutLoading(false);
       }
     } catch {
+      setCheckoutError("Network error. Please try again.");
       setCheckoutLoading(false);
     }
   }
@@ -237,6 +242,12 @@ export function BillingClient({
                 </li>
               ))}
             </ul>
+
+            {checkoutError && (
+              <p className="text-sm text-red-400 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+                {checkoutError}
+              </p>
+            )}
 
             <button
               onClick={handleUpgrade}

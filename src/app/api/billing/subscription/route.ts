@@ -40,13 +40,20 @@ export async function POST() {
       );
     }
 
-    const invoice = await getStripe().invoices.retrieve(invoiceId);
+    let invoice = await getStripe().invoices.retrieve(invoiceId);
+
+    // confirmation_secret is only present on a finalized invoice.
+    // With default_incomplete, the invoice may still be in draft state.
+    if (invoice.status === "draft") {
+      invoice = await getStripe().invoices.finalizeInvoice(invoiceId);
+    }
 
     const clientSecret = invoice.confirmation_secret?.client_secret ?? null;
 
     if (!clientSecret) {
+      console.error("No client_secret found. Invoice status:", invoice.status, "confirmation_secret:", invoice.confirmation_secret);
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Payment intent has no client secret" },
+        { success: false, error: "Could not initialize payment. Please try again." },
         { status: 500 }
       );
     }

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Zap, CheckCircle, AlertTriangle, CreditCard } from "lucide-react";
 import { FREE_TIER_CREDITS } from "@/lib/credits";
+import { CheckoutForm } from "@/components/billing/checkout-form";
 import type { $Enums } from "@prisma/client";
 type SubscriptionStatus = $Enums.SubscriptionStatus;
 
@@ -43,8 +45,10 @@ export function BillingClient({
   cancelAtPeriodEnd,
   justUpgraded,
 }: Props) {
+  const router = useRouter();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
 
   const isPro = subscriptionStatus === "ACTIVE";
   const isPastDue = subscriptionStatus === "PAST_DUE";
@@ -52,13 +56,15 @@ export function BillingClient({
   async function handleUpgrade() {
     setCheckoutLoading(true);
     try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const res = await fetch("/api/billing/subscription", { method: "POST" });
       const data = (await res.json()) as {
         success: boolean;
-        data?: { url: string };
+        data?: { clientSecret: string; subscriptionId: string };
       };
-      if (data.success && data.data?.url) {
-        window.location.href = data.data.url;
+      if (data.success && data.data?.clientSecret) {
+        setCheckoutClientSecret(data.data.clientSecret);
+      } else {
+        setCheckoutLoading(false);
       }
     } catch {
       setCheckoutLoading(false);
@@ -199,43 +205,54 @@ export function BillingClient({
 
       {/* Upgrade section — free users only */}
       {!isPro && (
-        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-base font-semibold text-white">
-              Unlimited Applications
-            </h2>
-            <span className="text-base font-bold text-white">
-              $24.99
-              <span className="text-xs font-normal text-zinc-400">/mo</span>
-            </span>
+        checkoutClientSecret ? (
+          <CheckoutForm
+            clientSecret={checkoutClientSecret}
+            onSuccess={() => {
+              setCheckoutClientSecret(null);
+              router.refresh();
+            }}
+            onCancel={() => setCheckoutClientSecret(null)}
+          />
+        ) : (
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-base font-semibold text-white">
+                Unlimited Applications
+              </h2>
+              <span className="text-base font-bold text-white">
+                $24.99
+                <span className="text-xs font-normal text-zinc-400">/mo</span>
+              </span>
+            </div>
+
+            <ul className="space-y-2 text-sm text-zinc-300">
+              {[
+                "No daily application cap — apply to as many jobs as you want",
+                "Cancel any time",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+
+            <button
+              onClick={handleUpgrade}
+              disabled={checkoutLoading}
+              className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+            >
+              {checkoutLoading ? "Loading..." : "Upgrade to Unlimited — $24.99/mo"}
+            </button>
+
+            {/* Bootstrap note */}
+            <p className="text-xs text-zinc-500 text-center leading-relaxed">
+              Sorry to charge — we&apos;re bootstrapping and hope to make this
+              free down the line. We really appreciate your support.
+            </p>
           </div>
-
-          <ul className="space-y-2 text-sm text-zinc-300">
-            {[
-              "No daily application cap — apply to as many jobs as you want",
-              "Cancel any time",
-            ].map((item) => (
-              <li key={item} className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                {item}
-              </li>
-            ))}
-          </ul>
-
-          <button
-            onClick={handleUpgrade}
-            disabled={checkoutLoading}
-            className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-          >
-            {checkoutLoading ? "Redirecting to Stripe..." : "Upgrade to Unlimited — $24.99/mo"}
-          </button>
-
-          {/* Bootstrap note */}
-          <p className="text-xs text-zinc-500 text-center leading-relaxed">
-            Sorry to charge — we&apos;re bootstrapping and hope to make this
-            free down the line. We really appreciate your support.
-          </p>
-        </div>
+        )
       )}
     </div>
   );

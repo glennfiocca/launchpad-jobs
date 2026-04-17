@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Zap, Clock } from "lucide-react";
 import { FREE_TIER_CREDITS } from "@/lib/credits";
+import { CheckoutForm } from "@/components/billing/checkout-form";
 
 interface UpgradeModalProps {
   resetsAt: Date;
@@ -20,17 +21,20 @@ function formatTimeRemaining(resetsAt: Date): string {
 
 export function UpgradeModal({ resetsAt, onClose }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   async function handleUpgrade() {
     setLoading(true);
     try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const res = await fetch("/api/billing/subscription", { method: "POST" });
       const data = (await res.json()) as {
         success: boolean;
-        data?: { url: string };
+        data?: { clientSecret: string; subscriptionId: string };
       };
-      if (data.success && data.data?.url) {
-        window.location.href = data.data.url;
+      if (data.success && data.data?.clientSecret) {
+        setClientSecret(data.data.clientSecret);
+      } else {
+        setLoading(false);
       }
     } catch {
       setLoading(false);
@@ -73,27 +77,35 @@ export function UpgradeModal({ resetsAt, onClose }: UpgradeModalProps) {
           </div>
 
           {/* Upgrade card */}
-          <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-white">
-                Unlimited Applications
-              </span>
-              <span className="text-sm font-bold text-white">
-                $24.99
-                <span className="text-xs font-normal text-zinc-400">/mo</span>
-              </span>
+          {clientSecret ? (
+            <CheckoutForm
+              clientSecret={clientSecret}
+              onSuccess={onClose}
+              onCancel={() => setClientSecret(null)}
+            />
+          ) : (
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold text-white">
+                  Unlimited Applications
+                </span>
+                <span className="text-sm font-bold text-white">
+                  $24.99
+                  <span className="text-xs font-normal text-zinc-400">/mo</span>
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Apply to as many jobs as you want, every day, with no caps.
+              </p>
+              <button
+                onClick={handleUpgrade}
+                disabled={loading}
+                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Upgrade to Unlimited"}
+              </button>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Apply to as many jobs as you want, every day, with no caps.
-            </p>
-            <button
-              onClick={handleUpgrade}
-              disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-            >
-              {loading ? "Redirecting..." : "Upgrade to Unlimited"}
-            </button>
-          </div>
+          )}
 
           {/* Bootstrap note */}
           <p className="text-xs text-zinc-600 leading-relaxed text-center">

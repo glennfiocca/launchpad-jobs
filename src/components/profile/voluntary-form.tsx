@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import {
   EEOC_GENDER,
   EEOC_RACE,
@@ -35,8 +35,6 @@ export function VoluntaryForm({ initialData }: VoluntaryFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initFormState(initialData));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const set = (field: keyof FormState, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -44,8 +42,6 @@ export function VoluntaryForm({ initialData }: VoluntaryFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setError(null);
-    setSuccess(false);
 
     const payload = {
       voluntaryGender: form.gender || null,
@@ -63,16 +59,16 @@ export function VoluntaryForm({ initialData }: VoluntaryFormProps) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        setError(data.error ?? "Failed to save voluntary information");
+        toast.error(data.error ?? "Failed to save voluntary information");
       } else {
-        setSuccess(true);
+        toast.success("Voluntary information saved successfully!");
         router.refresh();
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save voluntary information");
+    } catch {
+      toast.error("Network error — please check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
   };
 
   const inputClass =
@@ -83,19 +79,6 @@ export function VoluntaryForm({ initialData }: VoluntaryFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 text-sm">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          Voluntary information saved successfully!
-        </div>
-      )}
-
       <div className="bg-blue-500/8 border border-blue-500/15 rounded-xl p-4 text-blue-400/80 text-sm">
         Completing these fields is entirely voluntary. The information is used solely for EEOC/affirmative
         action reporting and will never affect how your application is evaluated. Answers are stored once

@@ -3,7 +3,8 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
-import { CheckCircle, AlertCircle, Upload, FileText, X, Loader2 } from "lucide-react";
+import { AlertCircle, Upload, FileText, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface ProfileFormProps {
   initialData: UserProfile | null;
@@ -69,8 +70,6 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initFormState(initialData));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   // Resume state — tracked independently from profile form save.
   // resumeExists: true if a resume is on file (real Spaces URL or just uploaded this session).
@@ -120,8 +119,6 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setError(null);
-    setSuccess(false);
 
     const payload = {
       ...form,
@@ -135,20 +132,25 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
       // resumeUrl/resumeFileName are owned by /api/profile/resume — never written here
     };
 
-    const res = await fetch("/api/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Failed to save profile");
-    } else {
-      setSuccess(true);
-      router.refresh();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        toast.error(data.error ?? "Failed to save profile");
+      } else {
+        toast.success("Profile saved successfully!");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Network error — please check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const inputClass =
@@ -159,19 +161,6 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 text-sm">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          Profile saved successfully!
-        </div>
-      )}
-
       {/* Personal Info */}
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Personal Information</h2>

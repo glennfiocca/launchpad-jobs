@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ProgressBar } from "@/components/layout/progress-bar";
 import { FeedbackButton } from "@/components/feedback-button";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,6 +26,7 @@ export default function RootLayout({
           {children}
           <FeedbackButton />
         </Providers>
+        <Toaster theme="dark" richColors position="top-right" />
       </body>
     </html>
   );

@@ -83,12 +83,25 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const profile = await db.userProfile.updateMany({
+  const existing = await db.userProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+  if (!existing) {
+    return NextResponse.json<ApiResponse<never>>(
+      {
+        success: false,
+        error: "Please save your main profile first before adding voluntary information.",
+      },
+      { status: 404 }
+    );
+  }
+
+  const profile = await db.userProfile.update({
     where: { userId: session.user.id },
     data: parsed.data,
   });
 
-  return NextResponse.json<ApiResponse<typeof profile>>({ success: true, data: profile });
+  return NextResponse.json<ApiResponse<UserProfile>>({ success: true, data: profile });
 }
 
 export async function PUT(request: Request) {

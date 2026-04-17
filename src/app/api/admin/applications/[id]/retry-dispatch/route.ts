@@ -72,7 +72,11 @@ export async function POST(
     await db.$transaction([
       db.application.update({
         where: { id: app.id },
-        data: { externalApplicationId: applyResult.applicationId },
+        data: {
+          externalApplicationId: applyResult.applicationId,
+          submissionStatus: "SUBMITTED",
+          submissionError: null,
+        },
       }),
       db.applicationStatusHistory.create({
         data: {
@@ -92,20 +96,37 @@ export async function POST(
   }
 
   // Dispatch failed — log history entry
-  await db.applicationStatusHistory.create({
-    data: {
-      applicationId: app.id,
-      fromStatus: app.status,
-      toStatus: app.status,
-      reason: `Admin retry dispatch failed: ${applyResult.error ?? "Unknown error"}`,
-      triggeredBy: `admin:${session.user.email}`,
-    },
-  })
+  const failReason = applyResult.errorCode === "CAPTCHA_REQUIRED"
+    ? `CAPTCHA_REQUIRED: Bot challenge blocked automation. Manual apply: ${applyResult.manualApplyUrl ?? "N/A"}`
+    : `Admin retry dispatch failed: ${applyResult.error ?? "Unknown error"}`
 
-  return NextResponse.json<ApiResponse<never>>(
+  await db.$transaction([
+    db.application.update({
+      where: { id: app.id },
+      data: {
+        submissionStatus: "FAILED",
+        submissionError: failReason,
+      },
+    }),
+    db.applicationStatusHistory.create({
+      data: {
+        applicationId: app.id,
+        fromStatus: app.status,
+        toStatus: app.status,
+        reason: failReason,
+        triggeredBy: `admin:${session.user.email}`,
+      },
+    }),
+  ])
+
+  return NextResponse.json<ApiResponse<{ errorCode?: string; manualApplyUrl?: string }>>(
     {
       success: false,
       error: `Greenhouse dispatch failed: ${applyResult.error ?? "Unknown error"}`,
+      data: {
+        errorCode: applyResult.errorCode,
+        manualApplyUrl: applyResult.manualApplyUrl,
+      },
     },
     { status: 502 }
   )

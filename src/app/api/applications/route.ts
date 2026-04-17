@@ -86,13 +86,39 @@ async function runPlaywrightSubmission(opts: {
         console.error("[notifications] APPLIED notification failed:", err);
       });
     } else {
+      const isCaptchaBlocked = applyResult.errorCode === "CAPTCHA_REQUIRED";
+      const isBrowserFailed = applyResult.errorCode === "BROWSER_LAUNCH_FAILED";
+
+      const submissionError = isCaptchaBlocked
+        ? `CAPTCHA_REQUIRED: Automation was blocked by a bot challenge. Apply manually: ${applyResult.manualApplyUrl ?? ""}`
+        : (applyResult.error ?? "Unknown error");
+
       await db.application.update({
         where: { id: opts.applicationId },
         data: {
           submissionStatus: "FAILED",
-          submissionError: applyResult.error ?? "Unknown error",
+          submissionError,
         },
       });
+
+      if (isCaptchaBlocked || isBrowserFailed) {
+        // Surface actionable notification so user can apply manually
+        createNotification({
+          userId: opts.userId,
+          type: "APPLIED",
+          title: `Action required: ${opts.jobTitle} at ${opts.companyName}`,
+          body: isCaptchaBlocked
+            ? "Automation was blocked by a security challenge. Please apply manually via the job link."
+            : "Browser automation failed to start. Please apply manually via the job link.",
+          ctaUrl: applyResult.manualApplyUrl ?? `/dashboard?app=${opts.applicationId}`,
+          ctaLabel: isCaptchaBlocked ? "Apply Manually" : "View Job",
+          applicationId: opts.applicationId,
+          dedupeKey: `APPLY_FAILED:${opts.applicationId}`,
+          suppressEmail: false,
+        }).catch((err: unknown) => {
+          console.error("[notifications] APPLY_FAILED notification failed:", err);
+        });
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Playwright crashed";

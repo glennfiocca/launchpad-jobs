@@ -16,7 +16,9 @@
     "enrich-logos": "tsx scripts/enrich-logos.ts",
     "db:promote-admin": "tsx prisma/promote-admin.ts",
     "db:seed-boards": "tsx prisma/seed-company-boards.ts",
-    "db:seed-universities": "tsx prisma/seed-universities.ts"
+    "db:seed-universities": "tsx prisma/seed-universities.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -72,6 +74,7 @@
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
     "tsx": "^4.19.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.4"
   }
 }

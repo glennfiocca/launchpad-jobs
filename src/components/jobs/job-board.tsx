@@ -7,21 +7,11 @@ import { motion } from "framer-motion";
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
 import { JobDetail } from "./job-detail";
-import type { JobWithCompany, JobFilters, ApiResponse, ApplicationWithJob } from "@/types";
+import { useJobFilters } from "@/hooks/use-job-filters";
+import type { JobWithCompany, JobFacets, ApiResponse, ApplicationWithJob } from "@/types";
 import { Loader2 } from "lucide-react";
 
 const LIMIT = 20;
-
-function jobFiltersEqual(a: JobFilters, b: JobFilters): boolean {
-  return (
-    (a.query ?? "") === (b.query ?? "") &&
-    (a.location ?? "") === (b.location ?? "") &&
-    (a.department ?? "") === (b.department ?? "") &&
-    (a.company ?? "") === (b.company ?? "") &&
-    !!a.remote === !!b.remote &&
-    (a.employmentType ?? "") === (b.employmentType ?? "")
-  );
-}
 
 function jobMatchesUrlParam(job: JobWithCompany, param: string): boolean {
   if (job.id === param) return true;
@@ -33,6 +23,7 @@ export function JobBoard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
+  const { filters } = useJobFilters();
   const jobIdFromUrl = searchParams.get("job");
 
   const [jobs, setJobs] = useState<JobWithCompany[]>([]);
@@ -42,14 +33,14 @@ export function JobBoard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<JobFilters>({});
-  const filtersSnapshot = useRef(filters);
-  filtersSnapshot.current = filters;
+  const [facets, setFacets] = useState<JobFacets | undefined>();
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const jobsRef = useRef<JobWithCompany[]>([]);
   jobsRef.current = jobs;
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
   const observerRef = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const hasMoreRef = useRef(false);
@@ -61,10 +52,9 @@ export function JobBoard() {
   const loadNextPage = useCallback(() => {
     if (isFetchingRef.current || !hasMoreRef.current) return;
     isFetchingRef.current = true;
-    setPage(p => p + 1);
+    setPage((p) => p + 1);
   }, []);
 
-  // After each fetch, re-trigger intersection check in case sentinel is still in viewport
   const recheckSentinel = useCallback(() => {
     const observer = observerRef.current;
     const sentinel = sentinelRef.current;
@@ -73,44 +63,53 @@ export function JobBoard() {
     observer.observe(sentinel);
   }, []);
 
-  const fetchJobs = useCallback(async (f: JobFilters, p: number, replace: boolean) => {
-    if (replace) setLoading(true);
-    else setLoadingMore(true);
+  const fetchJobs = useCallback(
+    async (f: typeof filters, p: number, replace: boolean) => {
+      if (replace) setLoading(true);
+      else setLoadingMore(true);
 
-    const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
-    if (f.query) params.set("query", f.query);
-    if (f.location) params.set("location", f.location);
-    if (f.department) params.set("department", f.department);
-    if (f.company) params.set("company", f.company);
-    if (f.remote) params.set("remote", "true");
-    if (f.employmentType) params.set("employmentType", f.employmentType);
+      const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
+      if (f.query) params.set("query", f.query);
+      if (f.location) params.set("location", f.location);
+      if (f.department) params.set("department", f.department);
+      if (f.company) params.set("company", f.company);
+      if (f.remote) params.set("remote", "true");
+      if (f.employmentType) params.set("employmentType", f.employmentType);
+      if (f.datePosted && f.datePosted !== "any")
+        params.set("datePosted", f.datePosted);
+      if (f.salaryMin !== undefined) params.set("salaryMin", String(f.salaryMin));
+      if (f.salaryMax !== undefined) params.set("salaryMax", String(f.salaryMax));
+      if (f.sort) params.set("sort", f.sort);
 
-    try {
-      const res = await fetch(`/api/jobs?${params}`);
-      const data: ApiResponse<JobWithCompany[]> = await res.json();
-      if (data.success && data.data) {
-        if (replace) {
-          setJobs(data.data);
-        } else {
-          setJobs(prev => {
-            const existingIds = new Set(prev.map(j => j.id));
-            return [...prev, ...data.data!.filter(j => !existingIds.has(j.id))];
-          });
+      try {
+        const res = await fetch(`/api/jobs?${params}`);
+        const data: ApiResponse<JobWithCompany[]> = await res.json();
+        if (data.success && data.data) {
+          if (replace) {
+            setJobs(data.data);
+            hasAnimatedRef.current = false;
+          } else {
+            setJobs((prev) => {
+              const existingIds = new Set(prev.map((j) => j.id));
+              return [...prev, ...data.data!.filter((j) => !existingIds.has(j.id))];
+            });
+          }
+          setTotal(data.meta?.total ?? 0);
+          if (data.meta?.facets) setFacets(data.meta.facets);
         }
-        setTotal(data.meta?.total ?? 0);
+      } catch {
+        // non-fatal
+      } finally {
+        isFetchingRef.current = false;
+        if (replace) setLoading(false);
+        else setLoadingMore(false);
+        recheckSentinel();
       }
-    } catch {
-      // non-fatal
-    } finally {
-      isFetchingRef.current = false;
-      if (replace) setLoading(false);
-      else setLoadingMore(false);
-      // Re-evaluate intersection in case sentinel is still in viewport after load
-      recheckSentinel();
-    }
-  }, [recheckSentinel]);
+    },
+    [recheckSentinel]
+  );
 
-  // Observer set up once — sentinel is always mounted so ref is valid immediately
+  // Observer set up once
   useEffect(() => {
     const sentinel = sentinelRef.current;
     const list = listRef.current;
@@ -131,7 +130,7 @@ export function JobBoard() {
     };
   }, [loadNextPage]);
 
-  // Filter change: reset and fetch fresh page 1
+  // Filter change: reset to page 1 and fetch fresh
   useEffect(() => {
     isFetchingRef.current = false;
     setPage(1);
@@ -139,20 +138,20 @@ export function JobBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  // Page increment from scroll: fetch next page and append
+  // Page increment from infinite scroll: append next page
+  // Use filtersRef to avoid stale closure — filters may change between renders
   useEffect(() => {
     if (page === 1) return;
-    fetchJobs(filters, page, false);
+    fetchJobs(filtersRef.current, page, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, fetchJobs]);
 
   // Clear selection when URL has no ?job=
   useEffect(() => {
-    if (!jobIdFromUrl) {
-      setSelected(null);
-    }
+    if (!jobIdFromUrl) setSelected(null);
   }, [jobIdFromUrl]);
 
+  // Load applied job IDs for current user
   useEffect(() => {
     if (sessionStatus !== "authenticated" || !session?.user?.id) {
       setAppliedJobIds(new Set());
@@ -160,40 +159,31 @@ export function JobBoard() {
     }
 
     let cancelled = false;
-
     (async () => {
       try {
         const res = await fetch("/api/applications");
         const data: ApiResponse<ApplicationWithJob[]> = await res.json();
         if (!cancelled && data.success && data.data) {
-          setAppliedJobIds(new Set(data.data.map((application) => application.jobId)));
+          setAppliedJobIds(new Set(data.data.map((a) => a.jobId)));
         }
       } catch {
-        if (!cancelled) {
-          setAppliedJobIds(new Set());
-        }
+        if (!cancelled) setAppliedJobIds(new Set());
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [session?.user?.id, sessionStatus]);
 
-  // Prefer list row when the job appears in the loaded list (infinite scroll)
+  // Select job from loaded list when URL param matches
   useEffect(() => {
     if (!jobIdFromUrl) return;
     const match = jobs.find((j) => jobMatchesUrlParam(j, jobIdFromUrl));
-    if (match) {
-      setSelected(match);
-    }
+    if (match) setSelected(match);
   }, [jobIdFromUrl, jobs]);
 
-  // Fetch by id/publicJobId only when not in list — abort only when `job` param changes (not when `jobs` churns)
+  // Fetch individual job by id/publicJobId when not in list
   useEffect(() => {
-    if (!jobIdFromUrl) return;
-    if (loading) return;
-
+    if (!jobIdFromUrl || loading) return;
     const inList = jobsRef.current.some((j) => jobMatchesUrlParam(j, jobIdFromUrl));
     if (inList) return;
 
@@ -213,51 +203,48 @@ export function JobBoard() {
           router.replace("/jobs", { scroll: false });
         }
       } catch {
-        if (!ac.signal.aborted) {
-          router.replace("/jobs", { scroll: false });
-        }
+        if (!ac.signal.aborted) router.replace("/jobs", { scroll: false });
       }
     })();
 
-    return () => {
-      ac.abort();
-    };
+    return () => { ac.abort(); };
   }, [jobIdFromUrl, loading, router]);
 
   const selectJob = useCallback(
     (job: JobWithCompany) => {
       setSelected(job);
       const slug = job.publicJobId ?? job.id;
-      router.replace(`/jobs?job=${encodeURIComponent(slug)}`, { scroll: false });
+      // Preserve all active filter params — only set the job param
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("job", encodeURIComponent(slug));
+      router.replace(`/jobs?${params}`, { scroll: false });
     },
-    [router]
+    [router, searchParams]
   );
 
   const closeDetail = useCallback(() => {
     setSelected(null);
-    router.replace("/jobs", { scroll: false });
-  }, [router]);
-
-  const handleFiltersChange = useCallback(
-    (f: JobFilters) => {
-      if (jobFiltersEqual(filtersSnapshot.current, f)) return;
-      filtersSnapshot.current = f;
-      setFilters(f);
-      setSelected(null);
-      router.replace("/jobs", { scroll: false });
-    },
-    [router]
-  );
+    // Preserve all active filter params — only remove the job param
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("job");
+    const qs = params.toString();
+    router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
+  }, [router, searchParams]);
 
   return (
     <div className="h-full flex gap-6">
       {/* Left: filters + list */}
-      <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${selected ? "hidden lg:flex" : "flex"}`}>
-        {/* Filters — non-scrolling */}
-        <FiltersBar filters={filters} onChange={handleFiltersChange} />
+      <div
+        className={`flex-1 min-w-0 min-h-0 flex flex-col ${
+          selected ? "hidden lg:flex" : "flex"
+        }`}
+      >
+        <FiltersBar facets={facets} />
 
-        {/* Scrollable job list — this is the infinite-scroll container */}
-        <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div
+          ref={listRef}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+        >
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
@@ -265,15 +252,23 @@ export function JobBoard() {
           ) : jobs.length === 0 ? (
             <div className="text-center py-24">
               <p className="text-slate-400 text-lg">No jobs found</p>
-              <p className="text-slate-400 text-sm mt-1">Try adjusting your filters</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Try adjusting your filters
+              </p>
             </div>
           ) : (
             <>
-              <p className="text-sm text-slate-500 mb-3">{total.toLocaleString()} jobs found</p>
+              <p className="text-sm text-slate-500 mb-3">
+                {total.toLocaleString()} jobs found
+              </p>
               <div className="space-y-2">
                 {jobs.map((job, index) => {
-                  const shouldAnimate = !hasAnimatedRef.current && index < 10;
-                  if (index === jobs.length - 1 && !hasAnimatedRef.current) {
+                  const shouldAnimate =
+                    !hasAnimatedRef.current && index < 10;
+                  if (
+                    index === jobs.length - 1 &&
+                    !hasAnimatedRef.current
+                  ) {
                     hasAnimatedRef.current = true;
                   }
                   return (
@@ -284,7 +279,9 @@ export function JobBoard() {
                       transition={{
                         duration: 0.3,
                         ease: "easeOut",
-                        delay: shouldAnimate ? Math.min(index * 0.04, 0.4) : 0,
+                        delay: shouldAnimate
+                          ? Math.min(index * 0.04, 0.4)
+                          : 0,
                       }}
                     >
                       <JobCard
@@ -299,17 +296,20 @@ export function JobBoard() {
             </>
           )}
 
-          {/* Sentinel always inside the scroll container */}
           <div ref={sentinelRef} className="py-4 flex justify-center">
-            {loadingMore && <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />}
+            {loadingMore && (
+              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+            )}
             {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
-              <p className="text-xs text-slate-400">All {total.toLocaleString()} jobs loaded</p>
+              <p className="text-xs text-slate-400">
+                All {total.toLocaleString()} jobs loaded
+              </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Right: job detail — height comes from flex stretch, detail handles internal scroll */}
+      {/* Right: job detail */}
       {selected && (
         <div className="w-full lg:w-[560px] shrink-0 min-h-0 h-full">
           <JobDetail

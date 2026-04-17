@@ -73,6 +73,9 @@ export interface GreenhouseQuestion {
 }
 
 // Job filter params
+export type DatePostedOption = "today" | "3days" | "week" | "month" | "any";
+export type SortOption = "newest" | "relevance";
+
 export interface JobFilters {
   query?: string;
   location?: string;
@@ -80,8 +83,21 @@ export interface JobFilters {
   company?: string;
   remote?: boolean;
   employmentType?: string;
+  datePosted?: DatePostedOption;
+  salaryMin?: number;
+  salaryMax?: number;
+  sort?: SortOption;
   page?: number;
   limit?: number;
+}
+
+// Faceted counts returned on page-1 requests
+export interface JobFacets {
+  departments: Array<{ value: string; count: number }>;
+  employmentTypes: Array<{ value: string; count: number }>;
+  companies: Array<{ id: string; name: string; count: number }>;
+  totalRemote: number;
+  salaryRange: { min: number | null; max: number | null };
 }
 
 // API response wrapper
@@ -95,6 +111,7 @@ export interface ApiResponse<T> {
     total: number;
     page: number;
     limit: number;
+    facets?: JobFacets;
   };
 }
 

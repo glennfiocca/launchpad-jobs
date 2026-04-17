@@ -216,6 +216,9 @@ model Job {
   // [{ "id": "123", "label": "...", "required": true, "type": "text" }]
   applicationQuestions Json?
 
+  /// Full-text search vector. Maintained by DB trigger — do not write from application code.
+  searchVector Unsupported("tsvector")?
+
   isActive Boolean   @default(true)
   postedAt DateTime?
 

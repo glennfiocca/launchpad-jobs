@@ -11,7 +11,7 @@ services:
       repo: glennfiocca/launchpad-jobs
       branch: main
       deploy_on_push: true
-    build_command: npm run build && PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright npx playwright install chromium
+    build_command: npm run build && PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright npx playwright install --with-deps chromium
     run_command: npm start
     http_port: 3000
     instance_count: 1

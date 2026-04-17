@@ -115,16 +115,13 @@ jobs:
     kind: SCHEDULED
     schedule:
       cron: "0 9 * * *"
-    run_command: node scripts/sync-cron.mjs
+    run_command: npx tsx scripts/sync-cron.ts
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
     envs:
-      - key: NEXTAUTH_URL
+      - key: DATABASE_URL
         scope: RUN_TIME
-        value: ${APP_URL}
-      - key: CRON_SECRET
+        type: SECRET
+      - key: DIRECT_URL
         scope: RUN_TIME
-        value: ${web.CRON_SECRET}
-      - key: NEXT_PUBLIC_APP_URL
-        scope: RUN_TIME
-        value: ${APP_URL}
+        type: SECRET

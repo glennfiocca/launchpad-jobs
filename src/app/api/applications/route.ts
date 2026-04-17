@@ -185,6 +185,65 @@ export async function POST(request: Request) {
     );
   }
 
+  // Check A — isActive guard: bail early if job is marked inactive in DB
+  if (!job.isActive) {
+    return NextResponse.json<ApiResponse<never>>(
+      {
+        success: false,
+        error: "This job listing is no longer active. It may have been filled or removed.",
+      },
+      { status: 422 }
+    );
+  }
+
+  // Check B — URL redirect probe: lightweight HEAD to detect closed/redirected listings
+  if (job.absoluteUrl) {
+    try {
+      const probeRes = await fetch(job.absoluteUrl, {
+        method: "HEAD",
+        redirect: "manual",
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      const isRedirect = probeRes.status >= 300 && probeRes.status < 400;
+      if (isRedirect) {
+        const location = probeRes.headers.get("location") ?? "";
+        const isGreenhouseRedirect =
+          location.includes("greenhouse.io") || location.includes("job-boards");
+
+        if (!isGreenhouseRedirect) {
+          // Job redirects away from Greenhouse — mark inactive and reject
+          await db.job.update({
+            where: { id: job.id },
+            data: { isActive: false },
+          });
+          return NextResponse.json<ApiResponse<never>>(
+            {
+              success: false,
+              error: "This job listing appears to have been removed. We've updated our records.",
+            },
+            { status: 422 }
+          );
+        }
+      } else if (probeRes.status !== 0 && (probeRes.status < 200 || probeRes.status >= 300)) {
+        // Non-2xx, non-redirect response (e.g. 404, 410) — mark inactive and reject
+        await db.job.update({
+          where: { id: job.id },
+          data: { isActive: false },
+        });
+        return NextResponse.json<ApiResponse<never>>(
+          {
+            success: false,
+            error: "This job listing appears to have been removed. We've updated our records.",
+          },
+          { status: 422 }
+        );
+      }
+    } catch {
+      // Probe timed out or errored — fail open, proceed with Playwright submission
+    }
+  }
+
   // Check if already applied
   const existing = await db.application.findUnique({
     where: { userId_jobId: { userId: session.user.id, jobId: job.id } },

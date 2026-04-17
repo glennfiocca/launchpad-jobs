@@ -37,6 +37,7 @@ export async function GET(
     status: app.status,
     externalApplicationId: app.externalApplicationId,
     trackingEmail: app.trackingEmail,
+    submissionError: app.submissionError,
     appliedAt: app.appliedAt,
     updatedAt: app.updatedAt,
     dispatchStatus,

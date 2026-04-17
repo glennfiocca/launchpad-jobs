@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60; // seconds — required for Playwright
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -210,6 +212,12 @@ export async function POST(request: Request) {
   });
 
   if (!applyResult.success) {
+    // Persist the failure reason so it's visible in the DB / admin UI
+    await db.application.update({
+      where: { id: application.id },
+      data: { submissionError: applyResult.error ?? "Unknown error" },
+    });
+
     // Return partial success: we tracked it but Greenhouse submission failed
     return NextResponse.json<ApiResponse<{ applicationId: string; warning: string }>>({
       success: true,

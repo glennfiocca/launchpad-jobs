@@ -127,7 +127,21 @@ export function ApplicationsTable({
                   <ApplicationStatusBadge status={app.status} />
                 </td>
                 <td className="px-4 py-3">
-                  <DispatchStatusBadge status={app.dispatchStatus} />
+                  {app.dispatchStatus === "FAILED" && app.submissionError ? (
+                    <span
+                      title={app.submissionError}
+                      className="cursor-help"
+                    >
+                      <DispatchStatusBadge status={app.dispatchStatus} />
+                      <span className="block text-xs text-red-400/70 mt-0.5 max-w-[160px] truncate">
+                        {app.submissionError.length > 80
+                          ? `${app.submissionError.slice(0, 80)}…`
+                          : app.submissionError}
+                      </span>
+                    </span>
+                  ) : (
+                    <DispatchStatusBadge status={app.dispatchStatus} />
+                  )}
                 </td>
                 <td className="px-4 py-3 text-zinc-300">{app._count.emails}</td>
                 <td className="px-4 py-3 text-zinc-500 text-xs">

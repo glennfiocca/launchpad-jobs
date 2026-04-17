@@ -26,6 +26,8 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
 
   const dispatchStatus: DispatchStatus = app.externalApplicationId
     ? "DISPATCHED"
+    : app.submissionError !== null
+    ? "FAILED"
     : app.status === "APPLIED"
     ? "PENDING"
     : "FAILED"
@@ -35,6 +37,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
     status: app.status,
     externalApplicationId: app.externalApplicationId,
     trackingEmail: app.trackingEmail,
+    submissionError: app.submissionError,
     appliedAt: app.appliedAt,
     updatedAt: app.updatedAt,
     dispatchStatus,

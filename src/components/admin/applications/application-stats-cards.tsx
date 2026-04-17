@@ -95,6 +95,23 @@ export function ApplicationStatsCards({ stats }: Props) {
         </div>
       </div>
 
+      {/* Most Common Error — shown when there are top failure reasons */}
+      {(stats.topFailureReasons?.length ?? 0) > 0 && (
+        <div className="bg-zinc-900 border border-red-500/20 rounded-xl p-4">
+          <p className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wide">
+            Most Common Submission Error
+          </p>
+          <p className="text-red-400 text-sm font-medium truncate">
+            {stats.topFailureReasons![0].reason.length > 80
+              ? `${stats.topFailureReasons![0].reason.slice(0, 80)}…`
+              : stats.topFailureReasons![0].reason}
+          </p>
+          <p className="text-xs text-zinc-500 mt-1">
+            {stats.topFailureReasons![0].count} occurrence{stats.topFailureReasons![0].count !== 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
+
       {/* Status funnel bar */}
       {stats.byStatus.length > 0 && byStatusTotal > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">

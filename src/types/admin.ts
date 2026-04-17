@@ -7,6 +7,7 @@ export interface AdminApplication {
   status: ApplicationStatus
   externalApplicationId: string | null
   trackingEmail: string | null
+  submissionError: string | null
   appliedAt: Date
   updatedAt: Date
   dispatchStatus: DispatchStatus
@@ -55,6 +56,7 @@ export interface AdminApplicationStats {
   last30d: number
   byStatus: Array<{ status: ApplicationStatus; count: number }>
   failedDispatchLast24h: number
+  topFailureReasons?: Array<{ reason: string; count: number }>
 }
 
 export interface AdminStats {

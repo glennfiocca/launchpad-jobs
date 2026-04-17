@@ -13,24 +13,35 @@ export async function GET() {
   const d7 = new Date(now - 7 * 24 * 60 * 60 * 1000)
   const d30 = new Date(now - 30 * 24 * 60 * 60 * 1000)
 
-  const [total, dispatched, failedDispatch, last7d, last30d, byStatusRaw, failedDispatchLast24h] = await Promise.all([
-    db.application.count(),
-    db.application.count({ where: { externalApplicationId: { not: null } } }),
-    db.application.count({ where: { externalApplicationId: null, status: { notIn: ["WITHDRAWN"] } } }),
-    db.application.count({ where: { appliedAt: { gte: d7 } } }),
-    db.application.count({ where: { appliedAt: { gte: d30 } } }),
-    db.application.groupBy({ by: ["status"], _count: { status: true } }),
-    db.application.count({
-      where: {
-        externalApplicationId: null,
-        status: { notIn: ["WITHDRAWN"] },
-        appliedAt: { gte: d24h },
-      },
-    }),
-  ])
+  const [total, dispatched, failedDispatch, last7d, last30d, byStatusRaw, failedDispatchLast24h, failureReasonsRaw] =
+    await Promise.all([
+      db.application.count(),
+      db.application.count({ where: { externalApplicationId: { not: null } } }),
+      db.application.count({ where: { externalApplicationId: null, status: { notIn: ["WITHDRAWN"] } } }),
+      db.application.count({ where: { appliedAt: { gte: d7 } } }),
+      db.application.count({ where: { appliedAt: { gte: d30 } } }),
+      db.application.groupBy({ by: ["status"], _count: { status: true } }),
+      db.application.count({
+        where: {
+          externalApplicationId: null,
+          status: { notIn: ["WITHDRAWN"] },
+          appliedAt: { gte: d24h },
+        },
+      }),
+      db.application.groupBy({
+        by: ["submissionError"],
+        where: { submissionError: { not: null } },
+        _count: { submissionError: true },
+        orderBy: { _count: { submissionError: "desc" } },
+        take: 10,
+      }),
+    ])
 
   const dispatchRate = dispatched + failedDispatch > 0 ? dispatched / (dispatched + failedDispatch) : 1
   const byStatus = byStatusRaw.map((r) => ({ status: r.status, count: r._count.status }))
+  const topFailureReasons = failureReasonsRaw
+    .filter((r): r is typeof r & { submissionError: string } => r.submissionError !== null)
+    .map((r) => ({ reason: r.submissionError, count: r._count.submissionError }))
 
   const data: AdminApplicationStats = {
     total,
@@ -41,6 +52,7 @@ export async function GET() {
     last30d,
     byStatus,
     failedDispatchLast24h,
+    topFailureReasons,
   }
 
   return NextResponse.json<ApiResponse<AdminApplicationStats>>({ success: true, data })

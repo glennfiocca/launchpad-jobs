@@ -19,6 +19,9 @@ export default async function AdminStatsPage() {
     subscriptionsByStatus,
     activeJobs,
     activeBoards,
+    totalDispatched,
+    totalFailedWithError,
+    topFailureReasonsRaw,
   ] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
@@ -30,7 +33,23 @@ export default async function AdminStatsPage() {
     db.user.groupBy({ by: ["subscriptionStatus"], _count: { subscriptionStatus: true } }),
     db.job.count({ where: { isActive: true } }),
     db.companyBoard.count({ where: { isActive: true } }),
+    db.application.count({ where: { externalApplicationId: { not: null } } }),
+    db.application.count({ where: { submissionError: { not: null } } }),
+    db.application.groupBy({
+      by: ["submissionError"],
+      where: { submissionError: { not: null } },
+      _count: { submissionError: true },
+      orderBy: { _count: { submissionError: "desc" } },
+      take: 10,
+    }),
   ])
+
+  const submissionTotal = totalDispatched + totalFailedWithError
+  const submissionSuccessRate =
+    submissionTotal > 0 ? Math.round((totalDispatched / submissionTotal) * 100) : 100
+  const topFailureReasons = topFailureReasonsRaw
+    .filter((r): r is typeof r & { submissionError: string } => r.submissionError !== null)
+    .map((r) => ({ reason: r.submissionError, count: r._count.submissionError }))
 
   const maxAppStatus = Math.max(...applicationsByStatus.map((r) => r._count.status), 1)
 
@@ -103,6 +122,75 @@ export default async function AdminStatsPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Submission Health */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h2 className="text-base font-semibold text-white mb-5">Submission Health</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Dispatch Success Rate</p>
+            <p
+              className={[
+                "text-2xl font-bold",
+                submissionSuccessRate >= 90
+                  ? "text-green-400"
+                  : submissionSuccessRate >= 70
+                  ? "text-yellow-400"
+                  : "text-red-400",
+              ].join(" ")}
+            >
+              {submissionSuccessRate}%
+            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {totalDispatched} of {submissionTotal} submitted
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Failed Submissions</p>
+            <p
+              className={[
+                "text-2xl font-bold",
+                totalFailedWithError > 0 ? "text-red-400" : "text-white",
+              ].join(" ")}
+            >
+              {totalFailedWithError}
+            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">with recorded error</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Unique Error Types</p>
+            <p className="text-2xl font-bold text-white">{topFailureReasons.length}</p>
+            <p className="text-xs text-zinc-500 mt-0.5">distinct failure reasons</p>
+          </div>
+        </div>
+
+        {topFailureReasons.length > 0 && (
+          <div>
+            <p className="text-xs text-zinc-500 mb-3 font-medium uppercase tracking-wide">
+              Top Failure Reasons
+            </p>
+            <div className="space-y-2">
+              {topFailureReasons.map(({ reason, count }) => (
+                <div
+                  key={reason}
+                  className="flex items-start justify-between gap-4 py-2 border-b border-zinc-800/60 last:border-0"
+                >
+                  <p className="text-zinc-300 text-xs font-mono leading-relaxed flex-1">
+                    {reason.length > 100 ? `${reason.slice(0, 100)}…` : reason}
+                  </p>
+                  <span className="shrink-0 text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30 font-medium">
+                    {count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {topFailureReasons.length === 0 && (
+          <p className="text-zinc-500 text-sm">No submission errors recorded.</p>
+        )}
       </div>
     </div>
   )

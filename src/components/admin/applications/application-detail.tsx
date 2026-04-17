@@ -93,6 +93,42 @@ export function ApplicationDetail({ application }: Props) {
         )}
       </div>
 
+      {/* Submission Status */}
+      {application.externalApplicationId ? (
+        <div className="bg-zinc-900 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
+          <span className="text-green-400 text-base leading-none mt-0.5">✓</span>
+          <div>
+            <p className="text-green-400 text-sm font-medium">Submitted to Greenhouse</p>
+            <p className="font-mono text-xs text-zinc-400 mt-0.5">
+              ID: {application.externalApplicationId}
+            </p>
+          </div>
+        </div>
+      ) : application.submissionError ? (
+        <div className="bg-zinc-900 border border-red-500/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-red-400 text-sm font-medium">Submission Failed</p>
+              <p className="text-zinc-300 text-xs mt-1.5 font-mono leading-relaxed whitespace-pre-wrap">
+                {application.submissionError}
+              </p>
+            </div>
+            <button
+              disabled
+              title="Retry API not yet implemented"
+              className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed opacity-60"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-amber-400 text-base leading-none">⏳</span>
+          <p className="text-amber-300 text-sm font-medium">Pending Submission</p>
+        </div>
+      )}
+
       {/* Tracking email */}
       {application.trackingEmail && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60; // seconds — required for Playwright
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -13,6 +12,7 @@ import { getPresignedGetUrl } from "@/lib/spaces";
 import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { z } from "zod";
 import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion } from "@/types";
+import type { UserProfile } from "@prisma/client";
 
 const applySchema = z.object({
   jobId: z.string().min(1),
@@ -20,6 +20,93 @@ const applySchema = z.object({
     .record(z.string(), z.union([z.string(), z.number()]))
     .optional(),
 });
+
+async function runPlaywrightSubmission(opts: {
+  applicationId: string;
+  boardToken: string;
+  externalJobId: string;
+  profile: UserProfile;
+  trackingEmail: string;
+  resumeBuffer: Buffer | undefined;
+  resumeFileName: string;
+  questionAnswers: Record<string, string | number>;
+  userId: string;
+  jobTitle: string;
+  companyName: string;
+  userEmail: string | null;
+  userName: string;
+}): Promise<void> {
+  try {
+    const applyResult = await applyToGreenhouseJob({
+      boardToken: opts.boardToken,
+      jobId: opts.externalJobId,
+      profile: opts.profile,
+      trackingEmail: opts.trackingEmail,
+      resumeBuffer: opts.resumeBuffer,
+      resumeFileName: opts.resumeFileName,
+      questionAnswers: opts.questionAnswers,
+    });
+
+    if (applyResult.success) {
+      await db.application.update({
+        where: { id: opts.applicationId },
+        data: {
+          submissionStatus: "SUBMITTED",
+          externalApplicationId: applyResult.applicationId ?? null,
+        },
+      });
+      await db.applicationStatusHistory.create({
+        data: {
+          applicationId: opts.applicationId,
+          toStatus: "APPLIED",
+          reason: "Application submitted to Greenhouse successfully",
+          triggeredBy: "system",
+        },
+      });
+      if (opts.userEmail) {
+        sendApplyConfirmation({
+          userEmail: opts.userEmail,
+          userName: opts.userName,
+          jobTitle: opts.jobTitle,
+          companyName: opts.companyName,
+          appUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard`,
+        });
+      }
+      createNotification({
+        userId: opts.userId,
+        type: "APPLIED",
+        title: `Applied to ${opts.jobTitle} at ${opts.companyName}`,
+        body: "Your application was submitted successfully.",
+        ctaUrl: `/dashboard?app=${opts.applicationId}`,
+        ctaLabel: "View Dashboard",
+        applicationId: opts.applicationId,
+        dedupeKey: `APPLIED:${opts.applicationId}`,
+        suppressEmail: true,
+      }).catch((err: unknown) => {
+        console.error("[notifications] APPLIED notification failed:", err);
+      });
+    } else {
+      await db.application.update({
+        where: { id: opts.applicationId },
+        data: {
+          submissionStatus: "FAILED",
+          submissionError: applyResult.error ?? "Unknown error",
+        },
+      });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Playwright crashed";
+    console.error("[apply] Background submission error:", err);
+    await db.application
+      .update({
+        where: { id: opts.applicationId },
+        data: { submissionStatus: "FAILED", submissionError: msg },
+      })
+      .catch((dbErr: unknown) => {
+        console.error("[apply] Failed to persist submission error:", dbErr);
+      });
+  }
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -147,86 +234,27 @@ export async function POST(request: Request) {
   }
   Object.assign(questionAnswers, parsed.data.additionalAnswers ?? {});
 
-  // Step 3: Submit to Greenhouse using the tracking email so recruiter replies route back
-  const applyResult = await applyToGreenhouseJob({
+  // Fetch user for email/name (needed by background task)
+  const user = await db.user.findUnique({ where: { id: session.user.id } });
+
+  // Fire Playwright submission in background — do NOT await.
+  // DO App Platform has a hard 30s HTTP timeout; Playwright takes 30-60s.
+  // We return 200 immediately; the background task updates the DB when done.
+  void runPlaywrightSubmission({
+    applicationId: application.id,
     boardToken: job.boardToken,
-    jobId: job.externalId,
+    externalJobId: job.externalId,
     profile,
     trackingEmail,
     resumeBuffer,
     resumeFileName: profile.resumeFileName ?? "resume.pdf",
     questionAnswers,
-  });
-
-  // Step 4: Update record with Greenhouse application ID if available
-  if (applyResult.applicationId) {
-    await db.application.update({
-      where: { id: application.id },
-      data: { externalApplicationId: applyResult.applicationId },
-    });
-  }
-
-  // Create initial status history entry
-  await db.applicationStatusHistory.create({
-    data: {
-      applicationId: application.id,
-      toStatus: "APPLIED",
-      reason: "Application submitted",
-      triggeredBy: "user",
-    },
-  });
-
-  // Fire confirmation email and in-app notification (non-blocking)
-  const user = await db.user.findUnique({ where: { id: session.user.id } });
-  if (user?.email) {
-    sendApplyConfirmation({
-      userEmail: user.email,
-      userName: user.name ?? profile.firstName,
-      jobTitle: job.title,
-      companyName: job.company.name,
-      appUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard`,
-    });
-  }
-
-  // In-app notification (email suppressed — confirmation email already sent above)
-  createNotification({
     userId: session.user.id,
-    type: "APPLIED",
-    title: `Applied to ${job.title} at ${job.company.name}`,
-    body: "Your application was submitted successfully.",
-    ctaUrl: `/dashboard?app=${application.id}`,
-    ctaLabel: "View Dashboard",
-    applicationId: application.id,
-    jobId: job.id,
-    data: {
-      type: "APPLIED",
-      applicationId: application.id,
-      jobId: job.id,
-      jobTitle: job.title,
-      companyName: job.company.name,
-    },
-    dedupeKey: `APPLIED:${application.id}`,
-    suppressEmail: true, // confirmation email already sent
-  }).catch((err: unknown) => {
-    console.error("[notifications] APPLIED notification failed:", err);
+    jobTitle: job.title,
+    companyName: job.company.name,
+    userEmail: user?.email ?? null,
+    userName: user?.name ?? profile.firstName,
   });
-
-  if (!applyResult.success) {
-    // Persist the failure reason so it's visible in the DB / admin UI
-    await db.application.update({
-      where: { id: application.id },
-      data: { submissionError: applyResult.error ?? "Unknown error" },
-    });
-
-    // Return partial success: we tracked it but Greenhouse submission failed
-    return NextResponse.json<ApiResponse<{ applicationId: string; warning: string }>>({
-      success: true,
-      data: {
-        applicationId: application.id,
-        warning: `Application tracked, but auto-submit failed: ${applyResult.error}. Check the job listing to apply manually.`,
-      },
-    });
-  }
 
   return NextResponse.json<ApiResponse<{ applicationId: string }>>({
     success: true,

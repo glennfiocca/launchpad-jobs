@@ -35,13 +35,14 @@ export async function applyToGreenhouseJob(
   } = options;
 
   let tempResumeFile: string | null = null;
-
-  const browser = await chromium.launch({
-    args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-    headless: true,
-  });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 
   try {
+    browser = await chromium.launch({
+      args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      headless: true,
+    });
+
     const context = await browser.newContext({
       userAgent:
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -200,6 +201,6 @@ export async function applyToGreenhouseJob(
     if (tempResumeFile && fs.existsSync(tempResumeFile)) {
       fs.unlinkSync(tempResumeFile);
     }
-    await browser.close();
+    if (browser) await browser.close();
   }
 }

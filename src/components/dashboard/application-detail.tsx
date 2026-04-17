@@ -110,6 +110,23 @@ export function ApplicationDetail({ application, onClose, onApplicationUpdate }:
           </div>
         )}
 
+        {/* Submission status indicator — only shown when not yet confirmed in Greenhouse */}
+        {!application.externalApplicationId && application.submissionStatus === "FAILED" && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+            <span className="font-medium">Submission failed.</span>{" "}
+            {application.submissionError
+              ? application.submissionError
+              : "Auto-submit did not complete."}{" "}
+            Apply manually via the job listing.
+          </div>
+        )}
+        {!application.externalApplicationId && application.submissionStatus === "PENDING" && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">
+            <span className="font-medium">Submission in progress.</span>{" "}
+            Your application is being submitted to Greenhouse. This may take up to a minute.
+          </div>
+        )}
+
         {/* Withdraw button / confirm flow */}
         {!isTerminal && (
           <div className="flex items-center gap-2 mt-2">

@@ -265,6 +265,9 @@ model Application {
   // Error message from the last failed auto-submit attempt
   submissionError String? @db.Text
 
+  // Tracks async Playwright submission lifecycle: PENDING | SUBMITTED | FAILED
+  submissionStatus  String @default("PENDING")
+
   appliedAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

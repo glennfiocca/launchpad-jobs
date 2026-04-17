@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
         externalApplicationId: true,
         trackingEmail: true,
         submissionError: true,
+        submissionStatus: true,
         appliedAt: true,
         updatedAt: true,
         user: { select: { id: true, email: true, name: true } },
@@ -83,11 +84,9 @@ export async function GET(req: NextRequest) {
   const data: AdminApplication[] = rows.map((row) => {
     const derived: DispatchStatus = row.externalApplicationId
       ? "DISPATCHED"
-      : row.submissionError !== null
+      : row.submissionStatus === "FAILED"
       ? "FAILED"
-      : row.status === "APPLIED"
-      ? "PENDING"
-      : "FAILED"
+      : "PENDING"
 
     return { ...row, dispatchStatus: derived }
   })

@@ -34,7 +34,9 @@ export default async function AdminStatsPage() {
     db.job.count({ where: { isActive: true } }),
     db.companyBoard.count({ where: { isActive: true } }),
     db.application.count({ where: { externalApplicationId: { not: null } } }),
-    db.application.count({ where: { submissionError: { not: null } } }),
+    db.application.count({
+      where: { submissionStatus: "FAILED" },
+    }),
     db.application.groupBy({
       by: ["submissionError"],
       where: { submissionError: { not: null } },
@@ -156,7 +158,7 @@ export default async function AdminStatsPage() {
             >
               {totalFailedWithError}
             </p>
-            <p className="text-xs text-zinc-500 mt-0.5">with recorded error</p>
+            <p className="text-xs text-zinc-500 mt-0.5">failed submissions</p>
           </div>
           <div>
             <p className="text-xs text-zinc-500 mb-1">Unique Error Types</p>

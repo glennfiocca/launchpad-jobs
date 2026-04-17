@@ -73,6 +73,9 @@ services:
       - key: NEXT_PUBLIC_APP_NAME
         scope: RUN_AND_BUILD_TIME
         value: Pipeline
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        scope: RUN_AND_BUILD_TIME
+        value: /workspace/.cache/ms-playwright
       - key: STRIPE_SECRET_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET

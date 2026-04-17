@@ -11,7 +11,7 @@ services:
       repo: glennfiocca/launchpad-jobs
       branch: main
       deploy_on_push: true
-    build_command: npm run build && PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright npx playwright install --with-deps chromium
+    dockerfile_path: Dockerfile
     run_command: npm start
     http_port: 3000
     instance_count: 1
@@ -75,7 +75,7 @@ services:
         value: Pipeline
       - key: PLAYWRIGHT_BROWSERS_PATH
         scope: RUN_AND_BUILD_TIME
-        value: /workspace/.cache/ms-playwright
+        value: /app/.cache/ms-playwright
       - key: STRIPE_SECRET_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET

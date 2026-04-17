@@ -113,7 +113,8 @@ jobs:
       branch: main
       deploy_on_push: true
     kind: SCHEDULED
-    schedule: "0 9 * * *"
+    schedule:
+      cron: "0 9 * * *"
     run_command: node scripts/sync-cron.mjs
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
@@ -123,4 +124,7 @@ jobs:
         value: ${APP_URL}
       - key: CRON_SECRET
         scope: RUN_TIME
-        type: SECRET
+        value: ${web.CRON_SECRET}
+      - key: NEXT_PUBLIC_APP_URL
+        scope: RUN_TIME
+        value: ${APP_URL}

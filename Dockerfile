@@ -3,6 +3,7 @@ FROM node:20-bookworm
 WORKDIR /app
 
 COPY package*.json ./
+COPY prisma/ ./prisma/
 RUN npm ci
 
 # Install Chromium browser + all required system libraries into the image

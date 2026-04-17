@@ -1,9 +1,6 @@
 import { loadStripe } from "@stripe/stripe-js"
 
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? null
 
-if (!stripePublishableKey) {
-  throw new Error("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY not configured")
-}
-
-export const stripePromise = loadStripe(stripePublishableKey)
+// Resolve to null if key is missing — Elements handles null stripe gracefully
+export const stripePromise = key ? loadStripe(key) : Promise.resolve(null)

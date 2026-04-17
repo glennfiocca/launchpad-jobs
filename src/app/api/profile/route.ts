@@ -12,6 +12,15 @@ const profileSchema = z.object({
   email: z.string().email(),
   phone: z.string().optional(),
   location: z.string().optional(),
+  // Structured address (Google Places)
+  locationPlaceId: z.string().optional(),
+  locationFormatted: z.string().optional(),
+  locationStreet: z.string().optional(),
+  locationCity: z.string().optional(),
+  locationState: z.string().optional(),
+  locationPostalCode: z.string().optional(),
+  locationLat: z.number().optional(),
+  locationLng: z.number().optional(),
   linkedinUrl: z.string().url().optional().or(z.literal("")),
   githubUrl: z.string().url().optional().or(z.literal("")),
   portfolioUrl: z.string().url().optional().or(z.literal("")),
@@ -30,6 +39,7 @@ const profileSchema = z.object({
   highestDegree: z.string().optional(),
   fieldOfStudy: z.string().optional(),
   university: z.string().optional(),
+  universityId: z.string().optional(),
   graduationYear: z.number().int().min(1950).max(2030).optional(),
   workAuthorization: z.string().optional(),
   requiresSponsorship: z.boolean().default(false),
@@ -130,14 +140,29 @@ export async function PUT(request: Request) {
     portfolioUrl: parsed.data.portfolioUrl || null,
   };
 
-  const profile = await db.userProfile.upsert({
-    where: { userId: session.user.id },
-    update: data,
-    create: { ...data, userId: session.user.id },
-  });
-
-  return NextResponse.json<ApiResponse<UserProfile>>({
-    success: true,
-    data: profile,
-  });
+  try {
+    const profile = await db.userProfile.upsert({
+      where: { userId: session.user.id },
+      update: data,
+      create: { ...data, userId: session.user.id },
+    });
+    return NextResponse.json<ApiResponse<UserProfile>>({
+      success: true,
+      data: profile,
+    });
+  } catch (err) {
+    // P2003: FK constraint — universityId references a non-existent University row
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code: string }).code === "P2003"
+    ) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Invalid university selection" },
+        { status: 400 }
+      );
+    }
+    throw err;
+  }
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Search, MapPin, Building2, Filter, X, ArrowUpDown } from "lucide-react";
+import { Search, Building2, Filter, X, ArrowUpDown } from "lucide-react";
 import { DatePostedChips } from "./filters/date-posted-chips";
 import { SalaryRangeSlider } from "./filters/salary-range-slider";
 import { useJobFilters } from "@/hooks/use-job-filters";
+import { CityStateCombobox } from "@/components/ui/city-state-combobox";
 import {
   EMPLOYMENT_TYPE_OPTIONS,
   EMPLOYMENT_TYPE_LABELS,
@@ -26,17 +27,15 @@ export function JobFilters({ facets }: JobFiltersProps) {
 
   // Local text state for 150ms debounce — avoids re-fetching on every keystroke
   const [localQuery, setLocalQuery] = useState(filters.query ?? "");
-  const [localLocation, setLocalLocation] = useState(filters.location ?? "");
   const [localCompany, setLocalCompany] = useState(filters.company ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local text state when URL changes externally (back/forward nav, clear)
   useEffect(() => { setLocalQuery(filters.query ?? ""); }, [filters.query]);
-  useEffect(() => { setLocalLocation(filters.location ?? ""); }, [filters.location]);
   useEffect(() => { setLocalCompany(filters.company ?? ""); }, [filters.company]);
 
   const scheduleUpdate = useCallback(
-    (field: "query" | "location" | "company", value: string) => {
+    (field: "query" | "company", value: string) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         updateFilters({ [field]: value || undefined });
@@ -44,6 +43,12 @@ export function JobFilters({ facets }: JobFiltersProps) {
     },
     [updateFilters]
   );
+
+  // Derived display value for the city/state combobox
+  const locationDisplay =
+    filters.locationCity && filters.locationState
+      ? `${filters.locationCity}, ${filters.locationState}`
+      : filters.locationCity ?? "";
 
   const handleDatePosted = useCallback(
     (value: DatePostedOption) => updateFilters({ datePosted: value }),
@@ -104,19 +109,16 @@ export function JobFilters({ facets }: JobFiltersProps) {
 
       {/* Row 2: Location + Company */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-          <input
-            type="text"
-            placeholder="Location"
-            value={localLocation}
-            onChange={(e) => {
-              setLocalLocation(e.target.value);
-              scheduleUpdate("location", e.target.value);
-            }}
-            className={INPUT_CLASS}
-          />
-        </div>
+        <CityStateCombobox
+          value={locationDisplay}
+          onSelect={(city, state) =>
+            updateFilters({ locationCity: city, locationState: state, location: undefined })
+          }
+          onClear={() =>
+            updateFilters({ locationCity: undefined, locationState: undefined, location: undefined })
+          }
+          placeholder="City, State"
+        />
         <div className="relative">
           <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <input

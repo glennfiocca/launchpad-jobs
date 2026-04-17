@@ -78,7 +78,9 @@ export type SortOption = "newest" | "relevance";
 
 export interface JobFilters {
   query?: string;
-  location?: string;
+  location?: string;       // legacy plain-text (kept for backward compat)
+  locationCity?: string;   // structured city from Google Places
+  locationState?: string;  // structured state abbrev from Google Places
   department?: string;
   company?: string;
   remote?: boolean;
@@ -129,7 +131,16 @@ export interface ProfileFormData {
   lastName: string;
   email: string;
   phone?: string;
-  location?: string;
+  location?: string;           // legacy display fallback
+  // Structured address (Google Places)
+  locationPlaceId?: string;
+  locationFormatted?: string;
+  locationCity?: string;
+  locationState?: string;
+  locationStreet?: string;
+  locationPostalCode?: string;
+  locationLat?: number;
+  locationLng?: number;
   linkedinUrl?: string;
   githubUrl?: string;
   portfolioUrl?: string;
@@ -145,7 +156,8 @@ export interface ProfileFormData {
   openToOnsite: boolean;
   highestDegree?: string;
   fieldOfStudy?: string;
-  university?: string;
+  university?: string;         // legacy display name
+  universityId?: string;       // FK to University table
   graduationYear?: number;
   workAuthorization?: string;
   requiresSponsorship: boolean;

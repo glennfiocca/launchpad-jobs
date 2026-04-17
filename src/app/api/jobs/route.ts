@@ -19,6 +19,8 @@ export async function GET(request: Request) {
   const {
     query,
     location,
+    locationCity,
+    locationState,
     department,
     company,
     remote,
@@ -31,9 +33,31 @@ export async function GET(request: Request) {
     limit,
   } = parsed.data;
 
+  // V1 location matching strategy (documented):
+  // When locationCity is provided, use it for LIKE matching (covers most ATS text like "Austin, TX").
+  // When locationState is also provided, add a second LIKE for the state abbrev.
+  // Legacy `location` param is used only when locationCity is absent.
+  // Tradeoff: simple substring match; abbreviation normalization (NYC → New York) deferred to v2.
+  const effectiveLocation = locationCity ?? location ?? undefined;
+  const useStructuredLocation = !!locationCity;
+
   const skip = (page - 1) * limit;
   const isFirstPage = page === 1;
   const dateCutoff = datePostedToCutoff(datePosted);
+
+  // Build location where clause: structured city takes priority over legacy location param
+  const locationWhere: Prisma.JobWhereInput = useStructuredLocation
+    ? {
+        AND: [
+          { location: { contains: locationCity, mode: "insensitive" as const } },
+          ...(locationState
+            ? [{ location: { contains: locationState, mode: "insensitive" as const } }]
+            : []),
+        ],
+      }
+    : effectiveLocation
+    ? { location: { contains: effectiveLocation, mode: "insensitive" as const } }
+    : {};
 
   // Structural where clause (shared by Prisma path and facets)
   const structuralWhere: Prisma.JobWhereInput = {
@@ -43,9 +67,7 @@ export async function GET(request: Request) {
     ...(dateCutoff && { postedAt: { gte: dateCutoff } }),
     ...(salaryMin !== undefined && { salaryMin: { gte: salaryMin } }),
     ...(salaryMax !== undefined && { salaryMax: { lte: salaryMax } }),
-    ...(location && {
-      location: { contains: location, mode: "insensitive" as const },
-    }),
+    ...(effectiveLocation && locationWhere),
     ...(department && {
       department: { contains: department, mode: "insensitive" as const },
     }),
@@ -66,8 +88,13 @@ export async function GET(request: Request) {
     if (dateCutoff) conditions.push(Prisma.sql`j."postedAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
-    if (location) {
-      conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + location + "%"})`);
+    if (useStructuredLocation && locationCity) {
+      conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + locationCity + "%"})`);
+      if (locationState) {
+        conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + locationState + "%"})`);
+      }
+    } else if (effectiveLocation) {
+      conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + effectiveLocation + "%"})`);
     }
     if (department) {
       conditions.push(Prisma.sql`LOWER(j."department") LIKE LOWER(${"%" + department + "%"})`);

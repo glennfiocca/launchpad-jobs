@@ -10,6 +10,8 @@ function parseFilters(params: URLSearchParams): JobFilters {
   return {
     query: params.get("q") ?? undefined,
     location: params.get("location") ?? undefined,
+    locationCity: params.get("city") ?? undefined,
+    locationState: params.get("state") ?? undefined,
     department: params.get("dept") ?? undefined,
     company: params.get("company") ?? undefined,
     remote: params.get("remote") === "true" ? true : undefined,
@@ -25,6 +27,8 @@ function filtersToParams(filters: JobFilters): URLSearchParams {
   const p = new URLSearchParams();
   if (filters.query) p.set("q", filters.query);
   if (filters.location) p.set("location", filters.location);
+  if (filters.locationCity) p.set("city", filters.locationCity);
+  if (filters.locationState) p.set("state", filters.locationState);
   if (filters.department) p.set("dept", filters.department);
   if (filters.company) p.set("company", filters.company);
   if (filters.remote) p.set("remote", "true");
@@ -70,6 +74,8 @@ export function useJobFilters() {
   const hasFilters = !!(
     filters.query ||
     filters.location ||
+    filters.locationCity ||
+    filters.locationState ||
     filters.department ||
     filters.company ||
     filters.remote ||

@@ -15,7 +15,8 @@
     "postinstall": "prisma generate",
     "enrich-logos": "tsx scripts/enrich-logos.ts",
     "db:promote-admin": "tsx prisma/promote-admin.ts",
-    "db:seed-boards": "tsx prisma/seed-company-boards.ts"
+    "db:seed-boards": "tsx prisma/seed-company-boards.ts",
+    "db:seed-universities": "tsx prisma/seed-universities.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

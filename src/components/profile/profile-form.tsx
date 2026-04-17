@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
 import { AlertCircle, Upload, FileText, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { AddressCombobox } from "@/components/ui/address-combobox";
+import { UniversityCombobox } from "@/components/ui/university-combobox";
+import type { PlaceDetails } from "@/lib/validations/places";
 
 interface ProfileFormProps {
   initialData: UserProfile | null;
@@ -16,6 +19,14 @@ interface FormState {
   email: string;
   phone: string;
   location: string;
+  locationPlaceId: string;
+  locationFormatted: string;
+  locationStreet: string;
+  locationCity: string;
+  locationState: string;
+  locationPostalCode: string;
+  locationLat: string;
+  locationLng: string;
   linkedinUrl: string;
   githubUrl: string;
   portfolioUrl: string;
@@ -32,37 +43,62 @@ interface FormState {
   highestDegree: string;
   fieldOfStudy: string;
   university: string;
+  universityId: string;
   graduationYear: string;
   workAuthorization: string;
   requiresSponsorship: boolean;
 }
 
 function initFormState(data: UserProfile | null): FormState {
+  // Cast to access new structured fields that may be present at runtime
+  // but not yet reflected in the generated Prisma type before next regeneration
+  const d = data as (UserProfile & {
+    locationPlaceId?: string | null;
+    locationFormatted?: string | null;
+    locationStreet?: string | null;
+    locationCity?: string | null;
+    locationState?: string | null;
+    locationPostalCode?: string | null;
+    locationLat?: number | null;
+    locationLng?: number | null;
+    universityId?: string | null;
+  }) | null;
+
   return {
-    firstName: data?.firstName ?? "",
-    lastName: data?.lastName ?? "",
-    email: data?.email ?? "",
-    phone: data?.phone ?? "",
-    location: data?.location ?? "",
-    linkedinUrl: data?.linkedinUrl ?? "",
-    githubUrl: data?.githubUrl ?? "",
-    portfolioUrl: data?.portfolioUrl ?? "",
-    headline: data?.headline ?? "",
-    summary: data?.summary ?? "",
-    currentTitle: data?.currentTitle ?? "",
-    currentCompany: data?.currentCompany ?? "",
-    yearsExperience: data?.yearsExperience?.toString() ?? "",
-    desiredSalaryMin: data?.desiredSalaryMin?.toString() ?? "",
-    desiredSalaryMax: data?.desiredSalaryMax?.toString() ?? "",
-    openToRemote: data?.openToRemote ?? true,
-    openToHybrid: data?.openToHybrid ?? true,
-    openToOnsite: data?.openToOnsite ?? false,
-    highestDegree: data?.highestDegree ?? "",
-    fieldOfStudy: data?.fieldOfStudy ?? "",
-    university: data?.university ?? "",
-    graduationYear: data?.graduationYear?.toString() ?? "",
-    workAuthorization: data?.workAuthorization ?? "",
-    requiresSponsorship: data?.requiresSponsorship ?? false,
+    firstName: d?.firstName ?? "",
+    lastName: d?.lastName ?? "",
+    email: d?.email ?? "",
+    phone: d?.phone ?? "",
+    // Display structured formatted address first; fall back to legacy location
+    location: d?.locationFormatted ?? d?.location ?? "",
+    locationPlaceId: d?.locationPlaceId ?? "",
+    locationFormatted: d?.locationFormatted ?? "",
+    locationStreet: d?.locationStreet ?? "",
+    locationCity: d?.locationCity ?? "",
+    locationState: d?.locationState ?? "",
+    locationPostalCode: d?.locationPostalCode ?? "",
+    locationLat: d?.locationLat?.toString() ?? "",
+    locationLng: d?.locationLng?.toString() ?? "",
+    linkedinUrl: d?.linkedinUrl ?? "",
+    githubUrl: d?.githubUrl ?? "",
+    portfolioUrl: d?.portfolioUrl ?? "",
+    headline: d?.headline ?? "",
+    summary: d?.summary ?? "",
+    currentTitle: d?.currentTitle ?? "",
+    currentCompany: d?.currentCompany ?? "",
+    yearsExperience: d?.yearsExperience?.toString() ?? "",
+    desiredSalaryMin: d?.desiredSalaryMin?.toString() ?? "",
+    desiredSalaryMax: d?.desiredSalaryMax?.toString() ?? "",
+    openToRemote: d?.openToRemote ?? true,
+    openToHybrid: d?.openToHybrid ?? true,
+    openToOnsite: d?.openToOnsite ?? false,
+    highestDegree: d?.highestDegree ?? "",
+    fieldOfStudy: d?.fieldOfStudy ?? "",
+    university: d?.university ?? "",
+    universityId: d?.universityId ?? "",
+    graduationYear: d?.graduationYear?.toString() ?? "",
+    workAuthorization: d?.workAuthorization ?? "",
+    requiresSponsorship: d?.requiresSponsorship ?? false,
   };
 }
 
@@ -126,6 +162,15 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
       desiredSalaryMin: form.desiredSalaryMin ? Number(form.desiredSalaryMin) : undefined,
       desiredSalaryMax: form.desiredSalaryMax ? Number(form.desiredSalaryMax) : undefined,
       graduationYear: form.graduationYear ? Number(form.graduationYear) : undefined,
+      locationLat: form.locationLat ? Number(form.locationLat) : undefined,
+      locationLng: form.locationLng ? Number(form.locationLng) : undefined,
+      locationPlaceId: form.locationPlaceId || undefined,
+      locationFormatted: form.locationFormatted || undefined,
+      locationStreet: form.locationStreet || undefined,
+      locationCity: form.locationCity || undefined,
+      locationState: form.locationState || undefined,
+      locationPostalCode: form.locationPostalCode || undefined,
+      universityId: form.universityId || undefined,
       linkedinUrl: form.linkedinUrl || undefined,
       githubUrl: form.githubUrl || undefined,
       portfolioUrl: form.portfolioUrl || undefined,
@@ -186,7 +231,25 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
         </div>
         <div>
           <label className={labelClass}>Location</label>
-          <input className={inputClass} value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="San Francisco, CA" />
+          <AddressCombobox
+            value={form.location}
+            onChange={(display) => set("location", display)}
+            onSelect={(details: PlaceDetails) => {
+              setForm((prev) => ({
+                ...prev,
+                location: details.formattedAddress,
+                locationPlaceId: details.placeId,
+                locationFormatted: details.formattedAddress,
+                locationStreet: details.street ?? "",
+                locationCity: details.city ?? "",
+                locationState: details.state ?? "",
+                locationPostalCode: details.postalCode ?? "",
+                locationLat: details.lat?.toString() ?? "",
+                locationLng: details.lng?.toString() ?? "",
+              }));
+            }}
+            placeholder="San Francisco, CA"
+          />
         </div>
       </div>
 
@@ -387,7 +450,17 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           </div>
           <div>
             <label className={labelClass}>University / School</label>
-            <input className={inputClass} value={form.university} onChange={(e) => set("university", e.target.value)} placeholder="State University" />
+            <UniversityCombobox
+              value={form.university}
+              universityId={form.universityId}
+              onSelect={(id, name) => {
+                setForm((prev) => ({ ...prev, university: name, universityId: id }));
+              }}
+              onClear={() => {
+                setForm((prev) => ({ ...prev, university: "", universityId: "" }));
+              }}
+              placeholder="Search universities..."
+            />
           </div>
         </div>
       </div>

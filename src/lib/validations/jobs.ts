@@ -27,7 +27,9 @@ export const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
 
 export const jobsQuerySchema = z.object({
   query: z.string().max(200).optional(),
-  location: z.string().max(200).optional(),
+  location: z.string().max(200).optional(),      // legacy plain-text
+  locationCity: z.string().max(200).optional(),  // structured city
+  locationState: z.string().max(50).optional(),  // structured state abbrev
   department: z.string().max(200).optional(),
   company: z.string().max(200).optional(),
   remote: z.enum(["true", "false"]).optional(),

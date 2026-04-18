@@ -75,22 +75,28 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
         setMsg("No Greenhouse URL in snapshot — cannot open prefilled form.")
         return
       }
-      // Open Greenhouse tab and send token via postMessage
+      // Open Greenhouse tab. The content script will message window.opener requesting
+      // the token once it loads — we reply with the signed fill package.
       const tab = window.open(manualApplyUrl, "_blank")
-      if (tab) {
-        // Give page time to load, then relay token via storage (extension picks it up)
-        setTimeout(() => {
-          try {
-            tab.postMessage({ type: "PIPELINE_FILL", token }, "*")
-          } catch {
-            // Cross-origin postMessage to newly opened tab may fail; extension fallback via storage
-          }
-          localStorage.setItem("PIPELINE_FILL_TOKEN", JSON.stringify({ token, applicationId: application.id }))
-        }, 2000)
-        setMsg("Opened Greenhouse tab. Extension will pre-fill the form.")
-      } else {
-        setMsg("Popup blocked. Allow popups for this site and try again.")
+      if (!tab) {
+        setMsg("Popup blocked — allow popups for this site and try again.")
+        return
       }
+
+      // Listen for the content script's token request. It sends PIPELINE_REQUEST_TOKEN
+      // once the Greenhouse page has loaded and the extension is active.
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === "PIPELINE_REQUEST_TOKEN") {
+          event.source?.postMessage({ type: "PIPELINE_FILL", token }, { targetOrigin: "*" })
+          window.removeEventListener("message", handleMessage)
+        }
+      }
+      window.addEventListener("message", handleMessage)
+
+      // Clean up listener after 2 minutes regardless
+      setTimeout(() => window.removeEventListener("message", handleMessage), 120_000)
+
+      setMsg("Greenhouse tab opened — extension will pre-fill once the page loads.")
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Request failed")
     } finally {

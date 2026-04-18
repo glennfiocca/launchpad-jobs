@@ -16,6 +16,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   OPERATOR_SUBMITTED: { label: "Operator submitted", color: "text-green-400" },
   OPERATOR_FAILED: { label: "Operator failed", color: "text-red-400" },
   PLAYWRIGHT_RESULT: { label: "Playwright result", color: "text-amber-400" },
+  SUBMISSION_CONFIRMED_BY_EMAIL: { label: "Confirmed by inbound email", color: "text-green-400" },
 }
 
 export function AuditLogTimeline({ logs }: Props) {

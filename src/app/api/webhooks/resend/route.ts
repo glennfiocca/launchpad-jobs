@@ -4,9 +4,15 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { classifyRecruitingEmail, shouldUpdateStatus } from "@/lib/ai";
 import { sendStatusUpdate } from "@/lib/email";
+import { sendApplyConfirmation } from "@/lib/apply-hooks";
 import { createNotification } from "@/lib/notifications";
 import type { ApplicationStatus, NotificationType } from "@prisma/client";
 import { STATUS_CONFIG } from "@/types";
+
+// Application statuses that confirm a submission went through
+const SUBMISSION_CONFIRMING_STATUSES = new Set<ApplicationStatus>([
+  "APPLIED", "REVIEWING", "PHONE_SCREEN", "INTERVIEWING", "OFFER",
+]);
 
 function statusToNotificationType(status: string): NotificationType {
   if (status === "OFFER") return "APPLICATION_OFFER";
@@ -183,6 +189,70 @@ export async function POST(request: Request) {
       dedupeKey: `${notifType}:${application.id}:${classification.status}`,
       suppressEmail: true, // sendStatusUpdate already sent it
     }).catch(() => undefined);
+  }
+
+  // Auto-confirm operator-queue applications when a submission confirmation arrives.
+  // Any inbound email at the tracking address with a forward-moving classification
+  // is ground truth that Greenhouse accepted the form — the operator submitted successfully.
+  // This is idempotent: if operator-complete already ran, submissionStatus !== AWAITING_OPERATOR
+  // and this block is skipped. If this runs first, operator-complete returns 400.
+  if (
+    application.submissionStatus === "AWAITING_OPERATOR" &&
+    SUBMISSION_CONFIRMING_STATUSES.has(classification.status) &&
+    classification.confidence >= 0.75
+  ) {
+    await db.$transaction([
+      db.application.update({
+        where: { id: application.id },
+        data: {
+          submissionStatus: "SUBMITTED",
+          dispatchMode: "ASSISTED",
+          claimedByUserId: null,
+          claimedAt: null,
+        },
+      }),
+      db.applicationAuditLog.create({
+        data: {
+          applicationId: application.id,
+          action: "SUBMISSION_CONFIRMED_BY_EMAIL",
+          metadata: {
+            emailSubject: data.subject,
+            aiClassification: classification.status,
+            aiConfidence: classification.confidence,
+            aiReasoning: classification.reasoning,
+          },
+        },
+      }),
+    ]);
+
+    // Send the APPLIED notification that was suppressed when routing to the operator queue
+    createNotification({
+      userId: application.userId,
+      type: "APPLIED",
+      title: `Applied to ${application.job.title} at ${application.job.company.name}`,
+      body: "Your application was submitted successfully.",
+      ctaUrl: `/dashboard?app=${application.id}`,
+      ctaLabel: "View Dashboard",
+      applicationId: application.id,
+      dedupeKey: `APPLIED:${application.id}`,
+      suppressEmail: true,
+    }).catch(() => undefined);
+
+    // Send confirmation email to the user
+    if (application.user.email) {
+      sendApplyConfirmation({
+        userEmail: application.user.email,
+        userName: application.user.name ?? application.user.email,
+        jobTitle: application.job.title,
+        companyName: application.job.company.name,
+        appUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard`,
+      });
+    }
+
+    console.log(
+      `[operator-queue] Auto-confirmed submission for application ${application.id} ` +
+      `via inbound email (${classification.status}, ${Math.round(classification.confidence * 100)}% confidence)`
+    );
   }
 
   return NextResponse.json({ received: true, matched: true });

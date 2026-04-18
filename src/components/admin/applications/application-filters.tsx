@@ -65,6 +65,7 @@ export function ApplicationFilters({ filters, onChange }: Props) {
           <option value="DISPATCHED">Dispatched</option>
           <option value="FAILED">Failed</option>
           <option value="PENDING">Pending</option>
+          <option value="AWAITING_OPERATOR">Awaiting Operator</option>
         </select>
       </div>
 

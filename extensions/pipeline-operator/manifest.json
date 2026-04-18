@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Pipeline Operator",
+  "version": "1.0.0",
+  "description": "Pre-fills Greenhouse application forms for operator-assisted submissions.",
+  "permissions": ["scripting", "tabs", "storage"],
+  "host_permissions": ["https://job-boards.greenhouse.io/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://job-boards.greenhouse.io/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Pipeline Operator"
+  }
+}

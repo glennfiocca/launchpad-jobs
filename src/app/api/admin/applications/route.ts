@@ -22,12 +22,14 @@ export async function GET(req: NextRequest) {
     ...(status ? { status } : {}),
     ...(userId ? { userId } : {}),
     ...(companyId ? { job: { company: { id: companyId } } } : {}),
-    ...(dispatchStatus === "FAILED"
-      ? { externalApplicationId: null, status: { notIn: ["WITHDRAWN"] } }
+    ...(dispatchStatus === "AWAITING_OPERATOR"
+      ? { submissionStatus: "AWAITING_OPERATOR" }
+      : dispatchStatus === "FAILED"
+      ? { externalApplicationId: null, submissionStatus: "FAILED" }
       : dispatchStatus === "DISPATCHED"
       ? { externalApplicationId: { not: null } }
       : dispatchStatus === "PENDING"
-      ? { externalApplicationId: null, status: "APPLIED" }
+      ? { externalApplicationId: null, submissionStatus: { notIn: ["FAILED", "AWAITING_OPERATOR"] } }
       : {}),
     ...(search
       ? {
@@ -84,6 +86,8 @@ export async function GET(req: NextRequest) {
   const data: AdminApplication[] = rows.map((row) => {
     const derived: DispatchStatus = row.externalApplicationId
       ? "DISPATCHED"
+      : row.submissionStatus === "AWAITING_OPERATOR"
+      ? "AWAITING_OPERATOR"
       : row.submissionStatus === "FAILED"
       ? "FAILED"
       : "PENDING"

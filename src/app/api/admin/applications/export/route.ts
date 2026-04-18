@@ -12,7 +12,7 @@ const exportBodySchema = z.object({
   ids: z.array(z.string()).optional(),
   // Filter params are validated separately via applicationsQuerySchema when ids absent
   status: z.string().optional(),
-  dispatchStatus: z.enum(["DISPATCHED", "FAILED", "PENDING"]).optional(),
+  dispatchStatus: z.enum(["DISPATCHED", "FAILED", "PENDING", "AWAITING_OPERATOR"]).optional(),
   companyId: z.string().optional(),
   userId: z.string().optional(),
   search: z.string().optional(),
@@ -78,12 +78,14 @@ export async function POST(req: NextRequest) {
       ...(f.status ? { status: f.status } : {}),
       ...(f.userId ? { userId: f.userId } : {}),
       ...(f.companyId ? { job: { company: { id: f.companyId } } } : {}),
-      ...(f.dispatchStatus === "FAILED"
-        ? { externalApplicationId: null, status: { notIn: ["WITHDRAWN"] } }
+      ...(f.dispatchStatus === "AWAITING_OPERATOR"
+        ? { submissionStatus: "AWAITING_OPERATOR" }
+        : f.dispatchStatus === "FAILED"
+        ? { externalApplicationId: null, submissionStatus: "FAILED" }
         : f.dispatchStatus === "DISPATCHED"
         ? { externalApplicationId: { not: null } }
         : f.dispatchStatus === "PENDING"
-        ? { externalApplicationId: null, status: "APPLIED" }
+        ? { externalApplicationId: null, submissionStatus: { notIn: ["FAILED", "AWAITING_OPERATOR"] } }
         : {}),
       ...(f.search
         ? {
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest) {
     select: {
       id: true,
       status: true,
+      submissionStatus: true,
       externalApplicationId: true,
       trackingEmail: true,
       appliedAt: true,
@@ -137,9 +140,11 @@ export async function POST(req: NextRequest) {
   const dataRows = rows.map((row) => {
     const derived: DispatchStatus = row.externalApplicationId
       ? "DISPATCHED"
-      : row.status === "APPLIED"
-      ? "PENDING"
-      : "FAILED"
+      : row.submissionStatus === "AWAITING_OPERATOR"
+      ? "AWAITING_OPERATOR"
+      : row.submissionStatus === "FAILED"
+      ? "FAILED"
+      : "PENDING"
 
     return buildRow([
       row.id,

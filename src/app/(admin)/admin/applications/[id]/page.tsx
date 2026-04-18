@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
-import type { AdminApplicationDetail, DispatchStatus } from "@/types"
+import type { AdminApplicationDetail, DispatchStatus } from "@/types/admin"
 import { ApplicationDetail } from "@/components/admin/applications/application-detail"
 
 export const dynamic = "force-dynamic"
@@ -10,7 +12,8 @@ interface PageProps {
 }
 
 export default async function AdminApplicationDetailPage({ params }: PageProps) {
-  const { id } = await params
+  const [{ id }, session] = await Promise.all([params, getServerSession(authOptions)])
+  if (!session?.user?.id) notFound()
 
   const app = await db.application.findUnique({
     where: { id },
@@ -19,6 +22,11 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
       job: { include: { company: true } },
       emails: { orderBy: { receivedAt: "desc" } },
       statusHistory: { orderBy: { createdAt: "desc" } },
+      claimedBy: { select: { id: true, email: true, name: true } },
+      auditLogs: {
+        orderBy: { createdAt: "desc" },
+        include: { actor: { select: { id: true, email: true, name: true } } },
+      },
     },
   })
 
@@ -26,6 +34,8 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
 
   const dispatchStatus: DispatchStatus = app.externalApplicationId
     ? "DISPATCHED"
+    : app.submissionStatus === "AWAITING_OPERATOR"
+    ? "AWAITING_OPERATOR"
     : app.submissionStatus === "FAILED"
     ? "FAILED"
     : "PENDING"
@@ -36,10 +46,16 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
     externalApplicationId: app.externalApplicationId,
     trackingEmail: app.trackingEmail,
     submissionError: app.submissionError,
+    submissionStatus: app.submissionStatus,
     appliedAt: app.appliedAt,
     updatedAt: app.updatedAt,
     dispatchStatus,
     userNotes: app.userNotes,
+    claimedByUserId: app.claimedByUserId,
+    claimedAt: app.claimedAt,
+    claimedBy: app.claimedBy,
+    dispatchMode: app.dispatchMode,
+    applicationSnapshot: app.applicationSnapshot as Record<string, unknown> | null,
     user: { id: app.user.id, email: app.user.email, name: app.user.name },
     job: {
       id: app.job.id,
@@ -77,7 +93,15 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
       triggeredBy: h.triggeredBy,
       createdAt: h.createdAt,
     })),
+    auditLogs: app.auditLogs.map((l) => ({
+      id: l.id,
+      actorUserId: l.actorUserId,
+      actor: l.actor,
+      action: l.action,
+      metadata: l.metadata as Record<string, unknown> | null,
+      createdAt: l.createdAt,
+    })),
   }
 
-  return <ApplicationDetail application={detail} />
+  return <ApplicationDetail application={detail} currentUserId={session.user.id} />
 }

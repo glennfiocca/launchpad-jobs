@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import type { AdminApplicationDetail } from "@/types"
+import type { AdminApplicationDetail } from "@/types/admin"
 import type { ApplicationStatus } from "@/types"
 import { STATUS_CONFIG } from "@/types"
 import { ApplicationStatusBadge } from "./application-status-badge"
@@ -9,15 +9,18 @@ import { DispatchStatusBadge } from "./dispatch-status-badge"
 import { RetryDispatchButton } from "./retry-dispatch-button"
 import { EmailThreadViewer } from "./email-thread-viewer"
 import { StatusHistoryTimeline } from "./status-history-timeline"
+import { OperatorQueueSection } from "./operator-queue-section"
+import { AuditLogTimeline } from "./audit-log-timeline"
 
 interface Props {
   application: AdminApplicationDetail
+  currentUserId: string
 }
 
-type Tab = "emails" | "timeline"
+type Tab = "emails" | "timeline" | "audit"
 const APPLICATION_STATUSES = Object.keys(STATUS_CONFIG) as ApplicationStatus[]
 
-export function ApplicationDetail({ application }: Props) {
+export function ApplicationDetail({ application, currentUserId }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("emails")
   const [statusOverride, setStatusOverride] = useState<ApplicationStatus>(application.status)
   const [statusReason, setStatusReason] = useState("")
@@ -102,8 +105,13 @@ export function ApplicationDetail({ application }: Props) {
             <p className="font-mono text-xs text-zinc-400 mt-0.5">
               ID: {application.externalApplicationId}
             </p>
+            {application.dispatchMode === "ASSISTED" && (
+              <p className="text-xs text-zinc-500 mt-0.5">via operator-assisted submission</p>
+            )}
           </div>
         </div>
+      ) : application.submissionStatus === "AWAITING_OPERATOR" ? (
+        <OperatorQueueSection application={application} currentUserId={currentUserId} />
       ) : application.submissionError ? (
         <div className="bg-zinc-900 border border-red-500/30 rounded-xl p-4 space-y-3">
           <div className="flex items-start justify-between gap-4">
@@ -113,13 +121,6 @@ export function ApplicationDetail({ application }: Props) {
                 {application.submissionError}
               </p>
             </div>
-            <button
-              disabled
-              title="Retry API not yet implemented"
-              className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed opacity-60"
-            >
-              Retry
-            </button>
           </div>
         </div>
       ) : (
@@ -218,7 +219,7 @@ export function ApplicationDetail({ application }: Props) {
       {/* Tabs */}
       <div>
         <div className="flex border-b border-zinc-800 mb-4">
-          {(["emails", "timeline"] as Tab[]).map((tab) => (
+          {(["emails", "timeline", "audit"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -229,15 +230,21 @@ export function ApplicationDetail({ application }: Props) {
                   : "text-zinc-400 border-transparent hover:text-white",
               ].join(" ")}
             >
-              {tab === "emails" ? `Email Thread (${application.emails.length})` : "Status Timeline"}
+              {tab === "emails"
+                ? `Email Thread (${application.emails.length})`
+                : tab === "timeline"
+                ? "Status Timeline"
+                : `Audit Log (${application.auditLogs.length})`}
             </button>
           ))}
         </div>
 
         {activeTab === "emails" ? (
           <EmailThreadViewer emails={application.emails} />
-        ) : (
+        ) : activeTab === "timeline" ? (
           <StatusHistoryTimeline history={application.statusHistory} />
+        ) : (
+          <AuditLogTimeline logs={application.auditLogs} />
         )}
       </div>
     </div>

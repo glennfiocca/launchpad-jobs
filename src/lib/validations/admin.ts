@@ -39,7 +39,7 @@ export const ALL_APPLICATION_STATUSES = [
 
 export const applicationsQuerySchema = paginationSchema.extend({
   status: z.enum(ALL_APPLICATION_STATUSES).optional(),
-  dispatchStatus: z.enum(["DISPATCHED", "FAILED", "PENDING"]).optional(),
+  dispatchStatus: z.enum(["DISPATCHED", "FAILED", "PENDING", "AWAITING_OPERATOR"]).optional(),
   companyId: z.string().optional(),
   userId: z.string().optional(),
   search: z.string().optional(),

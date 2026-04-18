@@ -1,6 +1,6 @@
 import type { ApplicationStatus, SubscriptionStatus, Role } from "@prisma/client"
 
-export type DispatchStatus = "DISPATCHED" | "FAILED" | "PENDING"
+export type DispatchStatus = "DISPATCHED" | "FAILED" | "PENDING" | "AWAITING_OPERATOR"
 
 export interface AdminApplication {
   id: string
@@ -8,6 +8,7 @@ export interface AdminApplication {
   externalApplicationId: string | null
   trackingEmail: string | null
   submissionError: string | null
+  submissionStatus: string
   appliedAt: Date
   updatedAt: Date
   dispatchStatus: DispatchStatus
@@ -23,8 +24,29 @@ export interface AdminApplication {
   _count: { emails: number; statusHistory: number }
 }
 
+export interface ApplicationAuditLogEntry {
+  id: string
+  actorUserId: string | null
+  actor: { id: string; email: string | null; name: string | null } | null
+  action: string
+  metadata: Record<string, unknown> | null
+  createdAt: Date
+}
+
+export interface OperatorQueueApplication extends AdminApplication {
+  claimedByUserId: string | null
+  claimedAt: Date | null
+  claimedBy: { id: string; email: string | null; name: string | null } | null
+  job: AdminApplication["job"] & { absoluteUrl: string | null }
+}
+
 export interface AdminApplicationDetail extends AdminApplication {
   userNotes: string | null
+  claimedByUserId: string | null
+  claimedAt: Date | null
+  claimedBy: { id: string; email: string | null; name: string | null } | null
+  dispatchMode: string | null
+  applicationSnapshot: Record<string, unknown> | null
   emails: Array<{
     id: string
     fromEmail: string
@@ -43,6 +65,14 @@ export interface AdminApplicationDetail extends AdminApplication {
     toStatus: ApplicationStatus
     reason: string | null
     triggeredBy: string
+    createdAt: Date
+  }>
+  auditLogs: Array<{
+    id: string
+    actorUserId: string | null
+    actor: { id: string; email: string | null; name: string | null } | null
+    action: string
+    metadata: Record<string, unknown> | null
     createdAt: Date
   }>
 }

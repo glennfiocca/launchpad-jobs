@@ -21,6 +21,11 @@ export async function GET(
       job: { include: { company: true } },
       emails: { orderBy: { receivedAt: "desc" } },
       statusHistory: { orderBy: { createdAt: "desc" } },
+      claimedBy: { select: { id: true, email: true, name: true } },
+      auditLogs: {
+        orderBy: { createdAt: "desc" },
+        include: { actor: { select: { id: true, email: true, name: true } } },
+      },
     },
   })
 
@@ -28,9 +33,11 @@ export async function GET(
 
   const dispatchStatus: DispatchStatus = app.externalApplicationId
     ? "DISPATCHED"
-    : app.status === "APPLIED"
-    ? "PENDING"
-    : "FAILED"
+    : app.submissionStatus === "AWAITING_OPERATOR"
+    ? "AWAITING_OPERATOR"
+    : app.submissionStatus === "FAILED"
+    ? "FAILED"
+    : "PENDING"
 
   const data: AdminApplicationDetail = {
     id: app.id,
@@ -38,10 +45,16 @@ export async function GET(
     externalApplicationId: app.externalApplicationId,
     trackingEmail: app.trackingEmail,
     submissionError: app.submissionError,
+    submissionStatus: app.submissionStatus,
     appliedAt: app.appliedAt,
     updatedAt: app.updatedAt,
     dispatchStatus,
     userNotes: app.userNotes,
+    claimedByUserId: app.claimedByUserId,
+    claimedAt: app.claimedAt,
+    claimedBy: app.claimedBy,
+    dispatchMode: app.dispatchMode,
+    applicationSnapshot: app.applicationSnapshot as Record<string, unknown> | null,
     user: { id: app.user.id, email: app.user.email, name: app.user.name },
     job: {
       id: app.job.id,
@@ -79,6 +92,14 @@ export async function GET(
       reason: h.reason,
       triggeredBy: h.triggeredBy,
       createdAt: h.createdAt,
+    })),
+    auditLogs: app.auditLogs.map((l) => ({
+      id: l.id,
+      actorUserId: l.actorUserId,
+      actor: l.actor,
+      action: l.action,
+      metadata: l.metadata as Record<string, unknown> | null,
+      createdAt: l.createdAt,
     })),
   }
 

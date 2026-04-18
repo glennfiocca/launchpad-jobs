@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline Operator</title>
+  <style>
+    body {
+      width: 260px;
+      font-family: system-ui, sans-serif;
+      background: #09090b;
+      color: #e4e4e7;
+      margin: 0;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 4px;
+      color: #a78bfa;
+    }
+    p {
+      font-size: 12px;
+      color: #71717a;
+      margin: 0 0 12px;
+    }
+    #status {
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #18181b;
+      border: 1px solid #27272a;
+      color: #a1a1aa;
+    }
+    #status.ready { color: #86efac; border-color: #166534; background: #052e16; }
+    #status.waiting { color: #fde68a; border-color: #854d0e; background: #1c1207; }
+  </style>
+</head>
+<body>
+  <h1>Pipeline Operator</h1>
+  <p>Greenhouse form auto-fill extension</p>
+  <div id="status" class="waiting">Waiting for fill package...</div>
+  <script src="popup.js"></script>
+</body>
+</html>

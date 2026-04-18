@@ -14,6 +14,62 @@ import { z } from "zod";
 import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion } from "@/types";
 import type { UserProfile } from "@prisma/client";
 
+// Error codes that route to the operator queue instead of hard-failing
+const OPERATOR_QUEUE_CODES = new Set(
+  (process.env.OPERATOR_QUEUE_CODES ?? "CAPTCHA_REQUIRED,BROWSER_LAUNCH_FAILED,NO_CONFIRMATION").split(",")
+);
+
+interface ApplicationSnapshot {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  boardToken: string;
+  externalId: string;
+  manualApplyUrl?: string;
+  resumeFileName?: string;
+  resumeSpacesKey?: string;
+  trackingEmail?: string;
+  questionAnswers: Record<string, string>;
+  snapshotAt: string;
+}
+
+function buildSnapshot(
+  profile: UserProfile,
+  boardToken: string,
+  externalId: string,
+  questionAnswers: Record<string, string | number>,
+  trackingEmail: string,
+  manualApplyUrl?: string
+): ApplicationSnapshot {
+  // Extract Spaces key from resumeUrl (not a presigned URL — stable reference)
+  const resumeSpacesKey = profile.resumeUrl
+    ? profile.resumeUrl.split(".digitaloceanspaces.com/")[1] ?? undefined
+    : undefined;
+
+  const stringAnswers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(questionAnswers)) {
+    stringAnswers[k] = String(v);
+  }
+
+  return {
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    email: profile.email,
+    phone: profile.phone ?? undefined,
+    location: profile.locationFormatted ?? profile.location ?? undefined,
+    boardToken,
+    externalId,
+    manualApplyUrl,
+    resumeFileName: profile.resumeFileName ?? undefined,
+    resumeSpacesKey,
+    trackingEmail,
+    questionAnswers: stringAnswers,
+    snapshotAt: new Date().toISOString(),
+  };
+}
+
 const applySchema = z.object({
   jobId: z.string().min(1),
   additionalAnswers: z
@@ -86,32 +142,53 @@ async function runPlaywrightSubmission(opts: {
         console.error("[notifications] APPLIED notification failed:", err);
       });
     } else {
-      const isCaptchaBlocked = applyResult.errorCode === "CAPTCHA_REQUIRED";
-      const isBrowserFailed = applyResult.errorCode === "BROWSER_LAUNCH_FAILED";
+      const errorCode = applyResult.errorCode ?? "PLAYWRIGHT_ERROR";
 
-      const submissionError = isCaptchaBlocked
-        ? `CAPTCHA_REQUIRED: Automation was blocked by a bot challenge. Apply manually: ${applyResult.manualApplyUrl ?? ""}`
-        : (applyResult.error ?? "Unknown error");
+      if (OPERATOR_QUEUE_CODES.has(errorCode)) {
+        // Route to operator queue — do NOT send APPLY_FAILED notification
+        // User-facing dashboard shows "Finalizing submission" for AWAITING_OPERATOR
+        const snapshot = buildSnapshot(
+          opts.profile,
+          opts.boardToken,
+          opts.externalJobId,
+          opts.questionAnswers,
+          opts.trackingEmail,
+          applyResult.manualApplyUrl
+        );
 
-      await db.application.update({
-        where: { id: opts.applicationId },
-        data: {
-          submissionStatus: "FAILED",
-          submissionError,
-        },
-      });
+        await db.application.update({
+          where: { id: opts.applicationId },
+          data: {
+            submissionStatus: "AWAITING_OPERATOR",
+            submissionError: errorCode,
+            applicationSnapshot: snapshot as object,
+          },
+        });
 
-      if (isCaptchaBlocked || isBrowserFailed) {
-        // Surface actionable notification so user can apply manually
+        await db.applicationAuditLog.create({
+          data: {
+            applicationId: opts.applicationId,
+            action: "PLAYWRIGHT_RESULT",
+            metadata: { errorCode, manualApplyUrl: applyResult.manualApplyUrl ?? null },
+          },
+        });
+      } else {
+        // Terminal failure — not recoverable by operator
+        await db.application.update({
+          where: { id: opts.applicationId },
+          data: {
+            submissionStatus: "FAILED",
+            submissionError: applyResult.error ?? errorCode,
+          },
+        });
+
         createNotification({
           userId: opts.userId,
           type: "APPLIED",
           title: `Action required: ${opts.jobTitle} at ${opts.companyName}`,
-          body: isCaptchaBlocked
-            ? "Automation was blocked by a security challenge. Please apply manually via the job link."
-            : "Browser automation failed to start. Please apply manually via the job link.",
+          body: "Automation failed to submit your application. Please apply manually via the job link.",
           ctaUrl: applyResult.manualApplyUrl ?? `/dashboard?app=${opts.applicationId}`,
-          ctaLabel: isCaptchaBlocked ? "Apply Manually" : "View Job",
+          ctaLabel: "View Job",
           applicationId: opts.applicationId,
           dedupeKey: `APPLY_FAILED:${opts.applicationId}`,
           suppressEmail: false,

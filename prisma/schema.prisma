@@ -86,6 +86,8 @@ model User {
   feedback               Feedback[]
   notifications          Notification[]
   notificationPreference NotificationPreference?
+  claimedApplications    Application[]           @relation("ApplicationClaims")
+  auditLogs              ApplicationAuditLog[]   @relation("AuditLogActor")
 }
 
 model Subscription {
@@ -293,8 +295,19 @@ model Application {
   // Error message from the last failed auto-submit attempt
   submissionError String? @db.Text
 
-  // Tracks async Playwright submission lifecycle: PENDING | SUBMITTED | FAILED
+  // Tracks async Playwright submission lifecycle: PENDING | SUBMITTED | FAILED | AWAITING_OPERATOR
   submissionStatus  String @default("PENDING")
+
+  // Immutable snapshot of apply-time data written when AWAITING_OPERATOR
+  applicationSnapshot Json?
+
+  // Operator claim fields
+  claimedByUserId String?
+  claimedBy       User?     @relation("ApplicationClaims", fields: [claimedByUserId], references: [id])
+  claimedAt       DateTime?
+
+  // Which path completed submission: AUTOMATED | ASSISTED
+  dispatchMode String?
 
   appliedAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -302,12 +315,15 @@ model Application {
   emails        ApplicationEmail[]
   statusHistory ApplicationStatusHistory[]
   notifications Notification[]
+  auditLogs     ApplicationAuditLog[]
 
   @@unique([userId, jobId])
   @@index([userId])
   @@index([status])
   @@index([externalApplicationId])
   @@index([appliedAt])
+  @@index([submissionStatus])
+  @@index([claimedByUserId])
 }
 
 model ApplicationEmail {
@@ -529,4 +545,22 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Operator Queue Audit ─────────────────────────────────────────────────────
+
+model ApplicationAuditLog {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorUserId   String?
+  actor         User?       @relation("AuditLogActor", fields: [actorUserId], references: [id])
+
+  // CLAIM | RELEASE | FILL_PACKAGE_ISSUED | OPERATOR_SUBMITTED | OPERATOR_FAILED | PLAYWRIGHT_RESULT
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([applicationId])
+  @@index([actorUserId])
 }

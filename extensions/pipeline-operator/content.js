@@ -54,24 +54,59 @@ function nativeSet(el, value) {
   }
   el.dispatchEvent(new Event("input", { bubbles: true }))
   el.dispatchEvent(new Event("change", { bubbles: true }))
+  el.dispatchEvent(new Event("blur", { bubbles: true }))
+}
+
+/**
+ * Find a field by known name or id attributes (preferred — more reliable than label text).
+ */
+function findFieldByNameOrId(candidates) {
+  for (const name of candidates) {
+    const el = document.querySelector(
+      `input[name="${name}"], input[id="${name}"], textarea[name="${name}"], textarea[id="${name}"]`
+    )
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el
+  }
+  return null
 }
 
 /**
  * Find a form field by label text (case-insensitive substring match).
+ * Checks: label[for]→id, label child, next sibling, and parent-container child
+ * (handles the common Greenhouse wrapper-div pattern).
  */
 function findFieldByLabel(labelText) {
   for (const label of document.querySelectorAll("label")) {
     if (!label.textContent?.toLowerCase().includes(labelText.toLowerCase())) continue
 
+    // Strategy 1: label[for] → getElementById
     const forAttr = label.getAttribute("for")
     if (forAttr) {
       const el = document.getElementById(forAttr)
-      if (el) return el
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el
     }
+
+    // Strategy 2: input/textarea inside the label element
+    const child = label.querySelector("input, textarea, select")
+    if (child instanceof HTMLInputElement || child instanceof HTMLTextAreaElement) return child
+
+    // Strategy 3: immediate next sibling
     const sibling = label.nextElementSibling
     if (sibling instanceof HTMLInputElement || sibling instanceof HTMLTextAreaElement) return sibling
-    const child = label.querySelector("input, textarea, select")
-    if (child) return child
+
+    // Strategy 4: parent container's descendant input
+    // Handles <div class="field"><label>…</label><div><input></div></div>
+    const parent = label.parentElement
+    if (parent) {
+      const parentChild = parent.querySelector("input, textarea")
+      if (parentChild instanceof HTMLInputElement || parentChild instanceof HTMLTextAreaElement) return parentChild
+    }
+
+    // Strategy 5: aria-label fallback on inputs
+    const ariaEl = document.querySelector(
+      `input[aria-label*="${labelText}" i], textarea[aria-label*="${labelText}" i]`
+    )
+    if (ariaEl instanceof HTMLInputElement || ariaEl instanceof HTMLTextAreaElement) return ariaEl
   }
   return null
 }
@@ -95,9 +130,9 @@ async function attachResume(input, presignedUrl, fileName) {
 }
 
 /**
- * Wait for a selector to appear in the DOM (up to 10s).
+ * Wait for a selector to appear in the DOM (up to timeoutMs).
  */
-function waitForElement(selector, timeoutMs = 10000) {
+function waitForElement(selector, timeoutMs = 15000) {
   return new Promise((resolve) => {
     const el = document.querySelector(selector)
     if (el) { resolve(el); return }
@@ -128,7 +163,7 @@ function showBanner(message, type = "info") {
   )
   el.textContent = `⚙ Pipeline Operator: ${message}`
   document.body.prepend(el)
-  if (type !== "error") setTimeout(() => el.remove(), 6000)
+  if (type !== "error") setTimeout(() => el.remove(), 8000)
 }
 
 /**
@@ -150,26 +185,65 @@ async function fillFormFromToken(token) {
   const snap = payload.snapshot
   showBanner("Pre-filling form…", "info")
 
-  await waitForElement("form")
+  // Wait for actual input fields to appear — not just <form>, which exists in the
+  // SPA shell before React hydrates and renders the individual field inputs.
+  await waitForElement(
+    "input[name='first_name'], input[id='first_name'], input[type='email']",
+    15000
+  )
 
-  // Standard Greenhouse fields
-  const firstNameField = findFieldByLabel("first name")
-  if (firstNameField) nativeSet(firstNameField, snap.firstName ?? "")
+  // Brief extra delay to allow React to finish hydrating sibling fields.
+  await new Promise((r) => setTimeout(r, 400))
 
-  const lastNameField = findFieldByLabel("last name")
-  if (lastNameField) nativeSet(lastNameField, snap.lastName ?? "")
+  let filled = 0
 
-  // Use tracking email so Greenhouse confirmation routes back to the app
-  const emailField = findFieldByLabel("email") ?? document.querySelector("input[type='email']")
-  if (emailField instanceof HTMLInputElement) {
-    nativeSet(emailField, snap.trackingEmail ?? snap.email ?? "")
+  // First Name
+  const firstNameField =
+    findFieldByNameOrId(["first_name", "firstName"]) ??
+    findFieldByLabel("first name")
+  if (firstNameField && snap.firstName) {
+    nativeSet(firstNameField, snap.firstName)
+    filled++
   }
 
-  const phoneField = findFieldByLabel("phone")
-  if (phoneField && snap.phone) nativeSet(phoneField, snap.phone)
+  // Last Name
+  const lastNameField =
+    findFieldByNameOrId(["last_name", "lastName"]) ??
+    findFieldByLabel("last name")
+  if (lastNameField && snap.lastName) {
+    nativeSet(lastNameField, snap.lastName)
+    filled++
+  }
 
-  const locationField = findFieldByLabel("location") ?? findFieldByLabel("city")
-  if (locationField && snap.location) nativeSet(locationField, snap.location)
+  // Email — use tracking email so Greenhouse confirmations route back to the app
+  const emailField =
+    findFieldByNameOrId(["email"]) ??
+    findFieldByLabel("email") ??
+    document.querySelector("input[type='email']")
+  const emailValue = snap.trackingEmail ?? snap.email
+  if (emailField instanceof HTMLInputElement && emailValue) {
+    nativeSet(emailField, emailValue)
+    filled++
+  }
+
+  // Phone
+  const phoneField =
+    findFieldByNameOrId(["phone"]) ??
+    findFieldByLabel("phone")
+  if (phoneField && snap.phone) {
+    nativeSet(phoneField, snap.phone)
+    filled++
+  }
+
+  // Location
+  const locationField =
+    findFieldByNameOrId(["job_application[location]", "location"]) ??
+    findFieldByLabel("location") ??
+    findFieldByLabel("city")
+  if (locationField && snap.location) {
+    nativeSet(locationField, snap.location)
+    filled++
+  }
 
   // Resume upload
   if (snap.presignedResumeUrl) {
@@ -183,9 +257,22 @@ async function fillFormFromToken(token) {
   if (snap.questionAnswers && typeof snap.questionAnswers === "object") {
     for (const [key, answer] of Object.entries(snap.questionAnswers)) {
       const field = findFieldByLabel(key)
-      if (field && typeof answer === "string") nativeSet(field, answer)
+      if (field && typeof answer === "string" && answer) {
+        nativeSet(field, answer)
+        filled++
+      }
     }
   }
 
-  showBanner("Form pre-filled — review all fields, then submit manually.", "success")
+  if (filled > 0) {
+    showBanner(
+      `Pre-filled ${filled} field${filled !== 1 ? "s" : ""} — review all fields, then submit manually.`,
+      "success"
+    )
+  } else {
+    showBanner(
+      "Could not detect form fields — Greenhouse layout may have changed. Fill manually.",
+      "error"
+    )
+  }
 }

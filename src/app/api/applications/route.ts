@@ -4,14 +4,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { applyToGreenhouseJob } from "@/lib/greenhouse";
-import { autoAnswerQuestion } from "@/lib/greenhouse/questions";
+import { autoAnswerQuestion, getUnansweredQuestions } from "@/lib/greenhouse/questions";
 import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
 import { createNotification } from "@/lib/notifications";
 import { getPresignedGetUrl } from "@/lib/spaces";
 import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { z } from "zod";
-import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion } from "@/types";
+import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion, QuestionMeta, PendingQuestion } from "@/types";
 import type { UserProfile } from "@prisma/client";
 
 // Error codes that route to the operator queue instead of hard-failing
@@ -32,6 +32,8 @@ interface ApplicationSnapshot {
   resumeSpacesKey?: string;
   trackingEmail?: string;
   questionAnswers: Record<string, string>;
+  questionMeta: QuestionMeta[];
+  pendingQuestions: PendingQuestion[];
   snapshotAt: string;
 }
 
@@ -39,6 +41,7 @@ function buildSnapshot(
   profile: UserProfile,
   boardToken: string,
   externalId: string,
+  questions: GreenhouseQuestion[],
   questionAnswers: Record<string, string | number>,
   trackingEmail: string,
   manualApplyUrl?: string
@@ -53,6 +56,34 @@ function buildSnapshot(
     stringAnswers[k] = String(v);
   }
 
+  // Build questionMeta: parallel array with label+fieldName for each answered question
+  const questionMeta: QuestionMeta[] = [];
+  for (const question of questions) {
+    const field = question.fields[0];
+    if (!field) continue;
+    if (!(field.name in stringAnswers)) continue;
+    questionMeta.push({
+      label: question.label,
+      fieldName: field.name,
+      fieldType: field.type,
+      ...(field.type === "multi_value_single_select" ? { selectValues: field.values } : {}),
+    });
+  }
+
+  // Build pendingQuestions: questions the profile cannot auto-answer
+  const unanswered = getUnansweredQuestions(questions, profile);
+  const pendingQuestions: PendingQuestion[] = unanswered.map((q) => {
+    const field = q.fields[0];
+    return {
+      label: q.label,
+      fieldName: field?.name ?? "",
+      fieldType: field?.type ?? "input_text",
+      required: q.required,
+      description: q.description,
+      ...(field?.type === "multi_value_single_select" ? { selectValues: field.values } : {}),
+    };
+  });
+
   return {
     firstName: profile.firstName,
     lastName: profile.lastName,
@@ -66,6 +97,8 @@ function buildSnapshot(
     resumeSpacesKey,
     trackingEmail,
     questionAnswers: stringAnswers,
+    questionMeta,
+    pendingQuestions,
     snapshotAt: new Date().toISOString(),
   };
 }
@@ -86,6 +119,7 @@ async function runPlaywrightSubmission(opts: {
   resumeBuffer: Buffer | undefined;
   resumeFileName: string;
   questionAnswers: Record<string, string | number>;
+  questions: GreenhouseQuestion[];
   userId: string;
   jobTitle: string;
   companyName: string;
@@ -151,6 +185,7 @@ async function runPlaywrightSubmission(opts: {
           opts.profile,
           opts.boardToken,
           opts.externalJobId,
+          opts.questions,
           opts.questionAnswers,
           opts.trackingEmail,
           applyResult.manualApplyUrl
@@ -172,6 +207,21 @@ async function runPlaywrightSubmission(opts: {
             metadata: { errorCode, manualApplyUrl: applyResult.manualApplyUrl ?? null },
           },
         });
+
+        const requiredPending = snapshot.pendingQuestions.filter((q) => q.required);
+        if (requiredPending.length > 0) {
+          createNotification({
+            userId: opts.userId,
+            type: "SYSTEM",
+            title: `Action required: answer ${requiredPending.length} question${requiredPending.length !== 1 ? "s" : ""} to complete your application`,
+            body: `Your application to ${opts.jobTitle} at ${opts.companyName} needs ${requiredPending.length} additional answer${requiredPending.length !== 1 ? "s" : ""} before it can be submitted.`,
+            ctaUrl: `/applications/${opts.applicationId}/questions`,
+            ctaLabel: "Answer Questions",
+            applicationId: opts.applicationId,
+          }).catch((err: unknown) => {
+            console.error("[notifications] pending questions notification failed:", err);
+          });
+        }
       } else {
         // Terminal failure — not recoverable by operator
         await db.application.update({
@@ -411,6 +461,7 @@ export async function POST(request: Request) {
     resumeBuffer,
     resumeFileName: profile.resumeFileName ?? "resume.pdf",
     questionAnswers,
+    questions: storedQuestions,
     userId: session.user.id,
     jobTitle: job.title,
     companyName: job.company.name,

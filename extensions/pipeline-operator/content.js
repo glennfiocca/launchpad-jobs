@@ -253,21 +253,51 @@ async function fillFormFromToken(token) {
     }
   }
 
-  // Custom question answers
-  if (snap.questionAnswers && typeof snap.questionAnswers === "object") {
-    for (const [key, answer] of Object.entries(snap.questionAnswers)) {
-      const field = findFieldByLabel(key)
-      if (field && typeof answer === "string" && answer) {
+  // Custom question answers — use questionMeta for label/fieldName mapping
+  if (Array.isArray(snap.questionMeta)) {
+    for (const meta of snap.questionMeta) {
+      const answer = snap.questionAnswers?.[meta.fieldName]
+      if (!answer) continue
+
+      if (meta.fieldType === "multi_value_single_select") {
+        // Greenhouse renders selects for this type; find by name attribute
+        const selectEl = document.querySelector(`select[name="${meta.fieldName}"]`)
+        if (selectEl instanceof HTMLSelectElement) {
+          const opt = Array.from(selectEl.options).find((o) => o.value === String(answer))
+          if (opt) {
+            selectEl.value = opt.value
+            selectEl.dispatchEvent(new Event("change", { bubbles: true }))
+            filled++
+          }
+        }
+        continue
+      }
+
+      // text / textarea: try name-attribute selector first, fall back to label text
+      let field = document.querySelector(
+        `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"]`
+      )
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
+        field = findFieldByLabel(meta.label)
+      }
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
         nativeSet(field, answer)
         filled++
       }
     }
   }
 
+  const unansweredPending = Array.isArray(snap.pendingQuestions)
+    ? snap.pendingQuestions.filter((q) => !q.userAnswer && q.required)
+    : []
+
   if (filled > 0) {
+    const pendingMsg = unansweredPending.length > 0
+      ? ` — ${unansweredPending.length} required field(s) need manual entry: ${unansweredPending.map((q) => q.label).join(", ")}`
+      : ""
     showBanner(
-      `Pre-filled ${filled} field${filled !== 1 ? "s" : ""} — review all fields, then submit manually.`,
-      "success"
+      `Pre-filled ${filled} field${filled !== 1 ? "s" : ""}${pendingMsg} — review all fields, then submit manually.`,
+      unansweredPending.length > 0 ? "info" : "success"
     )
   } else {
     showBanner(

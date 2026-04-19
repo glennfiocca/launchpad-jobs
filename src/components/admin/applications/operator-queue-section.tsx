@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type { AdminApplicationDetail } from "@/types/admin"
+import type { PendingQuestion } from "@/types"
 
 interface Props {
   application: AdminApplicationDetail
@@ -190,6 +191,39 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
             </p>
           )}
         </div>
+      )}
+
+      {/* Pending Questions */}
+      {snapshot && Array.isArray((snapshot as Record<string, unknown>).pendingQuestions) &&
+        ((snapshot as Record<string, unknown>).pendingQuestions as PendingQuestion[]).length > 0 && (
+        (() => {
+          const pending = (snapshot as Record<string, unknown>).pendingQuestions as PendingQuestion[]
+          const unanswered = pending.filter((q) => q.required && !q.userAnswer)
+          const answered = pending.filter((q) => !!q.userAnswer)
+          return (
+            <div className="bg-zinc-800 rounded-lg p-3 space-y-2 text-xs">
+              <p className="font-semibold text-amber-400">
+                Pending questions — {unanswered.length} unanswered / {answered.length} answered
+              </p>
+              <ul className="space-y-1 font-mono">
+                {pending.map((q) => (
+                  <li key={q.fieldName} className="flex items-start gap-2">
+                    <span className={q.userAnswer ? "text-green-400" : "text-amber-500"}>
+                      {q.userAnswer ? "✓" : "○"}
+                    </span>
+                    <span className="text-zinc-300 flex-1">{q.label}</span>
+                    {q.required && !q.userAnswer && (
+                      <span className="text-red-400 text-[10px] shrink-0">required</span>
+                    )}
+                    {q.userAnswer && (
+                      <span className="text-zinc-500 truncate max-w-[180px]">{q.userAnswer}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })()
       )}
 
       {/* Actions */}

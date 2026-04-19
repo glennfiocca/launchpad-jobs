@@ -298,6 +298,76 @@ async function fillReactMultiSelect(fieldId, valueIds, selectValues) {
 }
 
 /**
+ * Detect whether a fieldId maps to a checkbox group rather than a react-select.
+ * Detection order (stops at first match):
+ *  1. element is HTMLFieldSetElement
+ *  2. element contains checkbox inputs with matching name
+ *  3. name-based checkbox query returns results (no fieldset id match)
+ */
+function isCheckboxGroup(fieldId) {
+  const el = document.getElementById(fieldId)
+  if (el instanceof HTMLFieldSetElement) return true
+  if (el) {
+    const cbs = el.querySelectorAll(`input[type="checkbox"][name="${fieldId}"]`)
+    if (cbs.length > 0) return true
+  }
+  // No element found by id — check by name attribute directly
+  const byName = document.querySelectorAll(`input[type="checkbox"][name="${fieldId}"]`)
+  return byName.length > 0
+}
+
+/**
+ * Fill a checkbox group (fieldset with checkbox inputs) by checking matching value ids.
+ * Used for Twilio-style multi_value_multi_select fields.
+ *
+ * @param {string} fieldId - id of the fieldset (e.g. "question_64795406[]")
+ * @param {string[]} valueIds - array of option id strings to check
+ * @returns {Promise<boolean>} true if at least one checkbox was checked
+ */
+async function fillCheckboxGroup(fieldId, valueIds) {
+  // Locate the fieldset — getElementById works for ids containing "[]"
+  const container = document.getElementById(fieldId)
+    ?? document.querySelector(`fieldset[id="${fieldId}"]`)
+
+  // Fall back to any checkbox group sharing the name attribute
+  const checkboxes = container
+    ? container.querySelectorAll(`input[type="checkbox"]`)
+    : document.querySelectorAll(`input[type="checkbox"][name="${fieldId}"]`)
+
+  if (!checkboxes.length) {
+    console.warn(`[pipeline-operator] fillCheckboxGroup: no checkboxes found for fieldId=${fieldId}`)
+    return false
+  }
+
+  let checked = 0
+  for (const valueId of valueIds) {
+    for (const cb of checkboxes) {
+      if (cb.value === valueId && !cb.checked) {
+        cb.scrollIntoView({ block: "nearest", behavior: "instant" })
+        await new Promise(r => setTimeout(r, 40))
+        // Use nativeInputValueSetter discipline for React-controlled checkboxes
+        const nativeCheckedSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype, "checked"
+        )?.set
+        if (nativeCheckedSetter) {
+          nativeCheckedSetter.call(cb, true)
+        } else {
+          cb.checked = true
+        }
+        cb.dispatchEvent(new Event("input",  { bubbles: true }))
+        cb.dispatchEvent(new Event("change", { bubbles: true }))
+        cb.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+        checked++
+        break
+      }
+    }
+  }
+
+  console.log(`[pipeline-operator] fillCheckboxGroup fieldId=${fieldId} checked ${checked}/${valueIds.length}`)
+  return checked > 0
+}
+
+/**
  * Fill EEOC demographic questions from the Remix page context.
  * Reads window.__remixContext or embedded <script> JSON to get demographic_questions.
  *
@@ -606,7 +676,9 @@ async function fillFormFromToken(token) {
 
       if (meta.fieldType === "multi_value_multi_select") {
         const ids = String(answer).split(",").map((s) => s.trim()).filter(Boolean)
-        const ok = await fillReactMultiSelect(meta.fieldName, ids, meta.selectValues)
+        const ok = isCheckboxGroup(meta.fieldName)
+          ? await fillCheckboxGroup(meta.fieldName, ids)
+          : await fillReactMultiSelect(meta.fieldName, ids, meta.selectValues)
         if (ok) {
           filled++
         } else {

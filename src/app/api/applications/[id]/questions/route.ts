@@ -50,9 +50,10 @@ export async function POST(
   }
 
   // Merge userAnswer into pendingQuestions entries
+  // Match by q.label (not q.fieldName — fieldName is non-unique for selects)
   const existing = (snapshot.pendingQuestions as PendingQuestion[] | undefined) ?? [];
   const updatedPendingQuestions = existing.map((q) => {
-    const answer = parsed.data.answers[q.fieldName];
+    const answer = parsed.data.answers[q.label];
     return answer !== undefined ? { ...q, userAnswer: answer } : q;
   });
 

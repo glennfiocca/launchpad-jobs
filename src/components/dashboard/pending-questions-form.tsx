@@ -33,9 +33,9 @@ export function PendingQuestionsForm({
     const formData = new FormData(e.currentTarget);
     const answers: Record<string, string> = {};
     for (const q of pendingQuestions) {
-      const value = formData.get(q.fieldName);
+      const value = formData.get(q.label);  // use label, not fieldName
       if (typeof value === "string" && value.trim()) {
-        answers[q.fieldName] = value.trim();
+        answers[q.label] = value.trim();     // key by label
       }
     }
 
@@ -108,7 +108,7 @@ export function PendingQuestionsForm({
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {pendingQuestions.map((q) => (
-              <div key={q.fieldName} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-2">
+              <div key={q.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-2">
                 <label className="block text-sm font-medium text-white">
                   {q.label}
                   {q.required && <span className="text-red-400 ml-1">*</span>}
@@ -120,7 +120,7 @@ export function PendingQuestionsForm({
 
                 {q.fieldType === "multi_value_single_select" && q.selectValues ? (
                   <select
-                    name={q.fieldName}
+                    name={q.label}
                     required={q.required}
                     defaultValue={q.userAnswer ?? ""}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
@@ -134,7 +134,7 @@ export function PendingQuestionsForm({
                   </select>
                 ) : q.fieldType === "textarea" ? (
                   <textarea
-                    name={q.fieldName}
+                    name={q.label}
                     required={q.required}
                     defaultValue={q.userAnswer ?? ""}
                     rows={4}
@@ -143,7 +143,7 @@ export function PendingQuestionsForm({
                 ) : (
                   <input
                     type="text"
-                    name={q.fieldName}
+                    name={q.label}
                     required={q.required}
                     defaultValue={q.userAnswer ?? ""}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"

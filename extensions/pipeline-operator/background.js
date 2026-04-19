@@ -1,10 +1,31 @@
 /**
  * Pipeline Operator — background service worker (Manifest V3)
  *
- * Token delivery is handled by the window.opener postMessage handshake
- * between the admin page and content.js. This service worker is kept
- * minimal — it exists so the extension can declare host_permissions and
- * inject content.js into Greenhouse pages.
- *
- * If needed in the future, this is where you'd add chrome.tabs relay logic.
+ * Handles cross-origin file fetches that content scripts cannot make directly
+ * due to CORS restrictions on the Greenhouse page context.
  */
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "FETCH_FILE" && typeof message.url === "string") {
+    fetch(message.url)
+      .then(async (res) => {
+        if (!res.ok) {
+          sendResponse({ success: false, status: res.status })
+          return
+        }
+        const buffer = await res.arrayBuffer()
+        const bytes = new Uint8Array(buffer)
+        let binary = ""
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i])
+        }
+        const base64 = btoa(binary)
+        const mimeType = res.headers.get("content-type") ?? "application/octet-stream"
+        sendResponse({ success: true, base64, mimeType })
+      })
+      .catch((err) => {
+        sendResponse({ success: false, error: String(err) })
+      })
+    return true // keep message channel open for async response
+  }
+})

@@ -58,6 +58,32 @@ function nativeSet(el, value) {
 }
 
 /**
+ * Set a <select> element's value, matching by option value (numeric ID) first,
+ * then by option display text as fallback.
+ * Returns true if a matching option was found and selected.
+ */
+function nativeSelectSet(selectEl, answer) {
+  const target = String(answer)
+  // Strategy 1: match by option.value (the numeric Greenhouse option ID)
+  const byValue = Array.from(selectEl.options).find((o) => o.value === target)
+  if (byValue) {
+    selectEl.value = byValue.value
+    selectEl.dispatchEvent(new Event("change", { bubbles: true }))
+    return true
+  }
+  // Strategy 2: match by option display text (case-insensitive fallback)
+  const byText = Array.from(selectEl.options).find(
+    (o) => o.textContent?.trim().toLowerCase() === target.toLowerCase()
+  )
+  if (byText) {
+    selectEl.value = byText.value
+    selectEl.dispatchEvent(new Event("change", { bubbles: true }))
+    return true
+  }
+  return false
+}
+
+/**
  * Find a field by known name or id attributes (preferred — more reliable than label text).
  */
 function findFieldByNameOrId(candidates) {
@@ -83,50 +109,61 @@ function findFieldByLabel(labelText) {
     const forAttr = label.getAttribute("for")
     if (forAttr) {
       const el = document.getElementById(forAttr)
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return el
     }
 
-    // Strategy 2: input/textarea inside the label element
+    // Strategy 2: input/textarea/select inside the label element
     const child = label.querySelector("input, textarea, select")
-    if (child instanceof HTMLInputElement || child instanceof HTMLTextAreaElement) return child
+    if (child instanceof HTMLInputElement || child instanceof HTMLTextAreaElement || child instanceof HTMLSelectElement) return child
 
     // Strategy 3: immediate next sibling
     const sibling = label.nextElementSibling
-    if (sibling instanceof HTMLInputElement || sibling instanceof HTMLTextAreaElement) return sibling
+    if (sibling instanceof HTMLInputElement || sibling instanceof HTMLTextAreaElement || sibling instanceof HTMLSelectElement) return sibling
 
-    // Strategy 4: parent container's descendant input
+    // Strategy 4: parent container's descendant input/select
     // Handles <div class="field"><label>…</label><div><input></div></div>
     const parent = label.parentElement
     if (parent) {
-      const parentChild = parent.querySelector("input, textarea")
-      if (parentChild instanceof HTMLInputElement || parentChild instanceof HTMLTextAreaElement) return parentChild
+      const parentChild = parent.querySelector("input, textarea, select")
+      if (parentChild instanceof HTMLInputElement || parentChild instanceof HTMLTextAreaElement || parentChild instanceof HTMLSelectElement) return parentChild
     }
 
-    // Strategy 5: aria-label fallback on inputs
+    // Strategy 5: aria-label fallback on inputs/selects
     const ariaEl = document.querySelector(
-      `input[aria-label*="${labelText}" i], textarea[aria-label*="${labelText}" i]`
+      `input[aria-label*="${labelText}" i], textarea[aria-label*="${labelText}" i], select[aria-label*="${labelText}" i]`
     )
-    if (ariaEl instanceof HTMLInputElement || ariaEl instanceof HTMLTextAreaElement) return ariaEl
+    if (ariaEl instanceof HTMLInputElement || ariaEl instanceof HTMLTextAreaElement || ariaEl instanceof HTMLSelectElement) return ariaEl
   }
   return null
 }
 
 /**
- * Fetch resume from presigned URL and attach to file input.
+ * Fetch resume from presigned URL via the background service worker (avoids CORS)
+ * and attach to file input.
  */
 async function attachResume(input, presignedUrl, fileName) {
-  try {
-    const res = await fetch(presignedUrl)
-    if (!res.ok) return
-    const blob = await res.blob()
-    const file = new File([blob], fileName || "resume.pdf", { type: blob.type || "application/pdf" })
-    const dt = new DataTransfer()
-    dt.items.add(file)
-    input.files = dt.files
-    input.dispatchEvent(new Event("change", { bubbles: true }))
-  } catch {
-    // Non-fatal: operator can attach resume manually
-  }
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "FETCH_FILE", url: presignedUrl }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        resolve()
+        return
+      }
+      try {
+        const binary = atob(response.base64)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes], { type: response.mimeType })
+        const file = new File([blob], fileName || "resume.pdf", { type: response.mimeType })
+        const dt = new DataTransfer()
+        dt.items.add(file)
+        input.files = dt.files
+        input.dispatchEvent(new Event("change", { bubbles: true }))
+      } catch {
+        // Non-fatal: operator can attach resume manually
+      }
+      resolve()
+    })
+  })
 }
 
 /**
@@ -256,19 +293,17 @@ async function fillFormFromToken(token) {
   // Custom question answers — use questionMeta for label/fieldName mapping
   if (Array.isArray(snap.questionMeta)) {
     for (const meta of snap.questionMeta) {
-      const answer = snap.questionAnswers?.[meta.fieldName]
+      // For selects: answers may be keyed by label (new format) or fieldName (legacy)
+      const answer = meta.fieldType === "multi_value_single_select"
+        ? (snap.questionAnswers?.[meta.label] ?? snap.questionAnswers?.[meta.fieldName])
+        : snap.questionAnswers?.[meta.fieldName]
       if (!answer) continue
 
       if (meta.fieldType === "multi_value_single_select") {
-        // Greenhouse renders selects for this type; find by name attribute
-        const selectEl = document.querySelector(`select[name="${meta.fieldName}"]`)
+        // Find the right select by its question label (fieldName is non-unique across questions)
+        const selectEl = findFieldByLabel(meta.label)
         if (selectEl instanceof HTMLSelectElement) {
-          const opt = Array.from(selectEl.options).find((o) => o.value === String(answer))
-          if (opt) {
-            selectEl.value = opt.value
-            selectEl.dispatchEvent(new Event("change", { bubbles: true }))
-            filled++
-          }
+          if (nativeSelectSet(selectEl, answer)) filled++
         }
         continue
       }

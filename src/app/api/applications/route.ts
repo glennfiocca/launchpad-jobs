@@ -97,6 +97,8 @@ function buildSnapshot(
       ...(field.type === "multi_value_single_select" || field.type === "multi_value_multi_select"
         ? { selectValues: field.values }
         : {}),
+      // Hydrate userAnswer if modal already answered this field
+      ...(field.name && stringAnswers[field.name] ? { userAnswer: stringAnswers[field.name] } : {}),
     }));
   });
 
@@ -240,7 +242,7 @@ async function runPlaywrightSubmission(opts: {
           },
         });
 
-        const requiredPending = snapshot.pendingQuestions.filter((q) => q.required);
+        const requiredPending = snapshot.pendingQuestions.filter((q) => q.required && !q.userAnswer);
         if (requiredPending.length > 0) {
           createNotification({
             userId: opts.userId,

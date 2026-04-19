@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import type { ApiResponse, PendingQuestion } from "@/types";
+import type { ApiResponse, PendingQuestion, QuestionMeta } from "@/types";
 
 const schema = z.object({
   answers: z.record(z.string(), z.string()),
@@ -49,21 +49,53 @@ export async function POST(
     );
   }
 
-  // Merge userAnswer into pendingQuestions entries
-  // Match by q.label (not q.fieldName — fieldName is non-unique for selects)
+  // Match answers by label using pendingQuestions as the mapping table
   const existing = (snapshot.pendingQuestions as PendingQuestion[] | undefined) ?? [];
+
+  // Build label → fieldName map from pending questions
+  const labelToFieldName: Record<string, string> = {};
+  for (const pq of existing) {
+    if (pq.fieldName) labelToFieldName[pq.label] = pq.fieldName;
+  }
+
+  // Store fieldName-keyed answers in questionAnswers (extension reads by fieldName)
+  const fieldNameAnswers: Record<string, string> = {};
+  for (const [label, val] of Object.entries(parsed.data.answers)) {
+    const fn = labelToFieldName[label];
+    if (fn) {
+      fieldNameAnswers[fn] = val;
+    } else {
+      console.warn(`[questions] unmatched answer label — no pendingQuestion with this label`, {
+        applicationId: id,
+        label,
+      });
+    }
+  }
+  const existingAnswers = (snapshot.questionAnswers as Record<string, string> | undefined) ?? {};
+  const updatedAnswers = { ...existingAnswers, ...fieldNameAnswers };
+
+  // Merge userAnswer into pendingQuestions entries (match by label)
   const updatedPendingQuestions = existing.map((q) => {
     const answer = parsed.data.answers[q.label];
     return answer !== undefined ? { ...q, userAnswer: answer } : q;
   });
 
-  // Also merge into questionAnswers so the fill package picks them up
-  const existingAnswers = (snapshot.questionAnswers as Record<string, string> | undefined) ?? {};
-  const updatedAnswers = { ...existingAnswers, ...parsed.data.answers };
+  // Append questionMeta entries for newly answered pending questions
+  const existingMeta = (snapshot.questionMeta as QuestionMeta[] | undefined) ?? [];
+  const existingMetaFields = new Set(existingMeta.map((m) => m.fieldName));
+  const newMetaEntries: QuestionMeta[] = existing
+    .filter((pq) => pq.fieldName && fieldNameAnswers[pq.fieldName] && !existingMetaFields.has(pq.fieldName))
+    .map((pq) => ({
+      label: pq.label,
+      fieldName: pq.fieldName,
+      fieldType: pq.fieldType,
+      ...(pq.selectValues ? { selectValues: pq.selectValues } : {}),
+    }));
 
   const updatedSnapshot = {
     ...snapshot,
     questionAnswers: updatedAnswers,
+    questionMeta: [...existingMeta, ...newMetaEntries],
     pendingQuestions: updatedPendingQuestions,
   };
 

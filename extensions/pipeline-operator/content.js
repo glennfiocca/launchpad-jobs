@@ -111,52 +111,117 @@ function findFieldByLabel(labelText) {
  * @param {Array<{value: number|string, label: string}>|null} selectValues - Optional value→label map
  * @returns {Promise<boolean>} true if an option was clicked
  */
+/**
+ * Poll a condition function until it returns true or timeout expires.
+ * @param {() => boolean} condition
+ * @param {number} timeoutMs
+ * @returns {Promise<boolean>}
+ */
+function waitForCondition(condition, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    if (condition()) { resolve(true); return; }
+    const start = Date.now();
+    const id = setInterval(() => {
+      if (condition()) { clearInterval(id); resolve(true); return; }
+      if (Date.now() - start >= timeoutMs) { clearInterval(id); resolve(false); }
+    }, 100);
+  });
+}
+
 async function fillReactSelect(fieldId, targetValue, selectValues) {
   const input = document.getElementById(fieldId)
-  if (!(input instanceof HTMLInputElement)) return false
-
-  // Walk up to find div.select__control
-  const control = input.closest(".select__control") ?? input.parentElement?.closest("[class*='select']")
-  if (!control) return false
-
-  // Open the dropdown
-  const toggleBtn = control.querySelector("button[aria-label='Toggle flyout']")
-  if (toggleBtn) {
-    toggleBtn.click()
-  } else {
-    control.click()
-  }
-  await new Promise((r) => setTimeout(r, 400))
-
-  // Locate the open menu
-  const container = control.closest(".select__container") ?? control.parentElement
-  const menu = container?.querySelector(".select__menu") ?? document.querySelector(".select__menu")
-  if (!menu) {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  if (!(input instanceof HTMLInputElement)) {
+    console.warn(`[pipeline-operator] fillReactSelect: input#${fieldId} not found`)
     return false
   }
 
-  // Resolve target label from selectValues map, or use targetValue as-is
+  // Resolve label from selectValues map, fall back to raw value
   const strTarget = String(targetValue)
   const targetLabel = selectValues?.find((v) => String(v.value) === strTarget)?.label ?? strTarget
 
-  const options = menu.querySelectorAll(".select__option")
-  for (const opt of options) {
-    const text = opt.textContent?.trim() ?? ""
-    if (
-      text.toLowerCase() === targetLabel.toLowerCase() ||
-      opt.getAttribute("data-value") === strTarget
-    ) {
-      opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
-      opt.dispatchEvent(new MouseEvent("click", { bubbles: true }))
-      await new Promise((r) => setTimeout(r, 150))
-      return true
+  // Walk up to the react-select control element
+  const control = input.closest(".select__control") ?? input.parentElement?.closest("[class*='select']")
+  if (!control) {
+    console.warn(`[pipeline-operator] fillReactSelect: control not found for #${fieldId}`)
+    return false
+  }
+
+  const openMenu = () => {
+    const toggleBtn = control.querySelector("button[aria-label='Toggle flyout']")
+    if (toggleBtn) { toggleBtn.click(); return; }
+    control.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    control.click()
+  }
+
+  // Open and wait for aria-expanded — retry once if first attempt fails
+  for (let attempt = 0; attempt < 2; attempt++) {
+    openMenu()
+    const opened = await waitForCondition(() => input.getAttribute("aria-expanded") === "true", 5000)
+    if (opened) break
+    if (attempt === 1) {
+      console.warn(`[pipeline-operator] fillReactSelect: dropdown did not open for #${fieldId}`)
+      return false
     }
   }
 
-  // Close without selecting
-  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
-  return false
+  // Locate the menu: prefer aria-controls attr, then react-select id pattern, then visible .select__menu
+  let menu = null
+  const ariaControls = input.getAttribute("aria-controls")
+  if (ariaControls) menu = document.getElementById(ariaControls)
+  if (!menu) menu = document.getElementById(`react-select-${fieldId}-listbox`)
+  if (!menu) {
+    const allMenus = document.querySelectorAll(".select__menu, [role='listbox']")
+    for (const m of allMenus) {
+      if (m instanceof HTMLElement && m.offsetParent !== null) { menu = m; break; }
+    }
+  }
+  if (!menu) {
+    console.warn(`[pipeline-operator] fillReactSelect: menu element not found for #${fieldId}`)
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return false
+  }
+
+  // Wait for options to render
+  await waitForCondition(() => menu.querySelectorAll(".select__option, [role='option']").length > 0, 3000)
+
+  const normalize = (s) => s.trim().replace(/\s+/g, " ").toLowerCase()
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  const normTarget = normalize(targetLabel)
+
+  // Match by data-value exact, then text exact, then normalized text
+  const options = menu.querySelectorAll(".select__option, [role='option']")
+  let found = false
+  for (const opt of options) {
+    const optDataVal = opt.getAttribute("data-value") ?? ""
+    const optText = normalize(opt.textContent ?? "")
+    if (optDataVal === strTarget || optText === normTarget) {
+      opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+      opt.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      found = true
+      break
+    }
+  }
+  // Last-resort: substring match only if EXACTLY ONE option matches (avoids "Yes"/"No" false positives)
+  if (!found) {
+    const subMatches = Array.from(options).filter((opt) => {
+      const t = normalize(opt.textContent ?? "")
+      return t.includes(normTarget) || normTarget.includes(t)
+    })
+    if (subMatches.length === 1) {
+      subMatches[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+      subMatches[0].dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      found = true
+      console.warn(`[pipeline-operator] fillReactSelect: used unique-substring fallback for #${fieldId} label="${targetLabel}"`)
+    }
+  }
+
+  if (!found) {
+    console.warn(`[pipeline-operator] fillReactSelect: option not matched for #${fieldId} value="${strTarget}" label="${targetLabel}" options=${options.length}`)
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  }
+
+  await new Promise((r) => setTimeout(r, 150))
+  return found
 }
 
 /**
@@ -190,8 +255,18 @@ async function fillDemographics(eeoc) {
     // Try window.__remixContext (set by Remix on SPA pages)
     if (window.__remixContext?.state?.loaderData) {
       const loaderValues = Object.values(window.__remixContext.state.loaderData)
-      const loaderWithDemog = loaderValues.find((d) => d?.demographicQuestions)
-      demogQuestions = loaderWithDemog?.demographicQuestions?.questions ?? []
+      for (const d of loaderValues) {
+        if (!d || typeof d !== "object") continue
+        // camelCase variant
+        const camel = d.demographicQuestions
+        if (camel) { demogQuestions = camel.questions ?? (Array.isArray(camel) ? camel : []); break; }
+        // snake_case variant
+        const snake = d.demographic_questions
+        if (snake) { demogQuestions = snake.questions ?? (Array.isArray(snake) ? snake : []); break; }
+        // nested under jobPost
+        const nested = d.jobPost?.demographicQuestions ?? d.jobPost?.demographic_questions
+        if (nested) { demogQuestions = nested.questions ?? (Array.isArray(nested) ? nested : []); break; }
+      }
     }
 
     // Fallback: find embedded script tag with remix context JSON
@@ -201,14 +276,21 @@ async function fillDemographics(eeoc) {
         document.querySelector("script#__remix-context__")
       if (scriptEl?.textContent) {
         const parsed = JSON.parse(scriptEl.textContent)
-        demogQuestions =
-          parsed?.state?.loaderData?.root?.demographicQuestions?.questions ??
-          parsed?.loaderData?.root?.demographicQuestions?.questions ??
-          []
+        const loaderVals = Object.values(parsed?.state?.loaderData ?? parsed?.loaderData ?? {})
+        for (const d of loaderVals) {
+          if (!d || typeof d !== "object") continue
+          const qs = d.demographicQuestions?.questions ?? d.demographic_questions?.questions ??
+            d.jobPost?.demographicQuestions?.questions ?? d.jobPost?.demographic_questions?.questions
+          if (qs?.length) { demogQuestions = qs; break; }
+        }
       }
     }
   } catch {
     // Non-fatal — demographics remain for operator to fill manually
+  }
+
+  if (!demogQuestions.length && Object.keys(eeoc).length > 0) {
+    console.warn("[pipeline-operator] EEOC snapshot present but demographics not found in page context")
   }
 
   if (!demogQuestions.length) return
@@ -306,12 +388,23 @@ function showBanner(message, type = "info") {
   const el = document.createElement("div")
   el.id = "pipeline-operator-banner"
   el.setAttribute("style",
-    `position:fixed;top:0;left:0;right:0;z-index:2147483647;padding:10px 16px;` +
+    `position:fixed;top:0;left:0;right:0;z-index:2147483647;padding:10px 44px 10px 16px;` +
     `font-size:13px;font-family:monospace;text-align:center;${colors[type] ?? colors.info}`
   )
   el.textContent = `⚙ Pipeline Operator: ${message}`
+
+  // Dismiss button — manual X only, no auto-dismiss for non-errors
+  const btn = document.createElement("button")
+  btn.textContent = "✕"
+  btn.setAttribute("style",
+    "position:absolute;right:10px;top:50%;transform:translateY(-50%);" +
+    "background:transparent;border:none;cursor:pointer;font-size:15px;padding:2px 6px;" +
+    `color:${type === "error" ? "#fca5a5" : type === "success" ? "#86efac" : "#bfdbfe"}`
+  )
+  btn.onclick = () => el.remove()
+  el.appendChild(btn)
   document.body.prepend(el)
-  if (type !== "error") setTimeout(() => el.remove(), 8000)
+  // No auto-dismiss — operator must click X
 }
 
 /**

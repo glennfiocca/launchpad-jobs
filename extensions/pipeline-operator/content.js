@@ -169,9 +169,24 @@ function waitForCondition(condition, timeoutMs = 5000) {
 }
 
 async function fillReactSelect(fieldId, targetValue, selectValues) {
-  const input = document.getElementById(fieldId)
+  // Strategy 1: wait for exact id match (up to 3 s for late-mounting sections)
+  let input = await waitForElement(`#${fieldId}`, 3000)
+
+  // Strategy 2: aria-labelledby fallback (react-select inputs are labelled by <label id="fieldId-label">)
   if (!(input instanceof HTMLInputElement)) {
-    console.warn(`[pipeline-operator] fillReactSelect: input#${fieldId} not found`)
+    input = document.querySelector(`input[aria-labelledby="${fieldId}-label"]`)
+  }
+
+  // Strategy 3: find any input inside a field wrapper whose id starts with the numeric portion
+  if (!(input instanceof HTMLInputElement)) {
+    const numericId = fieldId.replace(/^question_/, '')
+    input = document.querySelector(`input[id^="question_${numericId}"]`)
+  }
+
+  if (!(input instanceof HTMLInputElement)) {
+    // Log candidates to help diagnose id mismatches
+    const candidates = Array.from(document.querySelectorAll('input[id^="question_"]')).map(el => el.id)
+    console.warn(`[pipeline-operator] fillReactSelect: input#${fieldId} not found. Candidates:`, candidates)
     return false
   }
 
@@ -400,19 +415,20 @@ async function attachResume(input, presignedUrl, fileName) {
 }
 
 /**
- * Wait for a selector to appear in the DOM (up to timeoutMs).
+ * Wait for a selector to appear in the DOM (polling-based, up to timeoutMs).
+ * Returns the element if found, null on timeout.
+ * @param {string} selector
+ * @param {number} timeoutMs
+ * @returns {Promise<Element|null>}
  */
-function waitForElement(selector, timeoutMs = 15000) {
-  return new Promise((resolve) => {
+async function waitForElement(selector, timeoutMs = 3000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
     const el = document.querySelector(selector)
-    if (el) { resolve(el); return }
-    const obs = new MutationObserver(() => {
-      const found = document.querySelector(selector)
-      if (found) { obs.disconnect(); resolve(found) }
-    })
-    obs.observe(document.body, { childList: true, subtree: true })
-    setTimeout(() => { obs.disconnect(); resolve(null) }, timeoutMs)
-  })
+    if (el) return el
+    await new Promise(r => setTimeout(r, 100))
+  }
+  return null
 }
 
 /**
@@ -539,8 +555,17 @@ async function fillFormFromToken(token) {
   }
 
   if (snap.coreFieldExtras?.country) {
+    // Belt-and-suspenders normalization for the most common abbreviations.
+    // Server-side normalization is the primary layer; this catches anything that slips through.
+    const COUNTRY_ABBR = {
+      "us": "United States", "usa": "United States", "u.s.": "United States", "u.s.a.": "United States",
+      "uk": "United Kingdom", "gb": "United Kingdom",
+      "uae": "United Arab Emirates",
+    }
+    const rawCountry = snap.coreFieldExtras.country
+    const country = COUNTRY_ABBR[rawCountry.toLowerCase().trim()] ?? rawCountry
     // Country is a react-select; pass label string directly as targetValue (no selectValues map)
-    const ok = await fillReactSelect("country", snap.coreFieldExtras.country, null)
+    const ok = await fillReactSelect("country", country, null)
     if (ok) {
       filled++
     } else {
@@ -561,6 +586,13 @@ async function fillFormFromToken(token) {
     for (const meta of snap.questionMeta) {
       const answer = snap.questionAnswers?.[meta.fieldName]
       if (!answer) continue
+
+      // Scroll section into view so late-mounting fields are present in the DOM
+      const fieldEl = document.getElementById(meta.fieldName)
+      if (fieldEl) {
+        fieldEl.scrollIntoView({ block: 'center', behavior: 'instant' })
+        await new Promise(r => setTimeout(r, 80))
+      }
 
       if (meta.fieldType === "multi_value_single_select") {
         const ok = await fillReactSelect(meta.fieldName, answer, meta.selectValues)

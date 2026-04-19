@@ -47,6 +47,78 @@ interface ApplicationSnapshot {
   };
 }
 
+const COUNTRY_ALIASES: Record<string, string> = {
+  "us": "United States",
+  "usa": "United States",
+  "u.s.": "United States",
+  "u.s.a.": "United States",
+  "united states of america": "United States",
+  "uk": "United Kingdom",
+  "gb": "United Kingdom",
+  "great britain": "United Kingdom",
+  "england": "United Kingdom",
+  "uae": "United Arab Emirates",
+  "u.a.e.": "United Arab Emirates",
+  "de": "Germany",
+  "deutschland": "Germany",
+  "fr": "France",
+  "au": "Australia",
+  "nz": "New Zealand",
+  "br": "Brazil",
+  "brasil": "Brazil",
+  "mx": "Mexico",
+  "méxico": "Mexico",
+  "in": "India",
+  "jp": "Japan",
+  "cn": "China",
+  "kr": "South Korea",
+  "south korea": "South Korea",
+  "s. korea": "South Korea",
+  "s.korea": "South Korea",
+  "sg": "Singapore",
+  "nl": "Netherlands",
+  "the netherlands": "Netherlands",
+  "es": "Spain",
+  "españa": "Spain",
+  "it": "Italy",
+  "italia": "Italy",
+  "se": "Sweden",
+  "no": "Norway",
+  "dk": "Denmark",
+  "fi": "Finland",
+  "pl": "Poland",
+  "ch": "Switzerland",
+  "at": "Austria",
+  "be": "Belgium",
+  "pt": "Portugal",
+  "ie": "Ireland",
+  "il": "Israel",
+  "tr": "Turkey",
+  "türkiye": "Turkey",
+  "za": "South Africa",
+  "ng": "Nigeria",
+  "ke": "Kenya",
+  "eg": "Egypt",
+  "ar": "Argentina",
+  "cl": "Chile",
+  "co": "Colombia",
+  "pe": "Peru",
+  "ph": "Philippines",
+  "id": "Indonesia",
+  "my": "Malaysia",
+  "th": "Thailand",
+  "vn": "Vietnam",
+  "pk": "Pakistan",
+  "bd": "Bangladesh",
+  "hk": "Hong Kong",
+  "tw": "Taiwan",
+}
+
+function normalizeCountry(raw: string): string {
+  const key = raw.toLowerCase().trim()
+  return COUNTRY_ALIASES[key] ?? raw
+}
+
 function buildSnapshot(
   profile: UserProfile,
   boardToken: string,
@@ -106,7 +178,7 @@ function buildSnapshot(
   const countryRaw = (profile.locationFormatted ?? profile.location ?? "").split(",").at(-1)?.trim() || undefined;
   const coreFieldExtras: ApplicationSnapshot["coreFieldExtras"] = {};
   if (profile.preferredFirstName) coreFieldExtras.preferredFirstName = profile.preferredFirstName;
-  if (countryRaw) coreFieldExtras.country = countryRaw;
+  if (countryRaw) coreFieldExtras.country = normalizeCountry(countryRaw);
   if (profile.voluntaryGender || profile.voluntaryRace || profile.voluntaryVeteranStatus || profile.voluntaryDisability) {
     coreFieldExtras.eeoc = {
       ...(profile.voluntaryGender ? { gender: profile.voluntaryGender } : {}),

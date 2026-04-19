@@ -61,6 +61,46 @@ function nativeSet(el, value) {
 }
 
 /**
+ * Click an element via CDP (dispatched from background.js) so Greenhouse's
+ * React event system sees a real pointer event rather than a synthetic one.
+ * Falls back to element.click() if CDP is unavailable or the element is
+ * outside the viewport.
+ *
+ * @param {Element} element
+ * @returns {Promise<boolean>} true if CDP click succeeded
+ */
+async function cdpClick(element) {
+  // Scroll element into view and wait for layout to settle
+  element.scrollIntoView({ block: "center", behavior: "instant" })
+  await new Promise(r => setTimeout(r, 80))
+
+  const rect = element.getBoundingClientRect()
+  const x = Math.round(rect.left + rect.width / 2)
+  const y = Math.round(rect.top + rect.height / 2)
+
+  // Validate coordinates are within viewport
+  if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+    console.warn("[Pipeline] cdpClick: element out of viewport, falling back to DOM click", element)
+    element.click()
+    return false
+  }
+
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "CDP_CLICK", x, y })
+    if (!result?.success) {
+      console.warn("[Pipeline] cdpClick: CDP failed, falling back to DOM click", result?.error)
+      element.click()
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn("[Pipeline] cdpClick: sendMessage failed, falling back to DOM click", err)
+    element.click()
+    return false
+  }
+}
+
+/**
  * Find a field by known name or id attributes.
  */
 function findFieldByNameOrId(candidates) {
@@ -146,16 +186,14 @@ async function fillReactSelect(fieldId, targetValue, selectValues) {
     return false
   }
 
-  const openMenu = () => {
+  const openMenu = async () => {
     const toggleBtn = control.querySelector("button[aria-label='Toggle flyout']")
-    if (toggleBtn) { toggleBtn.click(); return; }
-    control.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
-    control.click()
+    await cdpClick(toggleBtn ?? control)
   }
 
   // Open and wait for aria-expanded — retry once if first attempt fails
   for (let attempt = 0; attempt < 2; attempt++) {
-    openMenu()
+    await openMenu()
     const opened = await waitForCondition(() => input.getAttribute("aria-expanded") === "true", 5000)
     if (opened) break
     if (attempt === 1) {
@@ -195,8 +233,9 @@ async function fillReactSelect(fieldId, targetValue, selectValues) {
     const optDataVal = opt.getAttribute("data-value") ?? ""
     const optText = normalize(opt.textContent ?? "")
     if (optDataVal === strTarget || optText === normTarget) {
-      opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
-      opt.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      opt.scrollIntoView({ block: "nearest" })
+      await new Promise(r => setTimeout(r, 40))
+      await cdpClick(opt)
       found = true
       break
     }
@@ -208,8 +247,9 @@ async function fillReactSelect(fieldId, targetValue, selectValues) {
       return t.includes(normTarget) || normTarget.includes(t)
     })
     if (subMatches.length === 1) {
-      subMatches[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
-      subMatches[0].dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      subMatches[0].scrollIntoView({ block: "nearest" })
+      await new Promise(r => setTimeout(r, 40))
+      await cdpClick(subMatches[0])
       found = true
       console.warn(`[pipeline-operator] fillReactSelect: used unique-substring fallback for #${fieldId} label="${targetLabel}"`)
     }
@@ -575,6 +615,9 @@ async function fillFormFromToken(token) {
     ...unansweredPending.map((q) => q.label),
   ]
   const uniqueMissing = [...new Set(allMissing)]
+
+  // Remove Chrome debugging banner now that CDP clicks are done
+  chrome.runtime.sendMessage({ type: "DEBUGGER_DETACH" }).catch(() => {})
 
   if (filled > 0) {
     const pendingMsg = uniqueMissing.length > 0

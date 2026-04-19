@@ -370,7 +370,9 @@ export async function POST(request: Request) {
       if (isRedirect) {
         const location = probeRes.headers.get("location") ?? "";
         const isGreenhouseRedirect =
-          location.includes("greenhouse.io") || location.includes("job-boards");
+          location.startsWith("/") || // relative redirect = still on Greenhouse's domain
+          location.includes("greenhouse.io") ||
+          location.includes("job-boards");
 
         if (!isGreenhouseRedirect) {
           // Job redirects away from Greenhouse — mark inactive and reject

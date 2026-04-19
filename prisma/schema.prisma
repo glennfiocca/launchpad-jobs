@@ -110,8 +110,9 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Personal
-  firstName   String
-  lastName    String
+  firstName          String
+  lastName           String
+  preferredFirstName String?
   email       String
   phone       String?
   location    String?

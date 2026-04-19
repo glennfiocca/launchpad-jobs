@@ -17,7 +17,8 @@ function resolveYesNo(
 function isCoreField(label: string): boolean {
   const l = label.toLowerCase();
   return (
-    l.includes("first name") ||
+    // Match "First Name" but not "Preferred First Name"
+    (l.includes("first name") && !l.includes("preferred")) ||
     l.includes("last name") ||
     l === "email" ||
     l.includes("email address") ||
@@ -120,19 +121,29 @@ export function autoAnswerQuestion(
   }
 
   // --- Country of residence (select) ---
-  if (/country.*reside|currently based/i.test(question.label)) {
-    if (field.type !== "multi_value_single_select" || !profile.location)
-      return null;
-    // Try to match location string against available option labels
-    const locationLower = profile.location.toLowerCase();
-    const match = field.values.find((v) =>
-      locationLower.includes(v.label.toLowerCase())
+  if (/\bcountry\b|country of res|currently based/i.test(question.label)) {
+    if (field.type !== "multi_value_single_select") return null;
+
+    const usAliases = ["usa", "us", "united states", "united states of america"];
+    // Derive country from structured formatted address (last comma segment)
+    const lastSegment = (profile.locationFormatted ?? profile.location ?? "")
+      .split(",")
+      .at(-1)
+      ?.trim() ?? "";
+    // If locationState is set, we know it's a US address
+    const isUS = !!profile.locationState || usAliases.includes(lastSegment.toLowerCase());
+    const targetLabel = isUS ? "United States" : lastSegment;
+    if (!targetLabel) return null;
+
+    const match = field.values.find(
+      (v) =>
+        v.label.toLowerCase() === targetLabel.toLowerCase() ||
+        (isUS && usAliases.includes(v.label.toLowerCase()))
     );
     if (match) return { [fieldName]: match.value };
+
     // Fall back to "Other" if present
-    const other = field.values.find(
-      (v) => v.label.toLowerCase() === "other"
-    );
+    const other = field.values.find((v) => v.label.toLowerCase() === "other");
     return other ? { [fieldName]: other.value } : null;
   }
 
@@ -186,6 +197,60 @@ export function autoAnswerQuestion(
     if (field.type !== "multi_value_single_select") return null;
     const val = resolveYesNo(field, false);
     return val !== null ? { [fieldName]: val } : null;
+  }
+
+  // --- Preferred first name / nickname ---
+  if (/preferred.*name|preferred.*first|nickname/i.test(question.label)) {
+    if (field.type !== "input_text") return null;
+    return profile.preferredFirstName
+      ? { [fieldName]: profile.preferredFirstName }
+      : null;
+  }
+
+  // --- EEOC: gender identity ---
+  if (/\bgender\b/i.test(question.label)) {
+    if (field.type !== "multi_value_single_select" || !profile.voluntaryGender) return null;
+    const match = field.values.find(
+      (v) => v.label.toLowerCase() === profile.voluntaryGender!.toLowerCase()
+    );
+    return match ? { [fieldName]: match.value } : null;
+  }
+
+  // --- EEOC: race / ethnicity ---
+  if (/\brace\b|\bethnicity\b/i.test(question.label)) {
+    if (!profile.voluntaryRace) return null;
+    const targetLabel = profile.voluntaryRace;
+    if (field.type === "multi_value_single_select") {
+      const match = field.values.find(
+        (v) => v.label.toLowerCase() === targetLabel.toLowerCase()
+      );
+      return match ? { [fieldName]: match.value } : null;
+    }
+    if (field.type === "multi_value_multi_select") {
+      const match = field.values.find(
+        (v) => v.label.toLowerCase() === targetLabel.toLowerCase()
+      );
+      return match ? { [fieldName]: String(match.value) } : null;
+    }
+    return null;
+  }
+
+  // --- EEOC: veteran status ---
+  if (/\bveteran\b/i.test(question.label)) {
+    if (field.type !== "multi_value_single_select" || !profile.voluntaryVeteranStatus) return null;
+    const match = field.values.find(
+      (v) => v.label.toLowerCase() === profile.voluntaryVeteranStatus!.toLowerCase()
+    );
+    return match ? { [fieldName]: match.value } : null;
+  }
+
+  // --- EEOC: disability ---
+  if (/disabilit/i.test(question.label)) {
+    if (field.type !== "multi_value_single_select" || !profile.voluntaryDisability) return null;
+    const match = field.values.find(
+      (v) => v.label.toLowerCase() === profile.voluntaryDisability!.toLowerCase()
+    );
+    return match ? { [fieldName]: match.value } : null;
   }
 
   return null;

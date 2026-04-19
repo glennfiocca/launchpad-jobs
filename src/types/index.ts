@@ -146,6 +146,7 @@ export interface CreditStatus {
 export interface ProfileFormData {
   firstName: string;
   lastName: string;
+  preferredFirstName?: string;
   email: string;
   phone?: string;
   location?: string;           // legacy display fallback

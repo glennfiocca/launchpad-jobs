@@ -16,6 +16,7 @@ interface ProfileFormProps {
 interface FormState {
   firstName: string;
   lastName: string;
+  preferredFirstName: string;
   email: string;
   phone: string;
   location: string;
@@ -67,6 +68,7 @@ function initFormState(data: UserProfile | null): FormState {
   return {
     firstName: d?.firstName ?? "",
     lastName: d?.lastName ?? "",
+    preferredFirstName: d?.preferredFirstName ?? "",
     email: d?.email ?? "",
     phone: d?.phone ?? "",
     // Display structured formatted address first; fall back to legacy location
@@ -158,6 +160,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
     const payload = {
       ...form,
+      preferredFirstName: form.preferredFirstName || undefined,
       yearsExperience: form.yearsExperience ? Number(form.yearsExperience) : undefined,
       desiredSalaryMin: form.desiredSalaryMin ? Number(form.desiredSalaryMin) : undefined,
       desiredSalaryMax: form.desiredSalaryMax ? Number(form.desiredSalaryMax) : undefined,
@@ -218,6 +221,10 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             <label className={labelClass}>Last Name *</label>
             <input className={inputClass} value={form.lastName} onChange={(e) => set("lastName", e.target.value)} required placeholder="Doe" />
           </div>
+        </div>
+        <div>
+          <label className={labelClass}>Preferred First Name <span className="text-zinc-600 font-normal">(optional — used on applications that ask for a preferred name)</span></label>
+          <input className={inputClass} value={form.preferredFirstName} onChange={(e) => set("preferredFirstName", e.target.value)} placeholder="e.g. Alex (if different from your legal first name)" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

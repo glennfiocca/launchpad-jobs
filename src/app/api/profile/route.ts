@@ -9,6 +9,7 @@ import type { UserProfile } from "@prisma/client";
 const profileSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
+  preferredFirstName: z.string().optional(),
   email: z.string().email(),
   phone: z.string().optional(),
   location: z.string().optional(),

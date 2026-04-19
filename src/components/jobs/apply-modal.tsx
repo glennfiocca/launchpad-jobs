@@ -115,6 +115,50 @@ function isYesNo(field: GreenhouseQuestionField): boolean {
   return labels.includes("yes") && labels.includes("no");
 }
 
+function FieldRenderer({
+  field,
+  value,
+  onChange,
+}: FieldProps) {
+  if (field.type === "input_file") return null;
+
+  if (field.type === "input_text") {
+    return (
+      <input
+        type="text"
+        value={value !== undefined ? String(value) : ""}
+        onChange={(e) => onChange(field.name, e.target.value)}
+        className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
+      />
+    );
+  }
+
+  if (field.type === "textarea") {
+    return (
+      <textarea
+        rows={4}
+        value={value !== undefined ? String(value) : ""}
+        onChange={(e) => onChange(field.name, e.target.value)}
+        className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 resize-y transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
+      />
+    );
+  }
+
+  if (field.type === "multi_value_single_select") {
+    return isYesNo(field) ? (
+      <YesNoToggle field={field} value={value} onChange={onChange} />
+    ) : (
+      <SelectField field={field} value={value} onChange={onChange} />
+    );
+  }
+
+  if (field.type === "multi_value_multi_select") {
+    return <MultiSelectField field={field} value={value} onChange={onChange} />;
+  }
+
+  return null;
+}
+
 function QuestionInput({
   question,
   answers,
@@ -124,12 +168,14 @@ function QuestionInput({
   answers: Record<string, string | number>;
   onChange: (fieldName: string, value: string | number) => void;
 }) {
-  const field = question.fields[0];
-  if (!field || field.type === "input_file") return null;
+  const allFileFields =
+    question.fields.length > 0 &&
+    question.fields.every((f) => f.type === "input_file");
 
-  const value = answers[field.name];
-  const helpText =
-    question.description ? stripHtml(question.description) : null;
+  // Optional file-only question → hide entirely
+  if (allFileFields && !question.required) return null;
+
+  const helpText = question.description ? stripHtml(question.description) : null;
 
   return (
     <div className="space-y-1.5">
@@ -143,33 +189,19 @@ function QuestionInput({
         <p className="text-xs text-zinc-600">{helpText}</p>
       )}
 
-      {field.type === "input_text" && (
-        <input
-          type="text"
-          value={value !== undefined ? String(value) : ""}
-          onChange={(e) => onChange(field.name, e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
-        />
-      )}
-
-      {field.type === "textarea" && (
-        <textarea
-          rows={4}
-          value={value !== undefined ? String(value) : ""}
-          onChange={(e) => onChange(field.name, e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 resize-y transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
-        />
-      )}
-
-      {field.type === "multi_value_single_select" &&
-        (isYesNo(field) ? (
-          <YesNoToggle field={field} value={value} onChange={onChange} />
-        ) : (
-          <SelectField field={field} value={value} onChange={onChange} />
-        ))}
-
-      {field.type === "multi_value_multi_select" && (
-        <MultiSelectField field={field} value={value} onChange={onChange} />
+      {allFileFields && question.required ? (
+        <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-sm text-yellow-400">
+          <strong>{question.label}</strong> — File upload required. Attach this document directly on the Greenhouse page after the form opens.
+        </div>
+      ) : (
+        question.fields.map((field) => (
+          <FieldRenderer
+            key={field.name}
+            field={field}
+            value={answers[field.name]}
+            onChange={onChange}
+          />
+        ))
       )}
     </div>
   );

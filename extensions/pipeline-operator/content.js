@@ -9,6 +9,9 @@
  *   3. This script decodes the JWT snapshot and fills the form.
  *
  * Does NOT auto-submit — operator reviews and clicks Submit manually.
+ *
+ * IMPORTANT: Greenhouse uses react-select for all dropdowns (no native <select>).
+ * Fill pattern: click div.select__control → wait for menu → click matching option.
  */
 
 (function init() {
@@ -58,33 +61,7 @@ function nativeSet(el, value) {
 }
 
 /**
- * Set a <select> element's value, matching by option value (numeric ID) first,
- * then by option display text as fallback.
- * Returns true if a matching option was found and selected.
- */
-function nativeSelectSet(selectEl, answer) {
-  const target = String(answer)
-  // Strategy 1: match by option.value (the numeric Greenhouse option ID)
-  const byValue = Array.from(selectEl.options).find((o) => o.value === target)
-  if (byValue) {
-    selectEl.value = byValue.value
-    selectEl.dispatchEvent(new Event("change", { bubbles: true }))
-    return true
-  }
-  // Strategy 2: match by option display text (case-insensitive fallback)
-  const byText = Array.from(selectEl.options).find(
-    (o) => o.textContent?.trim().toLowerCase() === target.toLowerCase()
-  )
-  if (byText) {
-    selectEl.value = byText.value
-    selectEl.dispatchEvent(new Event("change", { bubbles: true }))
-    return true
-  }
-  return false
-}
-
-/**
- * Find a field by known name or id attributes (preferred — more reliable than label text).
+ * Find a field by known name or id attributes.
  */
 function findFieldByNameOrId(candidates) {
   for (const name of candidates) {
@@ -98,43 +75,177 @@ function findFieldByNameOrId(candidates) {
 
 /**
  * Find a form field by label text (case-insensitive substring match).
- * Checks: label[for]→id, label child, next sibling, and parent-container child
- * (handles the common Greenhouse wrapper-div pattern).
+ * Fallback for text/textarea fields where id is unknown.
  */
 function findFieldByLabel(labelText) {
   for (const label of document.querySelectorAll("label")) {
     if (!label.textContent?.toLowerCase().includes(labelText.toLowerCase())) continue
 
-    // Strategy 1: label[for] → getElementById
     const forAttr = label.getAttribute("for")
     if (forAttr) {
       const el = document.getElementById(forAttr)
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return el
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el
     }
 
-    // Strategy 2: input/textarea/select inside the label element
-    const child = label.querySelector("input, textarea, select")
-    if (child instanceof HTMLInputElement || child instanceof HTMLTextAreaElement || child instanceof HTMLSelectElement) return child
+    const child = label.querySelector("input, textarea")
+    if (child instanceof HTMLInputElement || child instanceof HTMLTextAreaElement) return child
 
-    // Strategy 3: immediate next sibling
     const sibling = label.nextElementSibling
-    if (sibling instanceof HTMLInputElement || sibling instanceof HTMLTextAreaElement || sibling instanceof HTMLSelectElement) return sibling
+    if (sibling instanceof HTMLInputElement || sibling instanceof HTMLTextAreaElement) return sibling
 
-    // Strategy 4: parent container's descendant input/select
-    // Handles <div class="field"><label>…</label><div><input></div></div>
     const parent = label.parentElement
     if (parent) {
-      const parentChild = parent.querySelector("input, textarea, select")
-      if (parentChild instanceof HTMLInputElement || parentChild instanceof HTMLTextAreaElement || parentChild instanceof HTMLSelectElement) return parentChild
+      const parentChild = parent.querySelector("input, textarea")
+      if (parentChild instanceof HTMLInputElement || parentChild instanceof HTMLTextAreaElement) return parentChild
     }
-
-    // Strategy 5: aria-label fallback on inputs/selects
-    const ariaEl = document.querySelector(
-      `input[aria-label*="${labelText}" i], textarea[aria-label*="${labelText}" i], select[aria-label*="${labelText}" i]`
-    )
-    if (ariaEl instanceof HTMLInputElement || ariaEl instanceof HTMLTextAreaElement || ariaEl instanceof HTMLSelectElement) return ariaEl
   }
   return null
+}
+
+/**
+ * Fill a react-select combobox by fieldId.
+ * Greenhouse react-select inputs have id="FIELD_ID" with class select__input inside div.select__control.
+ *
+ * @param {string} fieldId - The DOM input id (e.g. "country", "question_35943699002")
+ * @param {string|number} targetValue - The option value (numeric id) or label string to match
+ * @param {Array<{value: number|string, label: string}>|null} selectValues - Optional value→label map
+ * @returns {Promise<boolean>} true if an option was clicked
+ */
+async function fillReactSelect(fieldId, targetValue, selectValues) {
+  const input = document.getElementById(fieldId)
+  if (!(input instanceof HTMLInputElement)) return false
+
+  // Walk up to find div.select__control
+  const control = input.closest(".select__control") ?? input.parentElement?.closest("[class*='select']")
+  if (!control) return false
+
+  // Open the dropdown
+  const toggleBtn = control.querySelector("button[aria-label='Toggle flyout']")
+  if (toggleBtn) {
+    toggleBtn.click()
+  } else {
+    control.click()
+  }
+  await new Promise((r) => setTimeout(r, 400))
+
+  // Locate the open menu
+  const container = control.closest(".select__container") ?? control.parentElement
+  const menu = container?.querySelector(".select__menu") ?? document.querySelector(".select__menu")
+  if (!menu) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return false
+  }
+
+  // Resolve target label from selectValues map, or use targetValue as-is
+  const strTarget = String(targetValue)
+  const targetLabel = selectValues?.find((v) => String(v.value) === strTarget)?.label ?? strTarget
+
+  const options = menu.querySelectorAll(".select__option")
+  for (const opt of options) {
+    const text = opt.textContent?.trim() ?? ""
+    if (
+      text.toLowerCase() === targetLabel.toLowerCase() ||
+      opt.getAttribute("data-value") === strTarget
+    ) {
+      opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+      opt.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 150))
+      return true
+    }
+  }
+
+  // Close without selecting
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  return false
+}
+
+/**
+ * Fill a react-select multi-select by clicking each target value sequentially.
+ *
+ * @param {string} fieldId
+ * @param {string[]} valueIds - Array of numeric id strings to select
+ * @param {Array<{value: number|string, label: string}>|null} selectValues
+ * @returns {Promise<boolean>} true if at least one option was selected
+ */
+async function fillReactMultiSelect(fieldId, valueIds, selectValues) {
+  let filled = 0
+  for (const id of valueIds) {
+    const ok = await fillReactSelect(fieldId, id, selectValues)
+    if (ok) filled++
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  return filled > 0
+}
+
+/**
+ * Fill EEOC demographic questions from the Remix page context.
+ * Reads window.__remixContext or embedded <script> JSON to get demographic_questions.
+ *
+ * @param {{ gender?: string, race?: string, veteranStatus?: string, disability?: string }} eeoc
+ */
+async function fillDemographics(eeoc) {
+  let demogQuestions = []
+
+  try {
+    // Try window.__remixContext (set by Remix on SPA pages)
+    if (window.__remixContext?.state?.loaderData) {
+      const loaderValues = Object.values(window.__remixContext.state.loaderData)
+      const loaderWithDemog = loaderValues.find((d) => d?.demographicQuestions)
+      demogQuestions = loaderWithDemog?.demographicQuestions?.questions ?? []
+    }
+
+    // Fallback: find embedded script tag with remix context JSON
+    if (!demogQuestions.length) {
+      const scriptEl =
+        document.querySelector("script[data-remix-run-router]") ??
+        document.querySelector("script#__remix-context__")
+      if (scriptEl?.textContent) {
+        const parsed = JSON.parse(scriptEl.textContent)
+        demogQuestions =
+          parsed?.state?.loaderData?.root?.demographicQuestions?.questions ??
+          parsed?.loaderData?.root?.demographicQuestions?.questions ??
+          []
+      }
+    }
+  } catch {
+    // Non-fatal — demographics remain for operator to fill manually
+  }
+
+  if (!demogQuestions.length) return
+
+  const eeocMap = [
+    { profileKey: "gender", pattern: /gender/i },
+    { profileKey: "race", pattern: /race|ethnicity/i },
+    { profileKey: "veteranStatus", pattern: /veteran/i },
+    { profileKey: "disability", pattern: /disabilit/i },
+  ]
+
+  for (const { profileKey, pattern } of eeocMap) {
+    const profileLabel = eeoc[profileKey]
+    if (!profileLabel) continue
+
+    const q = demogQuestions.find((dq) => pattern.test(dq.name ?? dq.question ?? ""))
+    if (!q) continue
+
+    const isMulti = q.answer_type?.key === "MULTI_SELECT"
+    const matchedOpt = q.answer_options?.find(
+      (opt) => opt.name.toLowerCase() === profileLabel.toLowerCase()
+    )
+    if (!matchedOpt) continue
+
+    const fieldId = String(q.id)
+    const syntheticSelectValues = (q.answer_options ?? []).map((o) => ({
+      value: o.id,
+      label: o.name,
+    }))
+
+    if (isMulti) {
+      await fillReactMultiSelect(fieldId, [String(matchedOpt.id)], syntheticSelectValues)
+    } else {
+      await fillReactSelect(fieldId, String(matchedOpt.id), syntheticSelectValues)
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
 }
 
 /**
@@ -222,17 +333,17 @@ async function fillFormFromToken(token) {
   const snap = payload.snapshot
   showBanner("Pre-filling form…", "info")
 
-  // Wait for actual input fields to appear — not just <form>, which exists in the
-  // SPA shell before React hydrates and renders the individual field inputs.
+  // Wait for actual input fields to appear (SPA hydration)
   await waitForElement(
     "input[name='first_name'], input[id='first_name'], input[type='email']",
     15000
   )
-
-  // Brief extra delay to allow React to finish hydrating sibling fields.
   await new Promise((r) => setTimeout(r, 400))
 
   let filled = 0
+  const missingFields = []
+
+  // ── Core fields ─────────────────────────────────────────────────────────────
 
   // First Name
   const firstNameField =
@@ -282,7 +393,29 @@ async function fillFormFromToken(token) {
     filled++
   }
 
-  // Resume upload
+  // ── coreFieldExtras ──────────────────────────────────────────────────────────
+
+  if (snap.coreFieldExtras?.preferredFirstName) {
+    const el =
+      document.getElementById("preferred_name") ??
+      findFieldByLabel("preferred")
+    if (el instanceof HTMLInputElement) {
+      nativeSet(el, snap.coreFieldExtras.preferredFirstName)
+      filled++
+    }
+  }
+
+  if (snap.coreFieldExtras?.country) {
+    // Country is a react-select; pass label string directly as targetValue (no selectValues map)
+    const ok = await fillReactSelect("country", snap.coreFieldExtras.country, null)
+    if (ok) {
+      filled++
+    } else {
+      missingFields.push("Country")
+    }
+  }
+
+  // ── Resume upload ────────────────────────────────────────────────────────────
   if (snap.presignedResumeUrl) {
     const resumeInput = document.querySelector("input[type='file']")
     if (resumeInput instanceof HTMLInputElement) {
@@ -290,28 +423,40 @@ async function fillFormFromToken(token) {
     }
   }
 
-  // Custom question answers — use questionMeta for label/fieldName mapping
+  // ── Custom question answers (react-select + text/textarea) ───────────────────
   if (Array.isArray(snap.questionMeta)) {
     for (const meta of snap.questionMeta) {
-      // For selects: answers may be keyed by label (new format) or fieldName (legacy)
-      const answer = meta.fieldType === "multi_value_single_select"
-        ? (snap.questionAnswers?.[meta.label] ?? snap.questionAnswers?.[meta.fieldName])
-        : snap.questionAnswers?.[meta.fieldName]
+      const answer = snap.questionAnswers?.[meta.fieldName]
       if (!answer) continue
 
       if (meta.fieldType === "multi_value_single_select") {
-        // Find the right select by its question label (fieldName is non-unique across questions)
-        const selectEl = findFieldByLabel(meta.label)
-        if (selectEl instanceof HTMLSelectElement) {
-          if (nativeSelectSet(selectEl, answer)) filled++
+        const ok = await fillReactSelect(meta.fieldName, answer, meta.selectValues)
+        if (ok) {
+          filled++
+        } else {
+          missingFields.push(meta.label)
         }
         continue
       }
 
-      // text / textarea: try name-attribute selector first, fall back to label text
-      let field = document.querySelector(
-        `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"]`
-      )
+      if (meta.fieldType === "multi_value_multi_select") {
+        const ids = String(answer).split(",").map((s) => s.trim()).filter(Boolean)
+        const ok = await fillReactMultiSelect(meta.fieldName, ids, meta.selectValues)
+        if (ok) {
+          filled++
+        } else {
+          missingFields.push(meta.label)
+        }
+        continue
+      }
+
+      // text / textarea: try id selector first, fall back to label text
+      let field = document.getElementById(meta.fieldName)
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
+        field = document.querySelector(
+          `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"]`
+        )
+      }
       if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
         field = findFieldByLabel(meta.label)
       }
@@ -322,17 +467,29 @@ async function fillFormFromToken(token) {
     }
   }
 
+  // ── Demographics from Remix context ─────────────────────────────────────────
+  if (snap.coreFieldExtras?.eeoc) {
+    await fillDemographics(snap.coreFieldExtras.eeoc)
+  }
+
+  // ── Post-fill audit banner ───────────────────────────────────────────────────
   const unansweredPending = Array.isArray(snap.pendingQuestions)
     ? snap.pendingQuestions.filter((q) => !q.userAnswer && q.required)
     : []
 
+  const allMissing = [
+    ...missingFields,
+    ...unansweredPending.map((q) => q.label),
+  ]
+  const uniqueMissing = [...new Set(allMissing)]
+
   if (filled > 0) {
-    const pendingMsg = unansweredPending.length > 0
-      ? ` — ${unansweredPending.length} required field(s) need manual entry: ${unansweredPending.map((q) => q.label).join(", ")}`
+    const pendingMsg = uniqueMissing.length > 0
+      ? ` — ${uniqueMissing.length} required field(s) need manual entry: ${uniqueMissing.join(", ")}`
       : ""
     showBanner(
       `Pre-filled ${filled} field${filled !== 1 ? "s" : ""}${pendingMsg} — review all fields, then submit manually.`,
-      unansweredPending.length > 0 ? "info" : "success"
+      uniqueMissing.length > 0 ? "info" : "success"
     )
   } else {
     showBanner(

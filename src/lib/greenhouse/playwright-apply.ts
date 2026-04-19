@@ -14,6 +14,7 @@ export interface ApplyOptions {
   resumeFileName?: string;
   coverLetter?: string;
   questionAnswers?: Record<string, string | number>;
+  preferredFirstName?: string;
 }
 
 export interface ApplyResult {
@@ -103,6 +104,37 @@ export const CHROMIUM_ARGS = [
   "--disable-renderer-backgrounding",
 ];
 
+/**
+ * Fill a react-select combobox by clicking the control and matching an option by text.
+ * Returns true if an option was successfully clicked.
+ */
+async function fillPlaywrightReactSelect(
+  page: Page,
+  fieldId: string,
+  targetLabel: string
+): Promise<boolean> {
+  const input = page.locator(`#${CSS.escape(fieldId)}[role="combobox"]`);
+  if (!(await input.count())) return false;
+
+  // Click the react-select control (parent of the input)
+  const control = page.locator(`#${CSS.escape(fieldId)}`).locator("xpath=ancestor::div[contains(@class,'select__control')]");
+  if (await control.count()) {
+    await control.click();
+  } else {
+    await input.click();
+  }
+
+  await page.waitForSelector(".select__menu", { timeout: 3000 }).catch(() => {});
+
+  const option = page.locator(".select__option").filter({ hasText: new RegExp(`^${targetLabel}$`, "i") }).first();
+  if (await option.count()) {
+    await option.click();
+    return true;
+  }
+  await page.keyboard.press("Escape");
+  return false;
+}
+
 export async function applyToGreenhouseJob(
   options: ApplyOptions
 ): Promise<ApplyResult> {
@@ -115,6 +147,7 @@ export async function applyToGreenhouseJob(
     resumeFileName,
     coverLetter,
     questionAnswers,
+    preferredFirstName,
   } = options;
 
   const manualApplyUrl = `https://job-boards.greenhouse.io/${boardToken}/jobs/${jobId}`;
@@ -222,6 +255,12 @@ export async function applyToGreenhouseJob(
       if (locationEl) await locationEl.fill(profile.location);
     }
 
+    // ── Preferred first name ───────────────────────────────────────────────────
+    if (preferredFirstName) {
+      const prefEl = await page.$('#preferred_name, input[aria-label*="Preferred" i]');
+      if (prefEl) await prefEl.fill(preferredFirstName);
+    }
+
     // ── Resume upload ──────────────────────────────────────────────────────────
     if (resumeBuffer) {
       const ext = resumeFileName?.endsWith(".pdf") ? ".pdf" : ".pdf";
@@ -287,6 +326,15 @@ export async function applyToGreenhouseJob(
                 `[playwright-apply] Could not select "${strValue}" for ${fieldName}`
               );
             });
+          continue;
+        }
+
+        // Fallback: react-select combobox (Greenhouse uses react-select for all dropdowns)
+        const reactSelectInput = await page.$(`#${fieldName}[role="combobox"]`);
+        if (reactSelectInput) {
+          await fillPlaywrightReactSelect(page, fieldName, strValue).catch(() => {
+            console.log(`[playwright-apply] react-select fill failed for ${fieldName}`);
+          });
         }
       }
     }

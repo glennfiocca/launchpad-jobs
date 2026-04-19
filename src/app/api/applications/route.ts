@@ -35,6 +35,16 @@ interface ApplicationSnapshot {
   questionMeta: QuestionMeta[];
   pendingQuestions: PendingQuestion[];
   snapshotAt: string;
+  coreFieldExtras?: {
+    preferredFirstName?: string;
+    country?: string;
+    eeoc?: {
+      gender?: string;
+      race?: string;
+      veteranStatus?: string;
+      disability?: string;
+    };
+  };
 }
 
 function buildSnapshot(
@@ -56,33 +66,53 @@ function buildSnapshot(
     stringAnswers[k] = String(v);
   }
 
-  // Build questionMeta: parallel array with label+fieldName for each answered question
+  // Build questionMeta: one entry per answered field (supports multi-field questions)
   const questionMeta: QuestionMeta[] = [];
   for (const question of questions) {
-    const field = question.fields[0];
-    if (!field) continue;
-    if (!(field.name in stringAnswers)) continue;
-    questionMeta.push({
-      label: question.label,
-      fieldName: field.name,
-      fieldType: field.type,
-      ...(field.type === "multi_value_single_select" ? { selectValues: field.values } : {}),
-    });
+    for (const field of question.fields) {
+      if (!(field.name in stringAnswers)) continue;
+      questionMeta.push({
+        label: question.label,
+        fieldName: field.name,
+        fieldType: field.type,
+        ...(field.type === "multi_value_single_select" || field.type === "multi_value_multi_select"
+          ? { selectValues: field.values }
+          : {}),
+      });
+    }
   }
 
-  // Build pendingQuestions: questions the profile cannot auto-answer
+  // Build pendingQuestions: one entry per field for unanswered questions
   const unanswered = getUnansweredQuestions(questions, profile);
-  const pendingQuestions: PendingQuestion[] = unanswered.map((q) => {
-    const field = q.fields[0];
-    return {
+  const pendingQuestions: PendingQuestion[] = unanswered.flatMap((q) => {
+    if (q.fields.length === 0) {
+      return [{ label: q.label, fieldName: "", fieldType: "input_text" as const, required: q.required, description: q.description }];
+    }
+    return q.fields.map((field) => ({
       label: q.label,
-      fieldName: field?.name ?? "",
-      fieldType: field?.type ?? "input_text",
+      fieldName: field.name,
+      fieldType: field.type,
       required: q.required,
       description: q.description,
-      ...(field?.type === "multi_value_single_select" ? { selectValues: field.values } : {}),
-    };
+      ...(field.type === "multi_value_single_select" || field.type === "multi_value_multi_select"
+        ? { selectValues: field.values }
+        : {}),
+    }));
   });
+
+  // Build coreFieldExtras: preferred name, country, EEOC for extension/operator
+  const countryRaw = (profile.locationFormatted ?? profile.location ?? "").split(",").at(-1)?.trim() || undefined;
+  const coreFieldExtras: ApplicationSnapshot["coreFieldExtras"] = {};
+  if (profile.preferredFirstName) coreFieldExtras.preferredFirstName = profile.preferredFirstName;
+  if (countryRaw) coreFieldExtras.country = countryRaw;
+  if (profile.voluntaryGender || profile.voluntaryRace || profile.voluntaryVeteranStatus || profile.voluntaryDisability) {
+    coreFieldExtras.eeoc = {
+      ...(profile.voluntaryGender ? { gender: profile.voluntaryGender } : {}),
+      ...(profile.voluntaryRace ? { race: profile.voluntaryRace } : {}),
+      ...(profile.voluntaryVeteranStatus ? { veteranStatus: profile.voluntaryVeteranStatus } : {}),
+      ...(profile.voluntaryDisability ? { disability: profile.voluntaryDisability } : {}),
+    };
+  }
 
   return {
     firstName: profile.firstName,
@@ -100,6 +130,7 @@ function buildSnapshot(
     questionMeta,
     pendingQuestions,
     snapshotAt: new Date().toISOString(),
+    ...(Object.keys(coreFieldExtras).length > 0 ? { coreFieldExtras } : {}),
   };
 }
 
@@ -135,6 +166,7 @@ async function runPlaywrightSubmission(opts: {
       resumeBuffer: opts.resumeBuffer,
       resumeFileName: opts.resumeFileName,
       questionAnswers: opts.questionAnswers,
+      preferredFirstName: opts.profile.preferredFirstName ?? undefined,
     });
 
     if (applyResult.success) {

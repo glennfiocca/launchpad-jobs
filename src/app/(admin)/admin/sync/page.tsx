@@ -52,7 +52,7 @@ function formatTriggeredBy(triggeredBy: string): string {
 export default async function SyncLogsPage() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
-  const [logs, totalSyncs30d, successCount30d, lastSync] = await Promise.all([
+  const [logs, totalSyncs30d, completedCount30d, lastSync] = await Promise.all([
     db.syncLog.findMany({
       take: 50,
       orderBy: { startedAt: "desc" },
@@ -63,14 +63,14 @@ export default async function SyncLogsPage() {
     db.syncLog.count({
       where: {
         startedAt: { gte: thirtyDaysAgo },
-        status: "SUCCESS",
+        status: { in: ["SUCCESS", "PARTIAL_FAILURE"] },
       },
     }),
     db.syncLog.findFirst({ orderBy: { startedAt: "desc" } }),
   ])
 
   const successRate =
-    totalSyncs30d > 0 ? Math.round((successCount30d / totalSyncs30d) * 100) : null
+    totalSyncs30d > 0 ? Math.round((completedCount30d / totalSyncs30d) * 100) : null
 
   return (
     <div className="space-y-6">
@@ -98,9 +98,9 @@ export default async function SyncLogsPage() {
           value={totalSyncs30d}
         />
         <StatCard
-          label="Success Rate (30d)"
+          label="Completed Rate (30d)"
           value={successRate !== null ? `${successRate}%` : "—"}
-          sub={totalSyncs30d > 0 ? `${successCount30d} of ${totalSyncs30d} succeeded` : undefined}
+          sub={totalSyncs30d > 0 ? `${completedCount30d} of ${totalSyncs30d} completed (SUCCESS or PARTIAL)` : undefined}
         />
       </div>
 

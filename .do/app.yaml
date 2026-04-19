@@ -114,10 +114,13 @@ jobs:
       deploy_on_push: true
     kind: SCHEDULED
     schedule:
+      # 09:00 UTC = 04:00 EST (Nov–Mar) / 05:00 EDT (Mar–Nov).
+      # DO cron does not support timezones. To hit 04:00 EDT: change to "0 8 * * *".
       cron: "0 9 * * *"
     run_command: npx tsx scripts/sync-cron.ts
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
+    timeout_seconds: 1800
     envs:
       - key: DATABASE_URL
         scope: RUN_TIME

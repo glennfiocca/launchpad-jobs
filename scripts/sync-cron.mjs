@@ -1,3 +1,7 @@
+// DEPRECATED: This HTTP-based trigger is no longer used in production.
+// Production cron uses scripts/sync-cron.ts (direct Prisma, no HTTP round-trip).
+// This file is kept for reference only. Do not configure DO to use this script.
+//
 // scripts/sync-cron.mjs
 // Cron job: calls the job sync API endpoint.
 // Runs via DigitalOcean scheduled job at 09:00 UTC (04:00 EST).

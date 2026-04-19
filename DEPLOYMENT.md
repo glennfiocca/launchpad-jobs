@@ -106,3 +106,79 @@ To add a new Greenhouse board:
 1. Find the company's Greenhouse board token (usually `company-name` from their job listing URL: `jobs.greenhouse.io/company-name`)
 2. Add to `SEED_BOARDS` in `src/lib/greenhouse/sync.ts`
 3. Trigger a sync via `POST /api/jobs/sync`
+
+## Sync Schedule
+
+The Greenhouse board sync runs daily via DigitalOcean scheduled job (`sync-jobs` in `.do/app.yaml`).
+
+**Cron expression:** `0 9 * * *`
+**UTC time:** 09:00 UTC
+**Eastern time:** 04:00 EST (November–March) / 05:00 EDT (March–November)
+
+> **Note:** DigitalOcean App Platform cron does not support timezones. The cron expression
+> `0 9 * * *` is exact in winter (EST = UTC−5) and 1 hour late in summer (EDT = UTC−4).
+> To target 04:00 EDT year-round, change to `0 8 * * *` (which shifts to 03:00 EST in winter).
+> Neither is perfect for all seasons without an external timezone-aware scheduler.
+
+**Production trigger path:** `scripts/sync-cron.ts` (direct Prisma, no HTTP)
+**Deprecated path:** `scripts/sync-cron.mjs` (HTTP-based, do not configure in DO)
+
+**Job timeout:** 1800 seconds (30 minutes). Adjust `timeout_seconds` in `.do/app.yaml` if syncs routinely exceed this.
+
+## Operator Runbook: Stuck Sync
+
+If the admin sync dashboard shows a run permanently stuck in `Running` state:
+
+### Automatic recovery
+The `scripts/sync-cron.ts` cron calls `reconcileStaleRuns()` at startup before each run. Any `RUNNING` row older than **4 hours** is automatically marked `FAILURE` with a descriptive error summary. So the stuck row will be cleared on the next scheduled run.
+
+### Manual recovery (immediate)
+Run reconciliation directly:
+```bash
+DATABASE_URL="..." npx tsx -e "
+import { reconcileStaleRuns } from './src/lib/sync-runner';
+const n = await reconcileStaleRuns();
+console.log('Reconciled', n, 'stale run(s)');
+process.exit(0);
+"
+```
+
+Or via raw SQL:
+```sql
+UPDATE "SyncLog"
+SET
+  status = 'FAILURE',
+  "completedAt" = NOW(),
+  "errorSummary" = 'Manually reconciled: was stuck in RUNNING state'
+WHERE status = 'RUNNING'
+  AND "startedAt" < NOW() - INTERVAL '4 hours';
+```
+
+### Threshold tuning
+The stale threshold defaults to 4 hours. To override, pass `thresholdMs` to `reconcileStaleRuns()`:
+```typescript
+await reconcileStaleRuns(2 * 60 * 60 * 1000) // 2 hours
+```
+
+## Operator Runbook: Clear Sync Logs (One-Time)
+
+To clear all sync history (e.g., to remove test/stuck runs before going live):
+
+**Step 1: Back up production database first**
+```bash
+pg_dump "$DATABASE_URL" > backup-$(date +%Y%m%d).sql
+```
+
+**Step 2: Dry run (check counts)**
+```bash
+DATABASE_URL="..." npx tsx scripts/clear-sync-logs.ts
+```
+
+**Step 3: Confirm deletion**
+```bash
+DATABASE_URL="..." npx tsx scripts/clear-sync-logs.ts --confirm
+```
+
+`SyncBoardResult` rows are deleted first, then `SyncLog` rows. Both tables will be empty after this operation. New sync runs will create fresh history.
+
+> **Note:** This is irreversible. Only use this script when you want to wipe all sync history intentionally.

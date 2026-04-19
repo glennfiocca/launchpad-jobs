@@ -17,8 +17,10 @@ export function TriggerSyncButton() {
       const res = await fetch("/api/admin/jobs/sync", { method: "POST" })
       const json = await res.json()
       if (json.success) {
-        setResult(`Synced ${json.data.synced}/${json.data.total} boards (${json.data.failed} failed)`)
+        setResult(`Synced ${json.data.boardsSynced}/${json.data.totalBoards} boards (${json.data.boardsFailed} failed)`)
         router.refresh()
+      } else if (res.status === 409) {
+        setResult("A sync is already running — try again shortly")
       } else {
         setResult(`Error: ${json.error ?? "Unknown error"}`)
       }

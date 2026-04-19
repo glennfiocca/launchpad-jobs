@@ -386,8 +386,8 @@ export async function POST(request: Request) {
             { status: 422 }
           );
         }
-      } else if (probeRes.status !== 0 && (probeRes.status < 200 || probeRes.status >= 300)) {
-        // Non-2xx, non-redirect response (e.g. 404, 410) — mark inactive and reject
+      } else if ([404, 410, 451].includes(probeRes.status)) {
+        // Definitive "gone" response — mark inactive and reject
         await db.job.update({
           where: { id: job.id },
           data: { isActive: false },
@@ -400,6 +400,7 @@ export async function POST(request: Request) {
           { status: 422 }
         );
       }
+      // All other non-2xx responses (405, 501, 503, etc.) — fail open, Greenhouse doesn't support HEAD
     } catch {
       // Probe timed out or errored — fail open, proceed with Playwright submission
     }

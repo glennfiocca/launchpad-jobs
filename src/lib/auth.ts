@@ -3,6 +3,13 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import EmailProvider from "next-auth/providers/email";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
+import { cookies } from "next/headers"
+import {
+  ensureReferralCode,
+  normalizeEmail,
+  resolveReferralCode,
+  createPendingReferral,
+} from "@/lib/referral"
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db) as NextAuthOptions["adapter"],
@@ -44,6 +51,42 @@ export const authOptions: NextAuthOptions = {
     verifyRequest: "/auth/verify",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === "email" && user.id && user.email) {
+        // Generate referral code for new users (idempotent)
+        await ensureReferralCode(user.id).catch(() => null)
+
+        // Store normalized email for dupe detection
+        const normalized = normalizeEmail(user.email)
+        await db.user
+          .update({
+            where: { id: user.id },
+            data: { normalizedEmail: normalized },
+          })
+          .catch(() => null) // Ignore unique constraint on existing normalized email
+
+        // Process referral attribution from cookie
+        try {
+          const cookieStore = await cookies()
+          const refCookie = cookieStore.get("ref_code")
+
+          if (refCookie?.value) {
+            const attribution = await resolveReferralCode(refCookie.value)
+            if (attribution && attribution.referrerId !== user.id) {
+              await createPendingReferral({
+                referrerId: attribution.referrerId,
+                refereeId: user.id,
+                referralCode: attribution.referralCode,
+                refereeEmail: user.email,
+              })
+            }
+          }
+        } catch {
+          // Non-fatal: referral attribution failure must never block login
+        }
+      }
+      return true
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id

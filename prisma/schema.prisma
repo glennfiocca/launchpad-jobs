@@ -53,6 +53,21 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+enum ReferralStatus {
+  PENDING
+  CONVERTED
+  EXPIRED
+  FLAGGED
+  REVOKED
+}
+
+enum CreditTransactionType {
+  REFERRAL_BONUS
+  ADMIN_GRANT
+  ADMIN_DEDUCTION
+  REFERRAL_REVOKE
+}
+
 enum Role {
   USER
   ADMIN
@@ -77,6 +92,16 @@ model User {
   // Free-tier rolling 24h credit window
   creditWindowStart DateTime @default(now())
   creditsUsed       Int      @default(0)
+
+  // Referral system
+  referralCode        String?   @unique
+  normalizedEmail     String?   @unique
+  signupIpAddress     String?
+  referralCredits     Int       @default(0)
+  referralsSent       Referral[] @relation("ReferralsSent")
+  referralReceived    Referral?  @relation("ReferralReceived")
+  creditTransactions  CreditTransaction[]
+  creditActorLogs     CreditTransaction[] @relation("CreditActor")
 
   accounts               Account[]
   sessions               Session[]
@@ -564,4 +589,48 @@ model ApplicationAuditLog {
 
   @@index([applicationId])
   @@index([actorUserId])
+}
+
+// ─── Referral System ─────────────────────────────────────────────────────────
+
+model Referral {
+  id                   String         @id @default(cuid())
+  referrerId           String
+  referrer             User           @relation("ReferralsSent", fields: [referrerId], references: [id])
+  refereeId            String?        @unique
+  referee              User?          @relation("ReferralReceived", fields: [refereeId], references: [id])
+  referralCode         String
+  status               ReferralStatus @default(PENDING)
+  refereeIpAddress     String?
+  referrerIpAddress    String?
+  ipFlagged            Boolean        @default(false)
+  firstApplicationAt   DateTime?
+  creditTransactionId  String?        @unique
+  creditTransaction    CreditTransaction? @relation(fields: [creditTransactionId], references: [id])
+  expiresAt            DateTime
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([referrerId])
+  @@index([referralCode])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model CreditTransaction {
+  id           String                @id @default(cuid())
+  userId       String
+  user         User                  @relation(fields: [userId], references: [id])
+  type         CreditTransactionType
+  amount       Int
+  referralId   String?
+  actorUserId  String?
+  actor        User?                 @relation("CreditActor", fields: [actorUserId], references: [id])
+  note         String?
+  balanceAfter Int
+  createdAt    DateTime              @default(now())
+  referral     Referral?
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([type])
 }

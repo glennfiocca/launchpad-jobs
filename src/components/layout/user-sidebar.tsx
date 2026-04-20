@@ -12,6 +12,7 @@ import {
   Shield,
   LogOut,
   LogIn,
+  Gift,
 } from "lucide-react"
 import { CreditsBadge } from "@/components/billing/credits-badge"
 import { NotificationBell } from "@/components/notifications/notification-bell"
@@ -25,6 +26,7 @@ const authNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/billing", label: "Pro", icon: Zap },
+  { href: "/settings/referrals", label: "Referrals", icon: Gift },
 ]
 
 export function UserSidebar() {
@@ -35,6 +37,7 @@ export function UserSidebar() {
     if (href === "/jobs") return pathname?.startsWith("/jobs") ?? false
     if (href === "/dashboard") return pathname?.startsWith("/dashboard") ?? false
     if (href === "/admin") return pathname?.startsWith("/admin") ?? false
+    if (href === "/settings/referrals") return pathname?.startsWith("/settings/referrals") ?? false
     return pathname === href
   }
 

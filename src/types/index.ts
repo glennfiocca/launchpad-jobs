@@ -140,6 +140,7 @@ export interface CreditStatus {
   creditsUsed: number;
   creditsRemaining: number;
   resetsAt: Date;
+  referralCredits: number;
 }
 
 // Profile form data

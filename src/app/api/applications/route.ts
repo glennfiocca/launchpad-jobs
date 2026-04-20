@@ -10,6 +10,7 @@ import { sendApplyConfirmation } from "@/lib/apply-hooks";
 import { createNotification } from "@/lib/notifications";
 import { getPresignedGetUrl } from "@/lib/spaces";
 import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
+import { handleFirstApplicationConversion, isFirstApplication } from "@/lib/referral";
 import { z } from "zod";
 import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion, QuestionMeta, PendingQuestion } from "@/types";
 import type { UserProfile } from "@prisma/client";
@@ -518,6 +519,13 @@ export async function POST(request: Request) {
       trackingEmail: generateTrackingEmail(`${session.user.id.slice(0, 8)}-${job.id.slice(0, 8)}`),
     },
   });
+
+  // Referral conversion: award referrer credits on referee's first application
+  if (await isFirstApplication(session.user.id)) {
+    void handleFirstApplicationConversion(session.user.id).catch((err: unknown) => {
+      console.error("[referral] conversion error:", err)
+    })
+  }
 
   // Step 2: Generate tracking email from real ID and persist immediately
   const trackingEmail = generateTrackingEmail(application.id);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getReferralDashboard } from "@/lib/referral"
+import { getReferralDashboard, ensureReferralCode } from "@/lib/referral"
 import type { ApiResponse } from "@/types"
 import type { ReferralDashboardData } from "@/lib/referral"
 
@@ -14,12 +14,15 @@ export async function GET() {
     )
   }
 
+  // Generate code on-demand for existing users who predate this feature
+  await ensureReferralCode(session.user.id)
+
   const data = await getReferralDashboard(session.user.id)
 
   if (!data) {
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Referral code not yet generated" },
-      { status: 404 }
+      { success: false, error: "Failed to load referral data" },
+      { status: 500 }
     )
   }
 

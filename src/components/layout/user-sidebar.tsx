@@ -8,7 +8,6 @@ import {
   Briefcase,
   LayoutDashboard,
   User,
-  Zap,
   Shield,
   LogOut,
   LogIn,
@@ -18,6 +17,23 @@ import { CreditsBadge } from "@/components/billing/credits-badge"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { FeedbackButton } from "@/components/feedback-button"
 
+function BaseballBatIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 20 L18 6" />
+      <path d="M18 6 C18 6 20 4 21 4 C22 5 20 7 18 6Z" />
+    </svg>
+  )
+}
+
 const publicNavItems = [
   { href: "/jobs", label: "Browse Jobs", icon: Briefcase },
 ]
@@ -25,9 +41,10 @@ const publicNavItems = [
 const authNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profile", label: "Profile", icon: User },
-  { href: "/billing", label: "Pro", icon: Zap },
-  { href: "/settings/referrals", label: "Referrals", icon: Gift },
 ]
+
+const VIOLET_PILL_CLASS =
+  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500/20 hover:text-violet-300"
 
 export function UserSidebar() {
   const pathname = usePathname()
@@ -37,7 +54,6 @@ export function UserSidebar() {
     if (href === "/jobs") return pathname?.startsWith("/jobs") ?? false
     if (href === "/dashboard") return pathname?.startsWith("/dashboard") ?? false
     if (href === "/admin") return pathname?.startsWith("/admin") ?? false
-    if (href === "/settings/referrals") return pathname?.startsWith("/settings/referrals") ?? false
     return pathname === href
   }
 
@@ -84,8 +100,20 @@ export function UserSidebar() {
         ))}
       </nav>
 
-      {/* Feedback */}
-      <div className="px-4 pb-2">
+      {/* Bottom actions */}
+      <div className="px-4 pb-2 space-y-1">
+        {session && (
+          <>
+            <Link href="/billing" className={VIOLET_PILL_CLASS}>
+              <BaseballBatIcon className="w-4 h-4" />
+              Go Pro
+            </Link>
+            <Link href="/settings/referrals" className={VIOLET_PILL_CLASS}>
+              <Gift className="w-4 h-4" />
+              Referrals
+            </Link>
+          </>
+        )}
         <FeedbackButton variant="sidebar" />
       </div>
 

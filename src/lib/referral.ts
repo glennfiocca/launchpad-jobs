@@ -6,7 +6,6 @@ import type { ReferralStatus } from "@prisma/client"
 const REFERRAL_CREDITS_AWARD = 10
 const REFERRAL_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no I/O/0/1
 const REFERRAL_CODE_LENGTH = 8
-const REFERRAL_EXPIRY_DAYS = 90
 const VELOCITY_CAP = 20 // max conversions per referrer per 30 days
 const VELOCITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -123,7 +122,7 @@ export async function createPendingReferral(params: {
     refereeIpAddress === referrer.signupIpAddress
   )
 
-  const expiresAt = new Date(Date.now() + REFERRAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
+  const expiresAt = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000)
 
   const referral = await db.referral.create({
     data: {
@@ -149,15 +148,6 @@ export async function handleFirstApplicationConversion(
 
     if (!referral) return false
     if (referral.status !== "PENDING") return false
-
-    // Expiry check
-    if (new Date() > referral.expiresAt) {
-      await tx.referral.update({
-        where: { id: referral.id },
-        data: { status: "EXPIRED" },
-      })
-      return false
-    }
 
     // Velocity cap
     const windowStart = new Date(Date.now() - VELOCITY_WINDOW_MS)

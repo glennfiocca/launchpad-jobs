@@ -9,8 +9,8 @@ export type CreditCheckResult =
 
 /**
  * Atomically check and consume one credit for a user.
- * Paid subscribers (ACTIVE) bypass the check entirely.
- * Referral credits are consumed before the rolling free-tier window.
+ * Priority: Pro bypass > daily rolling window first, then referral credits as permanent overflow.
+ * Daily credits reset every 24h. Referral credits never expire.
  * Uses a transaction to prevent race conditions on concurrent requests.
  */
 export async function checkAndConsumeCredit(
@@ -24,7 +24,26 @@ export async function checkAndConsumeCredit(
       return { allowed: true }
     }
 
-    // 2. Consume from referral credits first
+    // 2. Daily rolling window (consumed first)
+    const now = new Date()
+    const windowExpired =
+      now.getTime() - user.creditWindowStart.getTime() >= WINDOW_MS
+
+    const currentUsed = windowExpired ? 0 : user.creditsUsed
+    const currentWindowStart = windowExpired ? now : user.creditWindowStart
+
+    if (currentUsed < FREE_TIER_CREDITS) {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          creditsUsed: currentUsed + 1,
+          ...(windowExpired ? { creditWindowStart: now } : {}),
+        },
+      })
+      return { allowed: true }
+    }
+
+    // 3. Daily limit reached — fall back to referral (bonus) credits
     if (user.referralCredits > 0) {
       await tx.user.update({
         where: { id: userId },
@@ -33,28 +52,9 @@ export async function checkAndConsumeCredit(
       return { allowed: true }
     }
 
-    // 3. Rolling window check
-    const now = new Date()
-    const windowExpired =
-      now.getTime() - user.creditWindowStart.getTime() >= WINDOW_MS
-
-    const currentUsed = windowExpired ? 0 : user.creditsUsed
-    const currentWindowStart = windowExpired ? now : user.creditWindowStart
-
-    if (currentUsed >= FREE_TIER_CREDITS) {
-      const resetsAt = new Date(currentWindowStart.getTime() + WINDOW_MS)
-      return { allowed: false, reason: "LIMIT_REACHED", resetsAt }
-    }
-
-    await tx.user.update({
-      where: { id: userId },
-      data: {
-        creditsUsed: currentUsed + 1,
-        ...(windowExpired ? { creditWindowStart: now } : {}),
-      },
-    })
-
-    return { allowed: true }
+    // 4. Both exhausted
+    const resetsAt = new Date(currentWindowStart.getTime() + WINDOW_MS)
+    return { allowed: false, reason: "LIMIT_REACHED", resetsAt }
   })
 }
 

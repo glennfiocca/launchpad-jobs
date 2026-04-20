@@ -71,10 +71,8 @@ export function CreditsBadge() {
     );
   }
 
-  const isLow = status.creditsRemaining <= 3;
-  const tooltipText = isLow
-    ? `Only ${status.creditsRemaining} application${status.creditsRemaining === 1 ? "" : "s"} left today. Resets in ${formatTimeRemaining(status.resetsAt)}.`
-    : `${status.creditsRemaining} of ${FREE_TIER_CREDITS} free applications remaining today. Resets in ${formatTimeRemaining(status.resetsAt)}.`;
+  const hasBonus = status.referralCredits > 0
+  const isLow = status.creditsRemaining <= 3 && !hasBonus
 
   return (
     <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>
@@ -88,7 +86,12 @@ export function CreditsBadge() {
         )}
       >
         <Zap className={cn("w-3.5 h-3.5", isLow && "fill-amber-400")} />
-        {status.creditsRemaining}/{FREE_TIER_CREDITS} left
+        <span>
+          {status.creditsRemaining}/{FREE_TIER_CREDITS}
+          {hasBonus && (
+            <span className="text-violet-400 ml-0.5">+{status.referralCredits}</span>
+          )}
+        </span>
       </Link>
       {tooltipVisible && (
         <div
@@ -99,7 +102,15 @@ export function CreditsBadge() {
           <p className={cn("font-medium mb-1", isLow ? "text-amber-400" : "text-white")}>
             Free tier
           </p>
-          <p>{tooltipText}</p>
+          <p>
+            {status.creditsRemaining} of {FREE_TIER_CREDITS} daily applications remaining.
+            Resets in {formatTimeRemaining(status.resetsAt)}.
+          </p>
+          {hasBonus && (
+            <p className="mt-1 text-violet-400">
+              +{status.referralCredits} bonus credit{status.referralCredits === 1 ? "" : "s"} (never expire)
+            </p>
+          )}
           <Link
             href="/billing"
             onClick={() => setTooltipVisible(false)}

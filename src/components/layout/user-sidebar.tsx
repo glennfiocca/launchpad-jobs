@@ -66,7 +66,7 @@ export function UserSidebar() {
   ]
 
   return (
-    <aside className="w-64 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0">
+    <aside className="w-64 h-full bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0">
       {/* Logo */}
       <div className="px-4 py-4 border-b border-zinc-800">
         <Link href="/" className="flex">
@@ -82,7 +82,7 @@ export function UserSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto min-h-0 p-4 space-y-1">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
@@ -101,7 +101,7 @@ export function UserSidebar() {
       </nav>
 
       {/* Bottom actions */}
-      <div className="px-4 pb-2 space-y-1">
+      <div className="px-4 pb-2 space-y-1 shrink-0">
         {session && (
           <>
             <Link href="/billing" className={VIOLET_PILL_CLASS}>
@@ -118,7 +118,7 @@ export function UserSidebar() {
       </div>
 
       {/* Account */}
-      <div className="p-4 border-t border-zinc-800 space-y-2">
+      <div className="p-4 border-t border-zinc-800 space-y-2 shrink-0">
         {session ? (
           <>
             <div className="px-3 py-1 flex items-center gap-2">

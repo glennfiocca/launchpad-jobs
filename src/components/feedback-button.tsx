@@ -260,7 +260,7 @@ export function FeedbackButton({ variant = "fab" }: FeedbackButtonProps) {
     return (
       <div ref={panelRef} className="relative">
         {/* Panel — floats above the trigger, aligned to the left edge */}
-        <div className="absolute bottom-full left-0 mb-3 z-50">
+        <div className={["absolute bottom-full left-0 mb-3 z-50", !open && "pointer-events-none"].filter(Boolean).join(" ")}>
           {panel}
         </div>
 

@@ -1,19 +1,14 @@
 // scripts/sync-cron.ts
 // Cron job: calls runSync() directly (Prisma), bypassing the HTTP layer.
 // Runs via DigitalOcean scheduled job at 09:00 UTC (04:00 EST / 05:00 EDT).
-// Note: DO App Platform cron does not support timezone; adjust manually if DST drift matters.
+// Stale RUNNING reconciliation is centralized in acquireSyncLock().
 // Execute with: npx tsx scripts/sync-cron.ts
 
-import { runSync, reconcileStaleRuns, SyncAlreadyRunningError } from "@/lib/sync-runner"
+import { runSync, SyncAlreadyRunningError } from "@/lib/sync-runner"
 
 if (!process.env.DATABASE_URL) {
   console.error("[sync-cron] ERROR: DATABASE_URL not set")
   process.exit(1)
-}
-
-const staleCount = await reconcileStaleRuns()
-if (staleCount > 0) {
-  console.warn(`[sync-cron] Reconciled ${staleCount} stale RUNNING sync(s) to FAILURE`)
 }
 
 console.log(`[sync-cron] Started at: ${new Date().toISOString()}`)

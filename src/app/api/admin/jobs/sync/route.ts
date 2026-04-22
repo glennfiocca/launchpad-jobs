@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAdminSession } from "../../_helpers"
-import { runSync, SyncAlreadyRunningError } from "@/lib/sync-runner"
+import { acquireSyncLock, executeSyncWork } from "@/lib/sync-runner"
 import type { ApiResponse } from "@/types"
 
 export async function POST() {
@@ -8,21 +8,24 @@ export async function POST() {
   if (error) return error
 
   const triggeredBy = `admin:${session?.user?.email ?? "unknown"}`
+  const lock = await acquireSyncLock(triggeredBy)
 
-  try {
-    const result = await runSync(triggeredBy)
-    return NextResponse.json<ApiResponse<typeof result>>({
-      success: true,
-      data: result,
-      ...(result.boardsFailed > 0 && { error: `${result.boardsFailed} boards failed` }),
-    })
-  } catch (err) {
-    if (err instanceof SyncAlreadyRunningError) {
-      return NextResponse.json<ApiResponse<{ runningSyncLogId: string }>>(
-        { success: false, error: "A sync is already running", data: { runningSyncLogId: err.runningSyncLogId } },
-        { status: 409 }
-      )
-    }
-    throw err
+  if (!lock.acquired) {
+    return NextResponse.json<ApiResponse<{ runningSyncLogId: string }>>(
+      { success: false, error: "A sync is already running", data: { runningSyncLogId: lock.runningSyncLogId } },
+      { status: 409 },
+    )
   }
+
+  // Fire-and-forget: route returns 202, worker runs in background
+  executeSyncWork(lock.syncLogId).catch((err) => {
+    console.error(
+      `[sync] Background worker fatal: syncLogId=${lock.syncLogId} error=${err instanceof Error ? err.message : String(err)}`,
+    )
+  })
+
+  return NextResponse.json<ApiResponse<{ syncLogId: string; status: string }>>(
+    { success: true, data: { syncLogId: lock.syncLogId, status: "RUNNING" } },
+    { status: 202 },
+  )
 }

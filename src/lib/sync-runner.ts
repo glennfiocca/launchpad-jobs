@@ -1,6 +1,10 @@
 import { db } from "@/lib/db"
 import { getActiveBoards, syncGreenhouseBoard } from "@/lib/greenhouse"
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 export interface SyncRunResult {
   syncLogId: string
   totalBoards: number
@@ -21,18 +25,127 @@ export class SyncAlreadyRunningError extends Error {
   }
 }
 
-export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
-  // Concurrency guard — throws before any DB write if already running
-  const existingRun = await db.syncLog.findFirst({
-    where: { status: "RUNNING" },
+export type AcquireLockResult =
+  | { acquired: true; syncLogId: string }
+  | { acquired: false; runningSyncLogId: string }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const DEFAULT_STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
+
+/** Read operator-tunable stale threshold from env, falling back to 4h. */
+export function getStaleThresholdMs(): number {
+  const raw = process.env.SYNC_STALE_THRESHOLD_MS
+  if (!raw) return DEFAULT_STALE_THRESHOLD_MS
+  const parsed = parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_STALE_THRESHOLD_MS
+}
+
+// ---------------------------------------------------------------------------
+// Reconcile stale RUNNING rows
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark any SyncLog rows stuck in RUNNING past the threshold as FAILURE.
+ * Called automatically inside `acquireSyncLock()` so every entry path
+ * (cron, admin, API) benefits from reconciliation.
+ */
+export async function reconcileStaleRuns(
+  thresholdMs?: number,
+): Promise<number> {
+  const effectiveThreshold = thresholdMs ?? getStaleThresholdMs()
+  const cutoff = new Date(Date.now() - effectiveThreshold)
+
+  const staleRuns = await db.syncLog.findMany({
+    where: { status: "RUNNING", startedAt: { lt: cutoff } },
     select: { id: true },
   })
-  if (existingRun) throw new SyncAlreadyRunningError(existingRun.id)
+  if (staleRuns.length === 0) return 0
 
-  const startedAt = new Date()
-  const syncLog = await db.syncLog.create({
-    data: { triggeredBy, startedAt, status: "RUNNING" },
+  const thresholdHours = (effectiveThreshold / 3_600_000).toFixed(1)
+  const reconciledAt = new Date()
+
+  await db.syncLog.updateMany({
+    where: { id: { in: staleRuns.map((r) => r.id) } },
+    data: {
+      status: "FAILURE",
+      completedAt: reconciledAt,
+      errorSummary: `Marked FAILURE by reconciler at ${reconciledAt.toISOString()}: sync had been RUNNING for >${thresholdHours}h. Probable cause: platform timeout (DO job limit), OOM kill, or process crash. Check DO runtime logs for this time window. Reconcile threshold: ${effectiveThreshold}ms.`,
+    },
   })
+
+  for (const run of staleRuns) {
+    console.warn(
+      `[sync] Reconciled stale run: syncLogId=${run.id} reconciledAt=${reconciledAt.toISOString()} thresholdMs=${effectiveThreshold}`,
+    )
+  }
+
+  return staleRuns.length
+}
+
+// ---------------------------------------------------------------------------
+// Atomic lock acquisition
+// ---------------------------------------------------------------------------
+
+/**
+ * Atomically insert a RUNNING SyncLog row if none exists, using a single
+ * INSERT ... WHERE NOT EXISTS to close the race window between the old
+ * findFirst + create two-query approach.
+ */
+export async function acquireSyncLock(
+  triggeredBy: string,
+): Promise<AcquireLockResult> {
+  // Reconcile any stale rows first — centralised for every entry path
+  await reconcileStaleRuns()
+
+  const id = crypto.randomUUID()
+  const now = new Date()
+
+  // Atomic INSERT ... WHERE NOT EXISTS — returns 0 if a RUNNING row exists
+  const inserted: number = await db.$executeRaw`
+    INSERT INTO "SyncLog" (id, "triggeredBy", "startedAt", status)
+    SELECT ${id}, ${triggeredBy}, ${now}::timestamp, 'RUNNING'::"SyncStatus"
+    WHERE NOT EXISTS (
+      SELECT 1 FROM "SyncLog" WHERE status = 'RUNNING'::"SyncStatus"
+    )
+  `
+
+  if (inserted === 0) {
+    const blocking = await db.syncLog.findFirst({
+      where: { status: "RUNNING" },
+      select: { id: true },
+    })
+    const runningSyncLogId = blocking?.id ?? "unknown"
+    console.warn(
+      `[sync] Lock rejected: triggeredBy=${triggeredBy} blockedBy=${runningSyncLogId}`,
+    )
+    return { acquired: false, runningSyncLogId }
+  }
+
+  console.log(
+    `[sync] Lock acquired: syncLogId=${id} triggeredBy=${triggeredBy}`,
+  )
+  return { acquired: true, syncLogId: id }
+}
+
+// ---------------------------------------------------------------------------
+// Core sync work
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute the actual board-by-board sync. Expects `syncLogId` to reference
+ * an existing RUNNING SyncLog row (created by `acquireSyncLock`).
+ */
+export async function executeSyncWork(
+  syncLogId: string,
+): Promise<SyncRunResult> {
+  const syncLog = await db.syncLog.findUniqueOrThrow({
+    where: { id: syncLogId },
+    select: { startedAt: true },
+  })
+  const startedAt = syncLog.startedAt
 
   let boards: Awaited<ReturnType<typeof getActiveBoards>> = []
   let totalAdded = 0
@@ -45,6 +158,9 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
 
   try {
     boards = await getActiveBoards()
+    console.log(
+      `[sync] Boards fetched: syncLogId=${syncLogId} count=${boards.length}`,
+    )
 
     for (const board of boards) {
       const boardStart = new Date()
@@ -56,7 +172,7 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
         const hasErrors = result.errors.length > 0
         await db.syncBoardResult.create({
           data: {
-            syncLogId: syncLog.id,
+            syncLogId,
             boardToken: board.token,
             boardName: board.name,
             status: hasErrors ? "FAILURE" : "SUCCESS",
@@ -74,8 +190,14 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
         if (hasErrors) {
           boardsFailed++
           errorSummaries.push(`${board.name}: ${result.errors.join("; ")}`)
+          console.warn(
+            `[sync] Board failed: syncLogId=${syncLogId} board=${board.name} errors=${result.errors.length} durationMs=${boardDuration}`,
+          )
         } else {
           boardsSynced++
+          console.log(
+            `[sync] Board synced: syncLogId=${syncLogId} board=${board.name} added=${result.jobsAdded} updated=${result.jobsUpdated} deactivated=${result.jobsDeactivated} durationMs=${boardDuration}`,
+          )
         }
 
         totalAdded += result.jobsAdded
@@ -87,7 +209,7 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
         const errMsg = err instanceof Error ? err.message : String(err)
         await db.syncBoardResult.create({
           data: {
-            syncLogId: syncLog.id,
+            syncLogId,
             boardToken: board.token,
             boardName: board.name,
             status: "FAILURE",
@@ -99,6 +221,9 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
         })
         boardsFailed++
         errorSummaries.push(`${board.name}: ${errMsg}`)
+        console.error(
+          `[sync] Board exception: syncLogId=${syncLogId} board=${board.name} error=${errMsg}`,
+        )
       }
     }
 
@@ -115,7 +240,7 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
     }
 
     await db.syncLog.update({
-      where: { id: syncLog.id },
+      where: { id: syncLogId },
       data: {
         completedAt,
         status,
@@ -131,8 +256,12 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
       },
     })
 
+    console.log(
+      `[sync] Completed: syncLogId=${syncLogId} status=${status} boards=${boardsSynced}/${boards.length} durationMs=${durationMs}`,
+    )
+
     return {
-      syncLogId: syncLog.id,
+      syncLogId,
       totalBoards: boards.length,
       boardsSynced,
       boardsFailed,
@@ -146,9 +275,12 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
   } catch (err) {
     const completedAt = new Date()
     const errMsg = err instanceof Error ? err.message : String(err)
+    console.error(
+      `[sync] Fatal error: syncLogId=${syncLogId} error=${errMsg}`,
+    )
     try {
       await db.syncLog.update({
-        where: { id: syncLog.id },
+        where: { id: syncLogId },
         data: {
           completedAt,
           status: "FAILURE",
@@ -160,36 +292,24 @@ export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
         },
       })
     } catch (updateErr) {
-      console.error("[sync-runner] Failed to update SyncLog on fatal error:", updateErr)
+      console.error(
+        `[sync] Failed to update SyncLog on fatal error: syncLogId=${syncLogId} error=${updateErr instanceof Error ? updateErr.message : String(updateErr)}`,
+      )
     }
     throw err
   }
 }
 
-// Default: 4 hours. Operators can tune via SYNC_STALE_THRESHOLD_MS env var.
-const DEFAULT_STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000
+// ---------------------------------------------------------------------------
+// Convenience wrapper
+// ---------------------------------------------------------------------------
 
-export async function reconcileStaleRuns(
-  thresholdMs: number = DEFAULT_STALE_THRESHOLD_MS
-): Promise<number> {
-  const cutoff = new Date(Date.now() - thresholdMs)
-  const staleRuns = await db.syncLog.findMany({
-    where: { status: "RUNNING", startedAt: { lt: cutoff } },
-    select: { id: true },
-  })
-  if (staleRuns.length === 0) return 0
-
-  const thresholdHours = (thresholdMs / 3600000).toFixed(1)
-  const reconciledAt = new Date()
-
-  await db.syncLog.updateMany({
-    where: { id: { in: staleRuns.map((r) => r.id) } },
-    data: {
-      status: "FAILURE",
-      completedAt: reconciledAt,
-      errorSummary: `Marked FAILURE by reconciler at ${reconciledAt.toISOString()}: sync had been RUNNING for >${thresholdHours}h. Probable cause: platform timeout (DO job limit), OOM kill, or process crash. Check DO runtime logs for this time window. Reconcile threshold: ${thresholdMs}ms.`,
-    },
-  })
-
-  return staleRuns.length
+/**
+ * Acquire the lock and execute sync in one call. Throws
+ * `SyncAlreadyRunningError` if another sync is in progress.
+ */
+export async function runSync(triggeredBy: string): Promise<SyncRunResult> {
+  const lock = await acquireSyncLock(triggeredBy)
+  if (!lock.acquired) throw new SyncAlreadyRunningError(lock.runningSyncLogId)
+  return executeSyncWork(lock.syncLogId)
 }

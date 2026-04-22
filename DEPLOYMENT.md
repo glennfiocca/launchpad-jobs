@@ -100,6 +100,12 @@ export const SEED_BOARDS = [
 
 See `.env.example` for all required variables.
 
+### Environment Variables: Sync Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SYNC_STALE_THRESHOLD_MS` | `14400000` (4 hours) | Time in ms before a `RUNNING` sync is considered stale and eligible for auto-recovery. Set lower for faster auto-recovery, higher if syncs legitimately take very long. Set in the DO app spec or `.env`. |
+
 ## Adding New Companies
 
 To add a new Greenhouse board:
@@ -123,6 +129,8 @@ The Greenhouse board sync runs daily via DigitalOcean scheduled job (`sync-jobs`
 **Production trigger path:** `scripts/sync-cron.ts` (direct Prisma, no HTTP)
 **Deprecated path:** `scripts/sync-cron.mjs` (HTTP-based, do not configure in DO)
 
+> **Note:** The cron script no longer calls `reconcileStaleRuns()` separately — stale run reconciliation is now centralized inside `acquireSyncLock()`, which every sync trigger path (cron, admin, API) calls automatically.
+
 **Job timeout:** 1800 seconds (30 minutes). Adjust `timeout_seconds` in `.do/app.yaml` if syncs routinely exceed this.
 
 ## Operator Runbook: Stuck Sync
@@ -130,7 +138,7 @@ The Greenhouse board sync runs daily via DigitalOcean scheduled job (`sync-jobs`
 If the admin sync dashboard shows a run permanently stuck in `Running` state:
 
 ### Automatic recovery
-The `scripts/sync-cron.ts` cron calls `reconcileStaleRuns()` at startup before each run. Any `RUNNING` row older than **4 hours** is automatically marked `FAILURE` with a descriptive error summary. So the stuck row will be cleared on the next scheduled run.
+Stale run reconciliation is centralized inside `acquireSyncLock()`, which is called by **every** sync trigger path — cron, admin UI, and API. Any `RUNNING` row older than the stale threshold (default: **4 hours**) is automatically marked `FAILURE` with a descriptive error summary. This means a stuck row is cleared on the next sync trigger from **any** source, not just the cron.
 
 ### Manual recovery (immediate)
 Run reconciliation directly:
@@ -155,10 +163,44 @@ WHERE status = 'RUNNING'
 ```
 
 ### Threshold tuning
-The stale threshold defaults to 4 hours. To override, pass `thresholdMs` to `reconcileStaleRuns()`:
-```typescript
-await reconcileStaleRuns(2 * 60 * 60 * 1000) // 2 hours
+The stale threshold defaults to 4 hours. To override, set the `SYNC_STALE_THRESHOLD_MS` environment variable (in the DO app spec or `.env`):
 ```
+SYNC_STALE_THRESHOLD_MS=7200000   # 2 hours
+```
+
+See [Environment Variables: Sync Configuration](#environment-variables-sync-configuration) for details.
+
+## Operator Runbook: Manual Sync Trigger
+
+The admin UI manual trigger (`POST /api/admin/jobs/sync`) is **fire-and-forget**: it returns `202 Accepted` immediately with `{ syncLogId, status: "RUNNING" }`. The actual sync runs in the background.
+
+- **Admin UI**: Click "Trigger Sync" in the admin panel. The UI automatically polls `GET /api/admin/sync/{syncLogId}` for real-time status updates until the sync completes.
+- **CLI trigger**:
+  ```bash
+  curl -X POST https://app.trypipeline.ai/api/admin/jobs/sync \
+    -H "Authorization: Bearer YOUR_AUTH_TOKEN"
+  ```
+- **Check status**: `GET /api/admin/sync/{syncLogId}` returns the `SyncLog` with board-level results.
+- If the admin UI shows **"A sync is already running"**, wait for it to complete or check sync logs at `/admin/sync`. The atomic concurrency guard (`INSERT ... WHERE NOT EXISTS`) prevents overlapping runs.
+
+## Operator Runbook: Sync Health Check
+
+### Diagnosing sync health
+
+1. **Check sync logs** in the admin UI at `/admin/sync`. Each entry shows status, trigger source, timing, and board results.
+2. **Verify cron is firing**: Look for daily entries with `triggeredBy=cron`. If no cron entries appear for >24 hours, check the DO scheduled job status in the DigitalOcean dashboard.
+3. **Structured log search**: All sync operations log with `[sync]` prefix and `syncLogId=` for correlation. Search application logs with these patterns:
+   - `[sync] Lock rejected` — concurrency guard blocked a duplicate run
+   - `[sync] Reconciled stale run` — auto-recovery kicked in for a stuck run
+   - `[sync] Fatal error` — sync crashed; check the full error for root cause
+   - `[sync] Completed` — normal completion with board counts and duration
+4. **Example log sequence** for a healthy sync:
+   ```
+   [sync] Lock acquired: syncLogId=abc-123 triggeredBy=admin:user@example.com
+   [sync] Boards fetched: syncLogId=abc-123 count=115
+   [sync] Board synced: syncLogId=abc-123 board=Stripe added=5 updated=12 deactivated=0 durationMs=1234
+   [sync] Completed: syncLogId=abc-123 status=SUCCESS boards=115/115 durationMs=45000
+   ```
 
 ## Operator Runbook: Clear Sync Logs (One-Time)
 
@@ -182,3 +224,20 @@ DATABASE_URL="..." npx tsx scripts/clear-sync-logs.ts --confirm
 `SyncBoardResult` rows are deleted first, then `SyncLog` rows. Both tables will be empty after this operation. New sync runs will create fresh history.
 
 > **Note:** This is irreversible. Only use this script when you want to wipe all sync history intentionally.
+
+## Post-Fix Verification Checklist
+
+Production verification steps after deploying the refactored sync system:
+
+1. **Manual trigger test**: Click "Trigger Sync" in the admin UI. Should return instantly with a "Sync started..." message, then polling shows progress, then shows completion with board results.
+2. **Wait for scheduled trigger**: Check sync logs the next day for a `triggeredBy=cron` entry. Confirm it completed with `SUCCESS` or `PARTIAL_FAILURE` (not stuck in `RUNNING`).
+3. **Stale run simulation**: Insert a `RUNNING` row with an old `startedAt` timestamp, then trigger a sync. The stale row should be reconciled to `FAILURE`, and the new sync should proceed normally.
+   ```sql
+   INSERT INTO "SyncLog" (id, status, "startedAt", "triggeredBy")
+   VALUES (gen_random_uuid(), 'RUNNING', NOW() - INTERVAL '5 hours', 'test:stale-simulation');
+   ```
+4. **Expected SyncLog states**:
+   - `RUNNING` — sync is in progress
+   - `SUCCESS` — all boards synced successfully
+   - `PARTIAL_FAILURE` — some boards failed, others succeeded
+   - `FAILURE` — all boards failed or a fatal error occurred

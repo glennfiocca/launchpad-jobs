@@ -130,13 +130,20 @@ export function JobBoard() {
     };
   }, [loadNextPage]);
 
-  // Filter change: reset to page 1 and fetch fresh
+  // Filter change: reset to page 1 and fetch fresh.
+  // Use a stable string key derived from searchParams minus the ?job= param so
+  // that selecting/deselecting a job (which only mutates ?job=) does not trigger
+  // a spurious page-1 reset and list replacement.
+  const filterKey = new URLSearchParams(
+    [...searchParams.entries()].filter(([k]) => k !== "job")
+  ).toString();
+
   useEffect(() => {
     isFetchingRef.current = false;
     setPage(1);
-    fetchJobs(filters, 1, true);
+    fetchJobs(filtersRef.current, 1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [filterKey]);
 
   // Page increment from infinite scroll: append next page
   // Use filtersRef to avoid stale closure — filters may change between renders

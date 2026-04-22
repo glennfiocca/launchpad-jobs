@@ -3,15 +3,19 @@
 import { MapPin, Wifi } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { CompanyLogo } from "@/components/company-logo";
+import { SaveButton } from "@/components/jobs/save-button";
+import { ShareButton } from "@/components/jobs/share-button";
 import type { JobWithCompany } from "@/types";
 
 interface JobCardProps {
   job: JobWithCompany;
   selected: boolean;
   onClick: () => void;
+  isSaved?: boolean;
+  onSaveToggle?: (jobId: string, saved: boolean) => void;
 }
 
-export function JobCard({ job, selected, onClick }: JobCardProps) {
+export function JobCard({ job, selected, onClick, isSaved = false, onSaveToggle }: JobCardProps) {
   return (
     <button
       onClick={onClick}
@@ -38,9 +42,24 @@ export function JobCard({ job, selected, onClick }: JobCardProps) {
               <p className="text-xs text-zinc-300 mb-0.5">{job.company.name}</p>
               <h3 className="text-sm font-semibold text-white leading-tight">{job.title}</h3>
             </div>
-            {job.postedAt && (
-              <span className="text-xs text-zinc-500 shrink-0">{timeAgo(job.postedAt)}</span>
-            )}
+            <div className="flex items-center gap-0.5 shrink-0">
+              {job.postedAt && (
+                <span className="text-xs text-zinc-500 mr-1">{timeAgo(job.postedAt)}</span>
+              )}
+              <SaveButton
+                jobId={job.id}
+                jobPublicId={job.publicJobId}
+                initialSaved={isSaved}
+                variant="card"
+                onToggle={(saved) => onSaveToggle?.(job.id, saved)}
+              />
+              <ShareButton
+                jobPublicId={job.publicJobId}
+                jobTitle={job.title}
+                companyName={job.company.name}
+                variant="card"
+              />
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-2">

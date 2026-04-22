@@ -1,4 +1,6 @@
-import type { ApplicationStatus, SubscriptionStatus, Role } from "@prisma/client"
+import type { ApplicationStatus, SubscriptionStatus, Role, ReportCategory, ReportStatus } from "@prisma/client"
+
+export type { ReportCategory, ReportStatus }
 
 export type DispatchStatus = "DISPATCHED" | "FAILED" | "PENDING" | "AWAITING_OPERATOR"
 
@@ -167,4 +169,28 @@ export interface AdminSyncLog {
   durationMs: number | null
   errorSummary: string | null
   boardResults?: AdminSyncBoardResult[]
+}
+
+export interface AdminJobReport {
+  id: string
+  category: ReportCategory
+  status: ReportStatus
+  message: string | null
+  resolvedAt: Date | null
+  resolvedBy: string | null
+  adminNote: string | null
+  createdAt: Date
+  updatedAt: Date
+  user: { id: string; email: string | null; name: string | null }
+  job: {
+    id: string
+    title: string
+    publicJobId: string
+    company: { id: string; name: string }
+  } | null
+}
+
+export interface SavedJobWithDetails {
+  savedAt: Date
+  job: import("@/types").JobWithCompany
 }

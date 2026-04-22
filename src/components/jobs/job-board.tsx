@@ -28,6 +28,7 @@ export function JobBoard() {
 
   const [jobs, setJobs] = useState<JobWithCompany[]>([]);
   const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
+  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<JobWithCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -181,6 +182,41 @@ export function JobBoard() {
     return () => { cancelled = true; };
   }, [session?.user?.id, sessionStatus]);
 
+  // Load saved job IDs for current user
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !session?.user?.id) {
+      setSavedJobIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/jobs/saved/ids");
+        const data: ApiResponse<string[]> = await res.json();
+        if (!cancelled && data.success && data.data) {
+          setSavedJobIds(new Set(data.data));
+        }
+      } catch {
+        if (!cancelled) setSavedJobIds(new Set());
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [session?.user?.id, sessionStatus]);
+
+  const handleSaveToggle = useCallback((jobId: string, saved: boolean) => {
+    setSavedJobIds((prev) => {
+      const next = new Set(prev);
+      if (saved) {
+        next.add(jobId);
+      } else {
+        next.delete(jobId);
+      }
+      return next;
+    });
+  }, []);
+
   // Select job from loaded list when URL param matches
   useEffect(() => {
     if (!jobIdFromUrl) return;
@@ -295,6 +331,8 @@ export function JobBoard() {
                         job={job}
                         selected={selected?.id === job.id}
                         onClick={() => selectJob(job)}
+                        isSaved={savedJobIds.has(job.id)}
+                        onSaveToggle={handleSaveToggle}
                       />
                     </motion.div>
                   );
@@ -323,6 +361,8 @@ export function JobBoard() {
             job={selected}
             hasPriorApplication={appliedJobIds.has(selected.id)}
             onClose={closeDetail}
+            isSaved={savedJobIds.has(selected.id)}
+            onSaveToggle={handleSaveToggle}
           />
         </div>
       )}

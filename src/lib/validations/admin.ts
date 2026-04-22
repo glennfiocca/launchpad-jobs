@@ -59,3 +59,31 @@ export const bulkApplicationActionSchema = z.object({
   action: z.enum(["retry-dispatch", "export-csv"]),
   ids: z.array(z.string()).min(1).max(500),
 })
+
+// ─── Job Reports ──────────────────────────────────────────────────────────────
+
+export const ALL_REPORT_CATEGORIES = [
+  "SPAM",
+  "INACCURATE",
+  "OFFENSIVE",
+  "BROKEN_LINK",
+  "OTHER",
+] as const
+
+export const ALL_REPORT_STATUSES = ["OPEN", "TRIAGED", "RESOLVED", "DISMISSED"] as const
+
+export const createReportSchema = z.object({
+  category: z.enum(ALL_REPORT_CATEGORIES),
+  message: z.string().max(1000).optional(),
+})
+
+export const adminUpdateReportSchema = z.object({
+  status: z.enum(ALL_REPORT_STATUSES),
+  adminNote: z.string().max(5000).optional(),
+})
+
+export const reportsQuerySchema = paginationSchema.extend({
+  status: z.enum(ALL_REPORT_STATUSES).optional(),
+  category: z.enum(ALL_REPORT_CATEGORIES).optional(),
+  search: z.string().optional(),
+})

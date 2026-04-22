@@ -113,6 +113,8 @@ model User {
   notificationPreference NotificationPreference?
   claimedApplications    Application[]           @relation("ApplicationClaims")
   auditLogs              ApplicationAuditLog[]   @relation("AuditLogActor")
+  savedJobs              SavedJob[]
+  jobReports             JobReport[]
 }
 
 model Subscription {
@@ -277,6 +279,8 @@ model Job {
 
   applications  Application[]
   notifications Notification[]
+  savedJobs     SavedJob[]
+  jobReports    JobReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -633,4 +637,56 @@ model CreditTransaction {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([type])
+}
+
+// ─── Saved Jobs ───────────────────────────────────────────────────────────────
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, jobId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ─── Job Reports ──────────────────────────────────────────────────────────────
+
+enum ReportCategory {
+  SPAM
+  INACCURATE
+  OFFENSIVE
+  BROKEN_LINK
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  TRIAGED
+  RESOLVED
+  DISMISSED
+}
+
+model JobReport {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId      String?
+  job        Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  category   ReportCategory
+  status     ReportStatus   @default(OPEN)
+  message    String?        @db.VarChar(1000)
+  resolvedAt DateTime?
+  resolvedBy String?
+  adminNote  String?        @db.Text
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([userId, jobId])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([jobId])
+  @@index([userId])
 }

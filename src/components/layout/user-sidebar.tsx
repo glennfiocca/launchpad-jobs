@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import {
   Briefcase,
+  Bookmark,
   LayoutDashboard,
   User,
   Shield,
@@ -39,6 +40,7 @@ const publicNavItems = [
 ]
 
 const authNavItems = [
+  { href: "/jobs/saved", label: "Saved Jobs", icon: Bookmark },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profile", label: "Profile", icon: User },
 ]
@@ -51,7 +53,11 @@ export function UserSidebar() {
   const { data: session } = useSession()
 
   function isActive(href: string) {
-    if (href === "/jobs") return pathname?.startsWith("/jobs") ?? false
+    if (href === "/jobs") {
+      // exact match only — don't highlight Browse Jobs when on /jobs/saved or sub-routes
+      return pathname === "/jobs" || pathname?.startsWith("/jobs?") || false
+    }
+    if (href === "/jobs/saved") return pathname?.startsWith("/jobs/saved") ?? false
     if (href === "/dashboard") return pathname?.startsWith("/dashboard") ?? false
     if (href === "/admin") return pathname?.startsWith("/admin") ?? false
     return pathname === href

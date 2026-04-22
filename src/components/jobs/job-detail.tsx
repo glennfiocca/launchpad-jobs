@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { X, MapPin, Building2, Calendar, Wifi, ExternalLink, Zap } from "lucide-react";
@@ -8,12 +8,23 @@ import { timeAgo } from "@/lib/utils";
 import { sanitizeEmployerJobHtml } from "@/lib/sanitize-job-html";
 import { ApplyModal } from "@/components/jobs/apply-modal";
 import { CompanyLogo } from "@/components/company-logo";
+import { SaveButton } from "@/components/jobs/save-button";
+import { ReportButton } from "@/components/jobs/report-button";
+import { ShareButton } from "@/components/jobs/share-button";
 import type { JobWithCompany } from "@/types";
+import type { ReportCategory } from "@prisma/client";
+
+interface ReportStatus {
+  reported: boolean;
+  category?: ReportCategory;
+}
 
 interface JobDetailProps {
   job: JobWithCompany;
   hasPriorApplication: boolean;
   onClose: () => void;
+  isSaved?: boolean;
+  onSaveToggle?: (jobId: string, saved: boolean) => void;
 }
 
 function decodeEntities(html: string): string {
@@ -22,7 +33,7 @@ function decodeEntities(html: string): string {
   return textarea.value;
 }
 
-export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps) {
+export function JobDetail({ job, hasPriorApplication, onClose, isSaved = false, onSaveToggle }: JobDetailProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -43,6 +54,26 @@ export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps)
   }, [job.id]);
 
   const { data: session } = useSession();
+
+  const [reportStatus, setReportStatus] = useState<ReportStatus>({ reported: false });
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${encodeURIComponent(job.publicJobId)}/report`);
+        const data = await res.json();
+        if (!cancelled && data.success) {
+          setReportStatus({ reported: data.data.reported, category: data.data.category });
+        }
+      } catch {
+        // non-fatal
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [job.id, job.publicJobId, session?.user?.id]);
+
   const decodedContent = useMemo(
     () =>
       job.content
@@ -73,12 +104,34 @@ export function JobDetail({ job, hasPriorApplication, onClose }: JobDetailProps)
               <h2 className="text-xl font-semibold text-white">{job.title}</h2>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-zinc-500 hover:text-white hover:bg-white/8 rounded-lg p-1.5 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <SaveButton
+              jobId={job.id}
+              jobPublicId={job.publicJobId}
+              initialSaved={isSaved}
+              variant="detail"
+              onToggle={(saved) => onSaveToggle?.(job.id, saved)}
+            />
+            <ReportButton
+              jobPublicId={job.publicJobId}
+              variant="detail"
+              initialReported={reportStatus.reported}
+              initialReportedCategory={reportStatus.category}
+            />
+            <ShareButton
+              jobPublicId={job.publicJobId}
+              jobTitle={job.title}
+              companyName={job.company.name}
+              variant="detail"
+            />
+            <button
+              onClick={onClose}
+              aria-label="Close job detail"
+              className="text-zinc-500 hover:text-white hover:bg-white/8 rounded-lg p-1.5 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Meta */}

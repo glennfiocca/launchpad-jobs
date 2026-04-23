@@ -1,5 +1,5 @@
 import { db } from "@/lib/db"
-import { getActiveBoards, syncGreenhouseBoard } from "@/lib/greenhouse"
+import { getActiveBoards, syncGreenhouseBoard } from "@/lib/greenhouse/sync"
 
 // ---------------------------------------------------------------------------
 // Types

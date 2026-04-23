@@ -4,17 +4,21 @@
 // Stale RUNNING reconciliation is centralized in acquireSyncLock().
 // Execute with: npx tsx scripts/sync-cron.ts
 
-import { runSync, SyncAlreadyRunningError } from "@/lib/sync-runner"
+async function main() {
+  if (!process.env.DATABASE_URL) {
+    console.error("[sync-cron] ERROR: DATABASE_URL not set")
+    process.exit(1)
+  }
 
-if (!process.env.DATABASE_URL) {
-  console.error("[sync-cron] ERROR: DATABASE_URL not set")
-  process.exit(1)
-}
+  console.log(`[sync-cron] Started at: ${new Date().toISOString()}`)
+  console.log(`[sync-cron] Node version: ${process.version}`)
+  console.log(`[sync-cron] Working directory: ${process.cwd()}`)
+  console.log("[sync-cron] Importing sync-runner...")
 
-console.log(`[sync-cron] Started at: ${new Date().toISOString()}`)
-console.log("[sync-cron] Running sync directly (no HTTP)")
+  const { runSync } = await import("@/lib/sync-runner")
 
-try {
+  console.log("[sync-cron] Import successful, running sync directly (no HTTP)")
+
   const result = await runSync("cron")
 
   console.log(`[sync-cron] SyncLog ID: ${result.syncLogId}`)
@@ -30,11 +34,14 @@ try {
 
   console.log(`[sync-cron] Completed at: ${new Date().toISOString()}`)
   process.exit(0)
-} catch (err) {
-  if (err instanceof SyncAlreadyRunningError) {
-    console.log(`[sync-cron] Skipped: another sync is already running (syncLogId: ${err.runningSyncLogId})`)
+}
+
+main().catch((err) => {
+  if (err && typeof err === "object" && "name" in err && err.name === "SyncAlreadyRunningError") {
+    const runningSyncLogId = "runningSyncLogId" in err ? err.runningSyncLogId : "unknown"
+    console.log(`[sync-cron] Skipped: another sync is already running (syncLogId: ${runningSyncLogId})`)
     process.exit(0)
   }
-  console.error(`[sync-cron] FATAL: ${err instanceof Error ? err.message : String(err)}`)
+  console.error(`[sync-cron] FATAL: ${err instanceof Error ? err.stack ?? err.message : String(err)}`)
   process.exit(1)
-}
+})

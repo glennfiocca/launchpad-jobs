@@ -17,7 +17,6 @@ export class GreenhouseClient {
         "Content-Type": "application/json",
         ...options?.headers,
       },
-      next: { revalidate: 300 }, // Cache for 5 minutes
     });
 
     if (!res.ok) {

@@ -112,14 +112,15 @@ jobs:
       repo: glennfiocca/launchpad-jobs
       branch: main
       deploy_on_push: true
+    dockerfile_path: Dockerfile
     kind: SCHEDULED
     schedule:
-      # 09:00 UTC = 04:00 EST (Nov–Mar) / 05:00 EDT (Mar–Nov).
-      # DO cron does not support timezones. To hit 04:00 EDT: change to "0 8 * * *".
-      cron: "0 9 * * *"
+      # TEMPORARY: 13:00 UTC = 09:00 EDT for verification.
+      # Revert to "0 9 * * *" (04:00 EST / 05:00 EDT) after confirming cron works.
+      cron: "0 13 * * *"
     run_command: npx tsx scripts/sync-cron.ts
     instance_count: 1
-    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_size_slug: apps-s-1vcpu-1gb
     timeout_seconds: 1800
     envs:
       - key: DATABASE_URL

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { getLogoUrl, normalizeLogoUrl } from "@/lib/logo-url";
 
 // Brand-safe background colors for the initials placeholder.
 // Color is derived deterministically from the company name.
@@ -33,15 +34,6 @@ function getPlaceholderColor(name: string): string {
   return PLACEHOLDER_COLORS[hash % PLACEHOLDER_COLORS.length];
 }
 
-function getLogoUrl(website: string): string | null {
-  try {
-    const hostname = new URL(website).hostname;
-    return `https://img.logo.dev/${hostname}?token=${process.env.NEXT_PUBLIC_LOGO_DEV_KEY}&size=200&format=png`;
-  } catch {
-    return null;
-  }
-}
-
 interface CompanyLogoProps {
   name: string;
   logoUrl: string | null;
@@ -51,29 +43,35 @@ interface CompanyLogoProps {
 
 /**
  * Renders a company logo with a three-tier fallback:
- *   1. logoUrl (stored value)
- *   2. logo.dev API derived from company website
+ *   1. logoUrl (stored value, normalized if it's a logo.dev URL)
+ *   2. logo.dev API derived from company website (theme=dark, retina=true)
  *   3. Initials placeholder with a deterministic brand-safe color
+ *
+ * See src/lib/logo-url.ts for the URL strategy ADR.
  */
 export function CompanyLogo({ name, logoUrl, website, className }: CompanyLogoProps) {
-  const faviconUrl = !logoUrl && website ? getLogoUrl(website) : null;
-  const initialSrc = logoUrl ?? faviconUrl ?? null;
+  const normalizedLogoUrl = logoUrl ? normalizeLogoUrl(logoUrl) : null;
+  // Always compute logo.dev URL when a website is available — used as a fallback
+  // even when a stored logoUrl exists, so a broken stored URL degrades gracefully.
+  const logoDevUrl = website ? getLogoUrl(website) : null;
+  const initialSrc = normalizedLogoUrl ?? logoDevUrl ?? null;
 
   const [src, setSrc] = useState<string | null>(initialSrc);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const newSrc = logoUrl ?? (website ? getLogoUrl(website) : null);
-    setSrc(newSrc);
+    const normalized = logoUrl ? normalizeLogoUrl(logoUrl) : null;
+    const devUrl = website ? getLogoUrl(website) : null;
+    setSrc(normalized ?? devUrl ?? null);
     setFailed(false);
   }, [logoUrl, website]);
 
   const handleError = () => {
-    if (src === logoUrl && faviconUrl) {
-      // logoUrl failed — try logo.dev
-      setSrc(faviconUrl);
+    if (src === normalizedLogoUrl && logoDevUrl) {
+      // Stored URL failed — fall back to logo.dev with dark-theme params
+      setSrc(logoDevUrl);
     } else {
-      // logo.dev (or logoUrl with no fallback) failed — show initials
+      // logo.dev also failed (or no website available) — show initials
       setFailed(true);
     }
   };
@@ -90,7 +88,6 @@ export function CompanyLogo({ name, logoUrl, website, className }: CompanyLogoPr
     );
   }
 
-  // Initials placeholder
   const initials = getInitials(name);
   const colorClass = getPlaceholderColor(name);
   return (

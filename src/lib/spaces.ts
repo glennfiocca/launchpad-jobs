@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const BUCKET = process.env.DO_SPACES_BUCKET ?? "pipeline-uploads";
@@ -32,6 +32,35 @@ export async function getPresignedGetUrl(
     new GetObjectCommand({ Bucket: BUCKET, Key: key }),
     { expiresIn }
   );
+}
+
+/**
+ * Upload a buffer as a public-read object to Spaces.
+ * Returns the public CDN URL on success, null on any error.
+ */
+export async function uploadPublicBuffer(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<string | null> {
+  const client = getSpacesClient();
+  if (!client) return null;
+
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        ACL: "public-read",
+      })
+    );
+    return `https://${BUCKET}.${REGION}.digitaloceanspaces.com/${key}`;
+  } catch (err) {
+    console.error("uploadPublicBuffer failed:", err);
+    return null;
+  }
 }
 
 export { BUCKET as SPACES_BUCKET };

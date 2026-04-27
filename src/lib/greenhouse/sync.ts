@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { generateUniquePublicJobId } from "@/lib/public-job-id";
 import { createGreenhouseClient, isRemoteJob, extractDepartment } from "./client";
 import { createNotification } from "@/lib/notifications";
+import { enrichCompanyLogo } from "../logo-enrichment";
 import { decode } from "html-entities";
 
 interface SyncResult {
@@ -38,6 +39,17 @@ export async function syncGreenhouseBoard(
     update: { name: companyName, ...(logoUrl && { logoUrl }) },
     create: { name: companyName, slug: boardToken, logoUrl },
   });
+
+  // Enrich logo in the background if one isn't already stored
+  if (!company.logoUrl) {
+    enrichCompanyLogo({ id: company.id, website: company.website, name: company.name })
+      .then((url) => {
+        if (!url) {
+          console.warn(`[logo-enrichment] No logo found for company: ${company.name}`);
+        }
+      })
+      .catch(() => undefined);
+  }
 
   let response;
   try {

@@ -6,5 +6,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Brand assets
 
-- **Favicon (browser tab):** `src/app/icon.svg` — Pipeline mark (overlapping circles on light gray). Uses the Next.js `app/icon` file convention; keep this file or replace it with an equivalent `icon.(ico|png|svg)` in `src/app/`.
+- **Favicon (browser tab):** `src/app/icon.svg` — Pipeline mark only (overlapping circles from brand SVG), white on black for clarity at small sizes. Uses the Next.js `app/icon` file convention; keep this file or replace it with an equivalent `icon.(ico|png|svg)` in `src/app/`.
 - **Wordmark (header / footer):** `public/pipeline-logo.png`

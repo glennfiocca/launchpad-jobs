@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { ApplicationWithJob } from "@/types";
 import { ApplicationCard } from "./application-card";
 import { ApplicationDetail } from "./application-detail";
-import { STATUS_CONFIG } from "@/types";
 import type { ApplicationStatus } from "@prisma/client";
+import { PipelineSankey } from "@/components/sankey/pipeline-sankey";
+import { buildSankeyFromApplications } from "@/lib/sankey";
 
 interface DashboardClientProps {
   initialApplications: ApplicationWithJob[];
@@ -42,6 +43,21 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
   const [selected, setSelected] = useState<ApplicationWithJob | null>(null);
 
   const searchParams = useSearchParams();
+
+  // Derive Sankey from live application state so it stays in sync with status changes
+  const sankeyData = useMemo(
+    () =>
+      buildSankeyFromApplications(
+        applications.map((a) => ({
+          status: a.status,
+          statusHistory: a.statusHistory.map((h) => ({
+            fromStatus: h.fromStatus,
+            toStatus: h.toStatus,
+          })),
+        })),
+      ),
+    [applications],
+  );
 
   useEffect(() => {
     const appId = searchParams.get("app");
@@ -86,6 +102,11 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {/* Pipeline Sankey */}
+      <div className="bg-[#0a0a0a] border border-white/8 rounded-xl p-5">
+        <PipelineSankey mode="live" data={sankeyData} />
+      </div>
+
       {/* Full-width tab bar */}
       <div className="bg-[#0a0a0a] border border-white/8 rounded-xl">
         <div className="flex items-center gap-1 px-3 py-2.5 overflow-x-auto">

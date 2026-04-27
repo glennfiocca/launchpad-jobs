@@ -1,8 +1,38 @@
 import Link from "next/link";
 import { ArrowRight, Zap, BarChart3, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
+import {
+  buildSankeyFromApplications,
+  buildDemoSankeyData,
+} from "@/lib/sankey";
+import { PipelineSankey } from "@/components/sankey/pipeline-sankey";
+import { JobSearchBlock } from "@/components/home/job-search-block";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const session = await getServerSession(authOptions);
+
+  // Load real application data for signed-in users
+  const sankeyData = session?.user?.id
+    ? buildSankeyFromApplications(
+        await db.application.findMany({
+          where: { userId: session.user.id },
+          select: {
+            status: true,
+            statusHistory: {
+              select: { fromStatus: true, toStatus: true },
+            },
+          },
+        }),
+      )
+    : buildDemoSankeyData();
+
+  const mode = session?.user?.id ? "live" : "demo";
+
   return (
     <div className="h-full overflow-y-auto bg-black">
       {/* Hero */}
@@ -15,7 +45,7 @@ export default function HomePage() {
           <div className="mt-16 w-[600px] h-[400px] rounded-full bg-blue-500/10 blur-[120px]" />
         </div>
 
-        <div className="relative text-center py-28">
+        <div className="relative text-center py-20">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-sm font-medium mb-8">
             <Zap className="w-3.5 h-3.5 text-blue-400" />
             One-click applications powered by AI
@@ -33,23 +63,29 @@ export default function HomePage() {
             Fill your profile once. Apply everywhere instantly. AI tracks your applications
             and keeps you informed — no more spreadsheets.
           </p>
-          <div className="flex items-center justify-center gap-4">
-            <Link
-              href="/jobs"
-              className="flex items-center gap-2 px-8 py-4 rounded-xl bg-white text-black font-semibold hover:bg-white/90 transition-colors text-base"
-            >
-              Browse Jobs
-              <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="/auth/signin"
-              className="flex items-center gap-2 px-8 py-4 rounded-xl border border-white/10 text-white font-semibold hover:border-white/25 transition-colors text-base"
-            >
-              Create Profile
-            </Link>
+
+          {/* Sankey visualization */}
+          <div className="max-w-3xl mx-auto mb-10 bg-[#0a0a0a] border border-white/8 rounded-2xl p-6">
+            <PipelineSankey mode={mode} data={sankeyData} />
           </div>
+
+          {/* CTA for anonymous users */}
+          {!session && (
+            <div className="flex items-center justify-center mb-6">
+              <Link
+                href="/auth/signin"
+                className="flex items-center gap-2 px-8 py-4 rounded-xl bg-white text-black font-semibold hover:bg-white/90 transition-colors text-base"
+              >
+                Get Started
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Job Search */}
+      <JobSearchBlock />
 
       {/* Features */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-28">

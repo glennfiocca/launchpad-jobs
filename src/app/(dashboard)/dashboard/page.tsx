@@ -18,7 +18,7 @@ export default async function DashboardPage() {
       include: {
         job: { include: { company: true } },
         emails: { orderBy: { receivedAt: "desc" }, take: 1 },
-        statusHistory: { orderBy: { createdAt: "desc" }, take: 1 },
+        statusHistory: { orderBy: { createdAt: "desc" } },
       },
       orderBy: { appliedAt: "desc" },
     }),
@@ -27,31 +27,19 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div className="border-b border-white/8 bg-black px-6 lg:px-8 py-4 shrink-0">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white text-xl font-semibold">My Applications</h1>
-            <p className="text-zinc-500 text-sm mt-1">{applications.length} total applications</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {!profile?.isComplete && (
-              <Link
-                href="/profile"
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-amber-400 text-sm font-medium hover:bg-amber-500/12 transition-colors"
-              >
-                Complete your profile to apply
-              </Link>
-            )}
+      {/* Compact header — profile warning + actions only */}
+      {(!profile?.isComplete) && (
+        <div className="border-b border-white/8 bg-black px-6 lg:px-8 py-3 shrink-0">
+          <div className="flex items-center justify-end gap-3">
             <Link
-              href="/jobs"
-              className="bg-white text-black font-semibold rounded-xl px-5 py-2.5 hover:bg-zinc-100 transition-colors text-sm"
+              href="/profile"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-amber-400 text-sm font-medium hover:bg-amber-500/12 transition-colors"
             >
-              Browse Jobs
+              Complete your profile to apply
             </Link>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-h-0 p-6 lg:p-8">
@@ -73,7 +61,9 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <Suspense fallback={null}>
-            <DashboardClient initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]} />
+            <DashboardClient
+              initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]}
+            />
           </Suspense>
         )}
       </div>

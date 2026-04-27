@@ -12,6 +12,8 @@ interface CityStateComboboxProps {
   onClear: () => void;
   placeholder?: string;
   className?: string;
+  /** Input sizing — "sm" (default, filter bar) or "lg" (hero search) */
+  size?: "sm" | "lg";
 }
 
 export function CityStateCombobox({
@@ -20,7 +22,9 @@ export function CityStateCombobox({
   onClear,
   placeholder = "City, State",
   className,
+  size = "sm",
 }: CityStateComboboxProps) {
+  const isLg = size === "lg";
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState(value);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -103,15 +107,18 @@ export function CityStateCombobox({
     };
   }, []);
 
-  const inputClass =
-    "w-full pl-9 pr-8 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white " +
-    "placeholder:text-zinc-600 transition-all duration-200 focus:outline-none " +
-    "focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20";
+  const inputClass = isLg
+    ? "w-full pl-11 pr-9 py-3.5 text-base rounded-xl border border-white/10 bg-black text-white " +
+      "placeholder:text-zinc-500 transition-all duration-200 focus:outline-none " +
+      "focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
+    : "w-full pl-9 pr-8 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white " +
+      "placeholder:text-zinc-600 transition-all duration-200 focus:outline-none " +
+      "focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20";
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <div className={`relative ${className ?? ""}`}>
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 pointer-events-none z-10" />
+        <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10 ${isLg ? "w-5 h-5 text-zinc-500" : "w-4 h-4 text-zinc-600"}`} />
         <Popover.Trigger asChild>
           <input
             type="text"

@@ -96,10 +96,6 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
 
   const detailScrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    detailScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
-  }, [selected?.id]);
-
   return (
     <div className="flex flex-col gap-2 h-full">
       {/* Pipeline Sankey */}
@@ -161,9 +157,9 @@ export function DashboardClient({ initialApplications }: DashboardClientProps) {
           )}
         </div>
 
-        {/* Right: detail panel */}
+        {/* Right: detail panel — flex column, scroll lives inside ApplicationDetail */}
         {selected && (
-          <div ref={detailScrollRef} className="w-full lg:w-[520px] shrink-0 overflow-y-auto overscroll-contain">
+          <div ref={detailScrollRef} className="w-full lg:w-[520px] shrink-0 flex flex-col min-h-0 bg-[#0a0a0a] border border-white/8 rounded-xl overflow-hidden">
             <ApplicationDetail
               application={selected}
               onClose={() => setSelected(null)}

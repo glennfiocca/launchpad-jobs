@@ -33,11 +33,23 @@ export async function syncGreenhouseBoard(
 
   const client = createGreenhouseClient(boardToken);
 
+  let boardWebsite: string | null = null;
+  try {
+    const board = await client.getBoard();
+    boardWebsite = board.website ?? null;
+  } catch {
+    // Non-fatal — sync continues without website; enrichment will be a no-op
+  }
+
   // Upsert company
   const company = await db.company.upsert({
     where: { slug: boardToken },
-    update: { name: companyName, ...(logoUrl && { logoUrl }) },
-    create: { name: companyName, slug: boardToken, logoUrl },
+    update: {
+      name: companyName,
+      ...(boardWebsite && { website: boardWebsite }),
+      ...(logoUrl && { logoUrl }),
+    },
+    create: { name: companyName, slug: boardToken, website: boardWebsite, logoUrl },
   });
 
   // Enrich logo in the background if one isn't already stored

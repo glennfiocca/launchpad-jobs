@@ -2,6 +2,12 @@ import type { GreenhouseJob, GreenhouseJobsResponse, GreenhouseQuestion } from "
 
 const GREENHOUSE_BASE_URL = "https://boards-api.greenhouse.io/v1/boards";
 
+export interface GreenhouseBoard {
+  name: string;
+  website: string | null;
+  logo: string | null;
+}
+
 export class GreenhouseClient {
   private boardToken: string;
 
@@ -27,6 +33,10 @@ export class GreenhouseClient {
     }
 
     return res.json() as Promise<T>;
+  }
+
+  async getBoard(): Promise<GreenhouseBoard> {
+    return this.fetch<GreenhouseBoard>("");
   }
 
   async getJobs(): Promise<GreenhouseJobsResponse> {

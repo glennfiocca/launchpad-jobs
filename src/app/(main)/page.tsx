@@ -42,15 +42,15 @@ export default async function HomePage() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 flex items-start justify-center overflow-hidden"
         >
-          <div className="mt-16 w-[600px] h-[400px] rounded-full bg-blue-500/10 blur-[120px]" />
+          <div className="mt-8 w-[500px] h-[250px] rounded-full bg-blue-500/10 blur-[120px]" />
         </div>
 
-        <div className="relative text-center py-20">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-sm font-medium mb-8">
+        <div className="relative text-center pt-8 pb-6">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-sm font-medium mb-4">
             <Zap className="w-3.5 h-3.5 text-blue-400" />
             One-click applications powered by AI
           </div>
-          <h1 className="text-5xl sm:text-6xl font-semibold leading-tight mb-6 tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-semibold leading-tight mb-4 tracking-tight">
             <span className="bg-gradient-to-r from-white via-white to-zinc-400 bg-clip-text text-transparent">
               Apply to your dream job
             </span>
@@ -59,22 +59,22 @@ export default async function HomePage() {
               in one click.
             </span>
           </h1>
-          <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p className="text-base text-zinc-400 max-w-2xl mx-auto mb-6 leading-relaxed">
             Fill your profile once. Apply everywhere instantly. AI tracks your applications
             and keeps you informed — no more spreadsheets.
           </p>
 
           {/* Sankey visualization */}
-          <div className="max-w-3xl mx-auto mb-10 bg-[#0a0a0a] border border-white/8 rounded-2xl p-6">
+          <div className="max-w-xl mx-auto mb-6 bg-[#0a0a0a] border border-white/8 rounded-xl p-3">
             <PipelineSankey mode={mode} data={sankeyData} />
           </div>
 
           {/* CTA for anonymous users */}
           {!session && (
-            <div className="flex items-center justify-center mb-6">
+            <div className="flex items-center justify-center mb-4">
               <Link
                 href="/auth/signin"
-                className="flex items-center gap-2 px-8 py-4 rounded-xl bg-white text-black font-semibold hover:bg-white/90 transition-colors text-base"
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-semibold hover:bg-white/90 transition-colors text-base"
               >
                 Get Started
                 <ArrowRight className="w-5 h-5" />
@@ -88,7 +88,7 @@ export default async function HomePage() {
       <JobSearchBlock />
 
       {/* Features */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-28">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {[
             {
@@ -112,9 +112,9 @@ export default async function HomePage() {
           ].map((feature) => (
             <div
               key={feature.title}
-              className="bg-[#0a0a0a] border border-white/8 rounded-2xl p-6 hover:border-white/15 transition-colors"
+              className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 hover:border-white/15 transition-colors"
             >
-              <div className={cn("relative w-9 h-9 rounded-lg flex items-center justify-center mb-4", feature.iconBg)}>
+              <div className={cn("relative w-8 h-8 rounded-lg flex items-center justify-center mb-2", feature.iconBg)}>
                 <div className={cn("absolute inset-0 rounded-lg blur-md opacity-60", feature.iconBg)} />
                 <div className="relative">{feature.icon}</div>
               </div>

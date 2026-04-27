@@ -43,7 +43,7 @@ export function JobSearchBlock() {
     <section
       role="search"
       aria-label="Search jobs"
-      className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-16"
+      className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-0 pb-6"
     >
       <form onSubmit={handleSubmit}>
         <div className="flex flex-col md:flex-row gap-3">

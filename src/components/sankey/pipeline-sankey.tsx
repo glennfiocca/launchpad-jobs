@@ -18,6 +18,11 @@ interface PipelineSankeyProps {
   mode: "live" | "demo";
   data: SankeyGraphData;
   className?: string;
+  chartWidth?: number;
+  chartHeight?: number;
+  margin?: { top: number; right: number; bottom: number; left: number };
+  nodePadding?: number;
+  hideCaption?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,7 +48,14 @@ const MARGIN = { top: 28, right: 100, bottom: 28, left: 100 };
 // Component
 // ---------------------------------------------------------------------------
 
-export function PipelineSankey({ mode, data, className }: PipelineSankeyProps) {
+export function PipelineSankey({
+  mode, data, className,
+  chartWidth = CHART_WIDTH,
+  chartHeight = CHART_HEIGHT,
+  margin = MARGIN,
+  nodePadding = NODE_PAD,
+  hideCaption = false,
+}: PipelineSankeyProps) {
   const prefersReducedMotion = useReducedMotion();
   const gradientIdBase = useId();
 
@@ -58,11 +70,11 @@ export function PipelineSankey({ mode, data, className }: PipelineSankeyProps) {
     const layout = d3Sankey<SankeyNode, SankeyLink>()
       .nodeId((d) => d.id)
       .nodeWidth(NODE_WIDTH)
-      .nodePadding(NODE_PAD)
+      .nodePadding(nodePadding)
       .nodeSort(null) // preserve our insertion order
       .extent([
-        [MARGIN.left, MARGIN.top],
-        [CHART_WIDTH - MARGIN.right, CHART_HEIGHT - MARGIN.bottom],
+        [margin.left, margin.top],
+        [chartWidth - margin.right, chartHeight - margin.bottom],
       ]);
 
     const graph = layout({
@@ -74,7 +86,7 @@ export function PipelineSankey({ mode, data, className }: PipelineSankeyProps) {
       nodes: graph.nodes as LayoutNode[],
       links: graph.links as LayoutLink[],
     };
-  }, [data]);
+  }, [data, chartWidth, chartHeight, margin, nodePadding]);
 
   const linkPathGen = sankeyLinkHorizontal();
 
@@ -112,25 +124,27 @@ export function PipelineSankey({ mode, data, className }: PipelineSankeyProps) {
   return (
     <div className={className}>
       {/* Caption */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium text-zinc-400">
-            {mode === "demo" ? "Sample Pipeline" : "Your Pipeline"}
-          </h2>
-          {mode === "demo" && (
-            <span className="text-[10px] uppercase tracking-wider text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full">
-              Illustrative
-            </span>
-          )}
+      {!hideCaption && (
+        <div className="flex items-center justify-between mb-1.5 px-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-medium text-zinc-400">
+              {mode === "demo" ? "Sample Pipeline" : "Your Pipeline"}
+            </h2>
+            {mode === "demo" && (
+              <span className="text-[10px] uppercase tracking-wider text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full">
+                Illustrative
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-zinc-600 tabular-nums">
+            {data.totalApplications} application{data.totalApplications !== 1 ? "s" : ""}
+          </span>
         </div>
-        <span className="text-xs text-zinc-600 tabular-nums">
-          {data.totalApplications} application{data.totalApplications !== 1 ? "s" : ""}
-        </span>
-      </div>
+      )}
 
       {/* SVG Chart */}
       <svg
-        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         className="w-full h-auto"
         role="img"
         aria-label={`Pipeline Sankey diagram showing ${data.totalApplications} applications across ${data.nodes.length} stages`}

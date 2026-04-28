@@ -88,6 +88,105 @@ async function isConfirmationPage(page: Page): Promise<boolean> {
   return SUCCESS_TEXT_PATTERN.test(body);
 }
 
+// ─── Navigation cascade ─────────────────────────────────────────────────────
+
+export interface NavigationResult {
+  found: boolean;
+  finalUrl?: string;
+  pathUsed: "direct" | "cta" | "embed";
+  reason?: "captcha" | "not_found";
+}
+
+export const FORM_ANCHOR_SELECTOR = 'input[name="first_name"], input[id="first_name"]';
+
+export async function navigateToApplicationForm(
+  page: Page,
+  boardToken: string,
+  jobId: string
+): Promise<NavigationResult> {
+  // ── Attempt A — Direct (detail page) ──────────────────────────────────────
+  const detailUrl = `https://job-boards.greenhouse.io/${boardToken}/jobs/${jobId}`;
+  console.log(`[playwright-apply] Attempt direct: ${detailUrl}`);
+  await page.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await page.waitForTimeout(1_500);
+  console.log(`[playwright-apply] Landed on: ${page.url()}`);
+
+  if (await hasCaptchaChallenge(page)) {
+    return { found: false, finalUrl: page.url(), pathUsed: "direct", reason: "captcha" };
+  }
+
+  try {
+    await page.waitForSelector(FORM_ANCHOR_SELECTOR, { timeout: 8_000 });
+    return { found: true, finalUrl: page.url(), pathUsed: "direct" };
+  } catch {
+    // Form not found on detail page — fall through to CTA attempt
+  }
+
+  // ── Attempt B — CTA click on detail page ──────────────────────────────────
+  console.log(`[playwright-apply] Attempt CTA on: ${page.url()}`);
+
+  const ctaSelectors = [
+    'a[href*="/embed/job_app"]',
+    'a[href*="gh_jid="]',
+    'a:has-text("Apply for this job")',
+    'a:has-text("Apply")',
+    'button:has-text("Apply for this job")',
+    'button:has-text("Apply")',
+    'a:has-text("Submit application")',
+    'button:has-text("Submit application")',
+  ];
+
+  for (const selector of ctaSelectors) {
+    const loc = page.locator(selector).first();
+    try {
+      if ((await loc.count()) > 0) {
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }).catch(() => {}),
+          loc.click(),
+        ]);
+        console.log(`[playwright-apply] Clicked CTA: ${selector}`);
+        await page.waitForTimeout(1_500);
+
+        if (await hasCaptchaChallenge(page)) {
+          return { found: false, finalUrl: page.url(), pathUsed: "cta", reason: "captcha" };
+        }
+
+        try {
+          await page.waitForSelector(FORM_ANCHOR_SELECTOR, { timeout: 10_000 });
+          return { found: true, finalUrl: page.url(), pathUsed: "cta" };
+        } catch {
+          // Form not found after CTA click — stop trying more CTAs
+          break;
+        }
+      }
+    } catch {
+      // Click itself threw — try next selector
+      continue;
+    }
+  }
+
+  // ── Attempt C — Direct embed URL ──────────────────────────────────────────
+  const embedUrl = `https://job-boards.greenhouse.io/embed/job_app?for=${boardToken}&token=${jobId}`;
+  console.log(`[playwright-apply] Attempt embed: ${embedUrl}`);
+  await page.goto(embedUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await page.waitForTimeout(1_500);
+  console.log(`[playwright-apply] Landed on: ${page.url()}`);
+
+  if (await hasCaptchaChallenge(page)) {
+    return { found: false, finalUrl: page.url(), pathUsed: "embed", reason: "captcha" };
+  }
+
+  try {
+    await page.waitForSelector(FORM_ANCHOR_SELECTOR, { timeout: 10_000 });
+    return { found: true, finalUrl: page.url(), pathUsed: "embed" };
+  } catch {
+    // All attempts exhausted
+  }
+
+  console.log(`[playwright-apply] Form not found after all attempts. Last URL: ${page.url()}`);
+  return { found: false, finalUrl: page.url(), pathUsed: "embed", reason: "not_found" };
+}
+
 // ─── Main apply function ──────────────────────────────────────────────────────
 
 /** Chromium flags tuned for containerised / headless Linux environments. */
@@ -180,20 +279,9 @@ export async function applyToGreenhouseJob(
     // Overall 60-second deadline per interaction
     context.setDefaultTimeout(60_000);
 
-    const url = manualApplyUrl;
-    console.log(`[playwright-apply] Navigating to ${url}`);
+    const navResult = await navigateToApplicationForm(page, boardToken, jobId);
 
-    // domcontentloaded is more reliable than networkidle on modern SPAs;
-    // we then wait explicitly for the form elements we need.
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-
-    // Brief stabilisation pause for SPA hydration
-    await page.waitForTimeout(1_500);
-
-    console.log(`[playwright-apply] Landed on: ${page.url()}`);
-
-    // ── CAPTCHA / bot-challenge guard ─────────────────────────────────────────
-    if (await hasCaptchaChallenge(page)) {
+    if (navResult.reason === "captcha") {
       console.warn("[playwright-apply] Bot challenge detected — failing closed");
       return {
         success: false,
@@ -205,29 +293,19 @@ export async function applyToGreenhouseJob(
       };
     }
 
-    // Wait for the application form to appear
-    try {
-      await page.waitForSelector(
-        'input[name="first_name"], input[id="first_name"]',
-        { timeout: 20_000 }
-      );
-    } catch {
-      // Re-check for CAPTCHA after slow load (sometimes challenges appear post-JS)
-      if (await hasCaptchaChallenge(page)) {
-        console.warn("[playwright-apply] Bot challenge detected after form wait");
-        return {
-          success: false,
-          errorCode: "CAPTCHA_REQUIRED",
-          error:
-            "Automation was blocked by a bot challenge on this job application. " +
-            "Please apply manually using the link below.",
-          manualApplyUrl,
-        };
-      }
-      throw new Error("Application form not found on the page within timeout");
+    if (!navResult.found) {
+      console.warn(`[playwright-apply] Form not found (pathUsed=${navResult.pathUsed})`);
+      return {
+        success: false,
+        errorCode: "FORM_NOT_FOUND",
+        error:
+          "Could not locate the application form after multiple attempts. " +
+          "Please apply manually using the link below.",
+        manualApplyUrl,
+      };
     }
 
-    console.log("[playwright-apply] Form detected — filling fields");
+    console.log(`[playwright-apply] Form detected via ${navResult.pathUsed} — filling fields`);
 
     // ── Fill basic fields ──────────────────────────────────────────────────────
     await page.fill(

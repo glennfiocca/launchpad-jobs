@@ -17,7 +17,7 @@ import type { UserProfile } from "@prisma/client";
 
 // Error codes that route to the operator queue instead of hard-failing
 const OPERATOR_QUEUE_CODES = new Set(
-  (process.env.OPERATOR_QUEUE_CODES ?? "CAPTCHA_REQUIRED,BROWSER_LAUNCH_FAILED,NO_CONFIRMATION").split(",")
+  (process.env.OPERATOR_QUEUE_CODES ?? "CAPTCHA_REQUIRED,BROWSER_LAUNCH_FAILED,NO_CONFIRMATION,FORM_NOT_FOUND").split(",")
 );
 
 interface ApplicationSnapshot {

@@ -180,14 +180,13 @@ function buildSnapshot(
   const coreFieldExtras: ApplicationSnapshot["coreFieldExtras"] = {};
   if (profile.preferredFirstName) coreFieldExtras.preferredFirstName = profile.preferredFirstName;
   if (countryRaw) coreFieldExtras.country = normalizeCountry(countryRaw);
-  if (profile.voluntaryGender || profile.voluntaryRace || profile.voluntaryVeteranStatus || profile.voluntaryDisability) {
-    coreFieldExtras.eeoc = {
-      ...(profile.voluntaryGender ? { gender: profile.voluntaryGender } : {}),
-      ...(profile.voluntaryRace ? { race: profile.voluntaryRace } : {}),
-      ...(profile.voluntaryVeteranStatus ? { veteranStatus: profile.voluntaryVeteranStatus } : {}),
-      ...(profile.voluntaryDisability ? { disability: profile.voluntaryDisability } : {}),
-    };
-  }
+  // Always emit eeoc so extension can attempt decline fallback even when all values are null
+  coreFieldExtras.eeoc = {
+    gender: profile.voluntaryGender ?? undefined,
+    race: profile.voluntaryRace ?? undefined,
+    veteranStatus: profile.voluntaryVeteranStatus ?? undefined,
+    disability: profile.voluntaryDisability ?? undefined,
+  };
 
   return {
     firstName: profile.firstName,

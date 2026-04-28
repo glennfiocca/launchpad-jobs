@@ -88,14 +88,14 @@ describe("autoAnswerQuestion — EEOC gender", () => {
     expect(autoAnswerQuestion(q, profile)).toEqual({ question_111: 102 });
   });
 
-  it("returns null when profile has no voluntaryGender", () => {
+  it("falls back to decline option when profile has no voluntaryGender", () => {
     const profile = makeProfile({ voluntaryGender: null });
-    expect(autoAnswerQuestion(q, profile)).toBeNull();
+    expect(autoAnswerQuestion(q, profile)).toEqual({ question_111: 103 });
   });
 
-  it("returns null when gender label has no match in field values", () => {
+  it("falls back to decline option when gender label has no match", () => {
     const profile = makeProfile({ voluntaryGender: "Non-binary" });
-    expect(autoAnswerQuestion(q, profile)).toBeNull();
+    expect(autoAnswerQuestion(q, profile)).toEqual({ question_111: 103 });
   });
 });
 
@@ -121,9 +121,20 @@ describe("autoAnswerQuestion — EEOC race/ethnicity", () => {
     expect(autoAnswerQuestion(qMulti, profile)).toEqual({ question_223: "201" });
   });
 
-  it("returns null when voluntaryRace is null", () => {
+  it("returns null when voluntaryRace is null and no decline option exists", () => {
     const profile = makeProfile({ voluntaryRace: null });
+    // qSingle has no decline option, so returns null
     expect(autoAnswerQuestion(qSingle, profile)).toBeNull();
+  });
+
+  it("falls back to decline for multi-select race when profile is null", () => {
+    const qMultiDecline = makeQuestion("Race / Ethnicity", "question_224", "multi_value_multi_select", [
+      { value: 201, label: "White" },
+      { value: 202, label: "Black or African American" },
+      { value: 208, label: "Decline To Self Identify" },
+    ]);
+    const profile = makeProfile({ voluntaryRace: null });
+    expect(autoAnswerQuestion(qMultiDecline, profile)).toEqual({ question_224: "208" });
   });
 });
 

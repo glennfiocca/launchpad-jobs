@@ -389,6 +389,39 @@ async function fillCheckboxGroup(fieldId, valueIds) {
   return checked > 0
 }
 
+// Decline-fallback helpers for EEOC demographics.
+// Canonical source: src/lib/greenhouse/demographic-matcher.ts — keep in sync.
+const DECLINE_PATTERNS = [
+  "decline to self identify",
+  "i dont wish to answer",
+  "i do not wish to answer",
+  "i do not want to answer",
+  "choose not to answer",
+  "prefer not to say",
+  "prefer not to answer",
+  "choose not to disclose",
+  "decline to identify",
+  "decline to state",
+]
+
+function normalizeDemogText(s) {
+  return s.toLowerCase().trim()
+    .replace(/[\u2018\u2019\u2032\u0060]/g, "'")
+    .replace(/[-/]/g, " ")
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+}
+
+function findDeclineOption(answerOptions) {
+  const matches = answerOptions.filter((opt) =>
+    DECLINE_PATTERNS.includes(normalizeDemogText(opt.name))
+  )
+  if (matches.length > 1) {
+    console.warn(`[pipeline-operator] Ambiguous: ${matches.length} decline options found: ${matches.map((m) => m.name).join(", ")}`)
+  }
+  return matches.length === 1 ? matches[0] : null
+}
+
 /**
  * Fill EEOC demographic questions from the Remix page context.
  * Reads window.__remixContext or embedded <script> JSON to get demographic_questions.
@@ -451,19 +484,34 @@ async function fillDemographics(eeoc) {
 
   for (const { profileKey, pattern } of eeocMap) {
     const profileLabel = eeoc[profileKey]
-    if (!profileLabel) continue
 
     const q = demogQuestions.find((dq) => pattern.test(dq.name ?? dq.question ?? ""))
     if (!q) continue
 
+    const answerOptions = q.answer_options ?? []
     const isMulti = q.answer_type?.key === "MULTI_SELECT"
-    const matchedOpt = q.answer_options?.find(
-      (opt) => opt.name.toLowerCase() === profileLabel.toLowerCase()
-    )
-    if (!matchedOpt) continue
+
+    // Tier 1: exact normalized match on profile value
+    let matchedOpt = profileLabel
+      ? answerOptions.find((opt) => normalizeDemogText(opt.name) === normalizeDemogText(profileLabel))
+      : null
+    let mode = matchedOpt ? "explicit_exact" : null
+
+    // Tier 2: decline fallback
+    if (!matchedOpt) {
+      matchedOpt = findDeclineOption(answerOptions)
+      mode = matchedOpt ? "decline_fallback" : "no_match"
+    }
+
+    if (!matchedOpt) {
+      console.warn(`[pipeline-operator] EEOC ${profileKey}: no_match — no decline option found`)
+      continue
+    }
+
+    console.log(`[pipeline-operator] EEOC ${profileKey}: mode=${mode} label="${matchedOpt.name}"`)
 
     const fieldId = String(q.id)
-    const syntheticSelectValues = (q.answer_options ?? []).map((o) => ({
+    const syntheticSelectValues = answerOptions.map((o) => ({
       value: o.id,
       label: o.name,
     }))

@@ -71,14 +71,18 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
         return
       }
       const { token } = json.data as { token: string }
-      const manualApplyUrl = snapshot?.manualApplyUrl
-      if (!manualApplyUrl) {
+      // Prefer the embed URL — it always renders the form directly, unlike the
+      // detail page which may require an extra click-through on some boards.
+      const boardToken = snapshot?.boardToken
+      const externalId = snapshot?.externalId
+      const greenhouseUrl = boardToken && externalId
+        ? `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(boardToken)}&token=${encodeURIComponent(externalId)}`
+        : snapshot?.manualApplyUrl
+      if (!greenhouseUrl) {
         setMsg("No Greenhouse URL in snapshot — cannot open prefilled form.")
         return
       }
-      // Open Greenhouse tab. The content script will message window.opener requesting
-      // the token once it loads — we reply with the signed fill package.
-      const tab = window.open(manualApplyUrl, "_blank")
+      const tab = window.open(greenhouseUrl, "_blank")
       if (!tab) {
         setMsg("Popup blocked — allow popups for this site and try again.")
         return

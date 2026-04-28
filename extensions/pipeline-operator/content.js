@@ -15,10 +15,19 @@
  */
 
 (function init() {
-  // Request token from the admin tab that opened this page
-  if (window.opener) {
-    window.opener.postMessage({ type: "PIPELINE_REQUEST_TOKEN" }, "*")
-  }
+  // Check for token persisted from a navigation cascade (CTA click or embed redirect)
+  chrome.storage.session.get(["pipelineFillToken", "pipelineFillExpiry"], (result) => {
+    if (result.pipelineFillToken && result.pipelineFillExpiry > Date.now()) {
+      chrome.storage.session.remove(["pipelineFillToken", "pipelineFillExpiry"])
+      fillFormFromToken(result.pipelineFillToken)
+      return
+    }
+
+    // Normal flow: request token from the admin tab that opened this page
+    if (window.opener) {
+      window.opener.postMessage({ type: "PIPELINE_REQUEST_TOKEN" }, "*")
+    }
+  })
 
   // Also accept direct messages (e.g. from background.js relay or re-trigger)
   window.addEventListener("message", (event) => {
@@ -534,6 +543,86 @@ function showBanner(message, type = "info") {
 }
 
 /**
+ * Attempt to navigate from a detail page to the actual application form.
+ * Tries clicking an Apply CTA first, then falls back to the embed URL.
+ * Persists the fill token in session storage so the re-injected content
+ * script on the new page can continue the fill.
+ *
+ * @param {string} token - The raw JWT string
+ * @param {object} snap  - The decoded snapshot from the JWT payload
+ * @returns {Promise<boolean>} true if a full-page navigation was triggered
+ *   (caller should return — new content script instance will resume)
+ */
+async function tryFormNavigation(token, snap) {
+  console.log("[Pipeline] Form not found — trying navigation cascade")
+
+  // ── Attempt 1: Click an Apply CTA on the current page ─────────────────────
+  // Check href-based selectors first (most reliable), then text-based
+  const ctaByHref = document.querySelector(
+    'a[href*="/embed/job_app"], a[href*="gh_jid="]'
+  )
+  if (ctaByHref) {
+    console.log("[Pipeline] Found CTA link:", ctaByHref.getAttribute("href"))
+    await chrome.storage.session.set({
+      pipelineFillToken: token,
+      pipelineFillExpiry: Date.now() + 120_000,
+    })
+    ctaByHref.click()
+    // Allow time for SPA transition or navigation
+    await new Promise((r) => setTimeout(r, 2000))
+    // If we're still on this page (SPA transition), return false so caller re-checks form
+    return false
+  }
+
+  // Text-based CTA search
+  const allClickables = document.querySelectorAll("a, button")
+  for (const el of allClickables) {
+    const text = (el.textContent ?? "").trim().toLowerCase()
+    if (
+      text === "apply" ||
+      text === "apply now" ||
+      text === "apply for this job" ||
+      text === "submit application"
+    ) {
+      console.log("[Pipeline] Found CTA button:", text)
+      await chrome.storage.session.set({
+        pipelineFillToken: token,
+        pipelineFillExpiry: Date.now() + 120_000,
+      })
+      el.click()
+      await new Promise((r) => setTimeout(r, 2000))
+      return false
+    }
+  }
+
+  // ── Attempt 2: Navigate directly to the embed URL ──────────────────────────
+  if (snap.boardToken && snap.externalId) {
+    const embedUrl =
+      "https://job-boards.greenhouse.io/embed/job_app?for=" +
+      encodeURIComponent(snap.boardToken) +
+      "&token=" +
+      encodeURIComponent(snap.externalId)
+
+    // Avoid infinite redirect if we're already on the embed page
+    if (window.location.href.includes("/embed/job_app")) {
+      console.log("[Pipeline] Already on embed page — no further navigation")
+      return false
+    }
+
+    console.log("[Pipeline] Navigating to embed URL:", embedUrl)
+    await chrome.storage.session.set({
+      pipelineFillToken: token,
+      pipelineFillExpiry: Date.now() + 120_000,
+    })
+    window.location.href = embedUrl
+    return true  // Full navigation — new content script will resume from storage
+  }
+
+  console.warn("[Pipeline] No boardToken/externalId in snapshot — cannot build embed URL")
+  return false
+}
+
+/**
  * Main fill routine.
  */
 async function fillFormFromToken(token) {
@@ -553,10 +642,30 @@ async function fillFormFromToken(token) {
   showBanner("Pre-filling form…", "info")
 
   // Wait for actual input fields to appear (SPA hydration)
-  await waitForElement(
+  let formEl = await waitForElement(
     "input[name='first_name'], input[id='first_name'], input[type='email']",
-    15000
+    8000
   )
+
+  // If form not found, try navigating to it (detail pages may not embed the form)
+  if (!formEl) {
+    const navigated = await tryFormNavigation(token, snap)
+    if (navigated) return  // New page will pick up the token from session storage
+    // Try one more time in case a CTA triggered a SPA transition
+    formEl = await waitForElement(
+      "input[name='first_name'], input[id='first_name'], input[type='email']",
+      5000
+    )
+  }
+
+  if (!formEl) {
+    showBanner(
+      "Could not detect form fields — fill manually or try refreshing.",
+      "error"
+    )
+    return
+  }
+
   await new Promise((r) => setTimeout(r, 400))
 
   let filled = 0

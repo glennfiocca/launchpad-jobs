@@ -192,6 +192,12 @@ async function fillReactSelect(fieldId, targetValue, selectValues) {
   // CSS.escape handles special chars like [] in field IDs (e.g. "question_65934102[]")
   let input = await waitForElement(`#${CSS.escape(fieldId)}`, 3000)
 
+  // Strategy 1b: if id matched a non-input element (container/div), find React-Select input inside it
+  if (input && !(input instanceof HTMLInputElement)) {
+    const inner = input.querySelector('input[role="combobox"], input.select__input, input[id*="select"]')
+    if (inner instanceof HTMLInputElement) input = inner
+  }
+
   // Strategy 2: aria-labelledby fallback (react-select inputs are labelled by <label id="fieldId-label">)
   if (!(input instanceof HTMLInputElement)) {
     input = document.querySelector(`input[aria-labelledby="${fieldId}-label"]`)
@@ -203,9 +209,36 @@ async function fillReactSelect(fieldId, targetValue, selectValues) {
     input = document.querySelector(`input[id^="question_${numericId}"]`)
   }
 
+  // Strategy 4: find by input name attribute (EEOC fields use name="gender", "race", etc.)
+  if (!(input instanceof HTMLInputElement)) {
+    const named = document.querySelector(`input[name="${CSS.escape(fieldId)}"], select[name="${CSS.escape(fieldId)}"]`)
+    if (named) {
+      if (named instanceof HTMLInputElement) {
+        input = named
+      } else {
+        // Found a <select> or hidden input — find the React-Select input in the same field wrapper
+        const wrapper = named.closest('fieldset') ?? named.closest('[class*="field"]') ?? named.parentElement
+        const rsInput = wrapper?.querySelector('input[role="combobox"], input.select__input')
+        if (rsInput instanceof HTMLInputElement) input = rsInput
+      }
+    }
+  }
+
+  // Strategy 5: find label matching fieldId and locate React-Select input in same container
+  if (!(input instanceof HTMLInputElement)) {
+    for (const label of document.querySelectorAll('label')) {
+      const lid = label.getAttribute('id') ?? ''
+      if (lid === fieldId || lid === `${fieldId}-label` || lid === `${fieldId}_label`) {
+        const wrapper = label.closest('fieldset') ?? label.closest('[class*="field"]') ?? label.parentElement
+        const rsInput = wrapper?.querySelector('input[role="combobox"], input.select__input, input[id*="select"]')
+        if (rsInput instanceof HTMLInputElement) { input = rsInput; break }
+      }
+    }
+  }
+
   if (!(input instanceof HTMLInputElement)) {
     // Log candidates to help diagnose id mismatches
-    const candidates = Array.from(document.querySelectorAll('input[id^="question_"]')).map(el => el.id)
+    const candidates = Array.from(document.querySelectorAll('input[role="combobox"], input[id^="question_"]')).map(el => el.id)
     console.warn(`[pipeline-operator] fillReactSelect: input#${fieldId} not found. Candidates:`, candidates)
     return false
   }
@@ -423,6 +456,141 @@ function findDeclineOption(answerOptions) {
 }
 
 /**
+ * Find a React-Select input by searching for a label element containing the given text.
+ * Walks up from the label to find the field container, then searches for the React-Select input.
+ * @param {string} labelText
+ * @returns {HTMLInputElement|null}
+ */
+function findReactSelectByLabelText(labelText) {
+  const normalizedTarget = labelText.toLowerCase().trim()
+  for (const label of document.querySelectorAll("label, legend, h3, .field-label")) {
+    const text = (label.textContent ?? "").toLowerCase().trim()
+    if (!text.includes(normalizedTarget) && !normalizedTarget.includes(text)) continue
+    // Walk up to find the field container
+    const wrapper =
+      label.closest("fieldset") ??
+      label.closest('[class*="field"]') ??
+      label.closest('[class*="eeoc"]') ??
+      label.parentElement
+    if (!wrapper) continue
+    const rsInput = wrapper.querySelector(
+      'input[role="combobox"], input.select__input, input[class*="select__input"]'
+    )
+    if (rsInput instanceof HTMLInputElement) return rsInput
+  }
+  return null
+}
+
+/**
+ * Fill a React-Select starting from a known input element (bypasses field-id lookup).
+ * Mirrors fillReactSelect logic but skips the input-finding phase.
+ * @param {HTMLInputElement} input
+ * @param {string} targetValue
+ * @param {string} targetLabel
+ * @param {Array<{value: string|number, label: string}>|null} selectValues
+ * @returns {Promise<boolean>}
+ */
+async function fillReactSelectFromInput(input, targetValue, targetLabel, selectValues) {
+  const control = input.closest(".select__control") ?? input.parentElement?.closest("[class*='select']")
+  if (!control) {
+    console.warn("[pipeline-operator] fillReactSelectFromInput: control not found")
+    return false
+  }
+
+  const openMenu = async () => {
+    if (input.getAttribute("aria-expanded") === "true") return
+    const toggleBtn = control.querySelector("button[aria-label='Toggle flyout']")
+    await cdpClick(toggleBtn ?? control)
+  }
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await openMenu()
+    const opened = await waitForCondition(() => input.getAttribute("aria-expanded") === "true", 5000)
+    if (opened) break
+    if (attempt === 1) {
+      console.warn("[pipeline-operator] fillReactSelectFromInput: dropdown did not open")
+      return false
+    }
+  }
+
+  let menu = null
+  const ariaControls = input.getAttribute("aria-controls")
+  if (ariaControls) menu = document.getElementById(ariaControls)
+  if (!menu) {
+    const allMenus = document.querySelectorAll(".select__menu, [role='listbox']")
+    for (const m of allMenus) {
+      if (m instanceof HTMLElement && m.offsetParent !== null) { menu = m; break }
+    }
+  }
+  if (!menu) {
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return false
+  }
+
+  await waitForCondition(() => menu.querySelectorAll(".select__option, [role='option']").length > 0, 3000)
+
+  const normalize = (s) => s.trim().replace(/\s+/g, " ").toLowerCase()
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  const strTarget = String(targetValue)
+  const resolvedLabel = selectValues?.find((v) => String(v.value) === strTarget)?.label ?? targetLabel
+  const normTarget = normalize(resolvedLabel)
+
+  const options = menu.querySelectorAll(".select__option, [role='option']")
+  let found = false
+  for (const opt of options) {
+    const optDataVal = opt.getAttribute("data-value") ?? ""
+    const optText = normalize(opt.textContent ?? "")
+    if (optDataVal === strTarget || optText === normTarget) {
+      opt.scrollIntoView({ block: "nearest" })
+      await new Promise((r) => setTimeout(r, 40))
+      await cdpClick(opt)
+      found = true
+      break
+    }
+  }
+  if (!found) {
+    const subMatches = Array.from(options).filter((opt) => {
+      const t = normalize(opt.textContent ?? "")
+      return t.includes(normTarget) || normTarget.includes(t)
+    })
+    if (subMatches.length === 1) {
+      subMatches[0].scrollIntoView({ block: "nearest" })
+      await new Promise((r) => setTimeout(r, 40))
+      await cdpClick(subMatches[0])
+      found = true
+    }
+  }
+
+  if (!found) {
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  }
+  await new Promise((r) => setTimeout(r, 150))
+  return found
+}
+
+/**
+ * Flatten Greenhouse eeoc_sections into the normalized shape expected by fillDemographics.
+ * Input:  [{ questions: [{ label, fields: [{ name, type, values: [{ label, value }] }] }] }]
+ * Output: [{ id: fieldName, name: questionLabel, answer_type, answer_options: [{ id, name }] }]
+ */
+function flattenEeocSections(sections) {
+  const result = []
+  for (const section of sections) {
+    for (const question of section.questions ?? []) {
+      for (const field of question.fields ?? []) {
+        result.push({
+          id: field.name,
+          name: question.label,
+          answer_type: { key: field.type === "multi_value_multi_select" ? "MULTI_SELECT" : "SINGLE_SELECT" },
+          answer_options: (field.values ?? []).map((v) => ({ id: v.value, name: v.label })),
+        })
+      }
+    }
+  }
+  return result
+}
+
+/**
  * Fill EEOC demographic questions from the Remix page context.
  * Reads window.__remixContext or embedded <script> JSON to get demographic_questions.
  *
@@ -446,6 +614,9 @@ async function fillDemographics(eeoc) {
         // nested under jobPost
         const nested = d.jobPost?.demographicQuestions ?? d.jobPost?.demographic_questions
         if (nested) { demogQuestions = nested.questions ?? (Array.isArray(nested) ? nested : []); break; }
+        // eeoc_sections: Greenhouse standard EEOC format (sections > questions > fields)
+        const eeocSections = d.jobPost?.eeoc_sections ?? d.jobPost?.eeocSections
+        if (eeocSections?.length) { demogQuestions = flattenEeocSections(eeocSections); break; }
       }
     }
 
@@ -462,6 +633,8 @@ async function fillDemographics(eeoc) {
           const qs = d.demographicQuestions?.questions ?? d.demographic_questions?.questions ??
             d.jobPost?.demographicQuestions?.questions ?? d.jobPost?.demographic_questions?.questions
           if (qs?.length) { demogQuestions = qs; break; }
+          const eeocSec = d.jobPost?.eeoc_sections ?? d.jobPost?.eeocSections
+          if (eeocSec?.length) { demogQuestions = flattenEeocSections(eeocSec); break; }
         }
       }
     }
@@ -474,6 +647,14 @@ async function fillDemographics(eeoc) {
   }
 
   if (!demogQuestions.length) return
+
+  // Scroll EEOC section into view so late-mounting React-Select components render
+  const eeocSection = document.querySelector('[class*="eeoc"], [class*="demographic"], [data-section="eeoc"]')
+    ?? document.querySelector('fieldset:last-of-type')
+  if (eeocSection) {
+    eeocSection.scrollIntoView({ block: "center", behavior: "instant" })
+    await new Promise((r) => setTimeout(r, 300))
+  }
 
   const eeocMap = [
     { profileKey: "gender", pattern: /gender/i },
@@ -516,11 +697,26 @@ async function fillDemographics(eeoc) {
       label: o.name,
     }))
 
+    let ok
     if (isMulti) {
-      await fillReactMultiSelect(fieldId, [String(matchedOpt.id)], syntheticSelectValues)
+      ok = await fillReactMultiSelect(fieldId, [String(matchedOpt.id)], syntheticSelectValues)
     } else {
-      await fillReactSelect(fieldId, String(matchedOpt.id), syntheticSelectValues)
+      ok = await fillReactSelect(fieldId, String(matchedOpt.id), syntheticSelectValues)
     }
+
+    // Last resort: find the React-Select by question label text (EEOC fields may lack standard IDs)
+    if (!ok && q.name) {
+      console.log(`[pipeline-operator] EEOC ${profileKey}: retrying via label text "${q.name}"`)
+      const rsInput = findReactSelectByLabelText(q.name)
+      if (rsInput) {
+        ok = await fillReactSelectFromInput(rsInput, String(matchedOpt.id), matchedOpt.name, syntheticSelectValues)
+      }
+    }
+
+    if (!ok) {
+      console.warn(`[pipeline-operator] EEOC ${profileKey}: could not fill — field not found in DOM`)
+    }
+
     await new Promise((r) => setTimeout(r, 200))
   }
 }

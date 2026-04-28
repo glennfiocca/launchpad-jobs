@@ -82,14 +82,16 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
         setMsg("No Greenhouse URL in snapshot — cannot open prefilled form.")
         return
       }
-      const tab = window.open(greenhouseUrl, "_blank")
+      // Pass the token in the URL hash — avoids unreliable cross-origin
+      // window.opener postMessage. Hash is never sent to Greenhouse's server.
+      const fillUrl = `${greenhouseUrl}#pipelineFill=${encodeURIComponent(token)}`
+      const tab = window.open(fillUrl, "_blank")
       if (!tab) {
         setMsg("Popup blocked — allow popups for this site and try again.")
         return
       }
 
-      // Listen for the content script's token request. It sends PIPELINE_REQUEST_TOKEN
-      // once the Greenhouse page has loaded and the extension is active.
+      // Keep postMessage as a fallback for manual extension usage
       const handleMessage = (event: MessageEvent) => {
         if (event.data?.type === "PIPELINE_REQUEST_TOKEN") {
           event.source?.postMessage({ type: "PIPELINE_FILL", token }, { targetOrigin: "*" })
@@ -97,8 +99,6 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
         }
       }
       window.addEventListener("message", handleMessage)
-
-      // Clean up listener after 2 minutes regardless
       setTimeout(() => window.removeEventListener("message", handleMessage), 120_000)
 
       setMsg("Greenhouse tab opened — extension will pre-fill once the page loads.")

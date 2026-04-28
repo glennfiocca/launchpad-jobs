@@ -15,7 +15,17 @@
  */
 
 (function init() {
-  // Check for token persisted from a navigation cascade (CTA click or embed redirect)
+  // Priority 1: Token in URL hash (most reliable — set by admin page, no cross-origin dependency)
+  const hashParams = new URLSearchParams(window.location.hash.slice(1))
+  const hashToken = hashParams.get("pipelineFill")
+  if (hashToken) {
+    // Clean the token from the URL bar immediately
+    window.history.replaceState(null, "", window.location.pathname + window.location.search)
+    fillFormFromToken(hashToken)
+    return
+  }
+
+  // Priority 2: Token persisted from a navigation cascade (CTA click or embed redirect)
   chrome.storage.session.get(["pipelineFillToken", "pipelineFillExpiry"], (result) => {
     if (result.pipelineFillToken && result.pipelineFillExpiry > Date.now()) {
       chrome.storage.session.remove(["pipelineFillToken", "pipelineFillExpiry"])
@@ -23,7 +33,7 @@
       return
     }
 
-    // Normal flow: request token from the admin tab that opened this page
+    // Priority 3: Request token from the admin tab via postMessage (legacy fallback)
     if (window.opener) {
       window.opener.postMessage({ type: "PIPELINE_REQUEST_TOKEN" }, "*")
     }

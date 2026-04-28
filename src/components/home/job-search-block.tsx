@@ -12,16 +12,25 @@ export function JobSearchBlock() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [locationDisplay, setLocationDisplay] = useState("");
+  const [freeLocationText, setFreeLocationText] = useState("");
 
   const handleLocationSelect = useCallback((c: string, s: string) => {
     setCity(c);
     setState(s);
+    setFreeLocationText("");
     setLocationDisplay(c && s ? `${c}, ${s}` : c || s);
+  }, []);
+
+  const handleLocationFreeText = useCallback((text: string) => {
+    setFreeLocationText(text);
+    setCity("");
+    setState("");
   }, []);
 
   const handleLocationClear = useCallback(() => {
     setCity("");
     setState("");
+    setFreeLocationText("");
     setLocationDisplay("");
   }, []);
 
@@ -31,12 +40,17 @@ export function JobSearchBlock() {
       const params = new URLSearchParams();
       const trimmed = query.trim();
       if (trimmed) params.set("q", trimmed);
-      if (city) params.set("city", city);
-      if (state) params.set("state", state);
+      if (city) {
+        params.set("city", city);
+        if (state) params.set("state", state);
+      } else if (freeLocationText) {
+        // User typed location text without selecting a suggestion — use legacy filter
+        params.set("location", freeLocationText);
+      }
       const qs = params.toString();
       router.push(qs ? `/jobs?${qs}` : "/jobs");
     },
-    [query, city, state, router],
+    [query, city, state, freeLocationText, router],
   );
 
   return (
@@ -69,6 +83,7 @@ export function JobSearchBlock() {
             <CityStateCombobox
               value={locationDisplay}
               onSelect={handleLocationSelect}
+              onFreeText={handleLocationFreeText}
               onClear={handleLocationClear}
               placeholder="City, State"
               size="lg"

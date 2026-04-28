@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobsQuerySchema, datePostedToCutoff } from "@/lib/validations/jobs";
 import { buildFacets } from "@/lib/job-facets";
+import { buildRelevanceOrder, buildBlendedRelevanceOrder } from "@/lib/job-relevance";
+import type { RelevanceProfile } from "@/lib/job-relevance";
 import type { ApiResponse, JobWithCompany } from "@/types";
 
 export async function GET(request: Request) {
@@ -44,6 +48,30 @@ export async function GET(request: Request) {
   const skip = (page - 1) * limit;
   const isFirstPage = page === 1;
   const dateCutoff = datePostedToCutoff(datePosted);
+
+  // Fetch user profile for relevance scoring
+  let relevanceProfile: RelevanceProfile | null = null;
+  if (sort === "relevance") {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.id) {
+      const profile = await db.userProfile.findUnique({
+        where: { userId: session.user.id },
+        select: {
+          locationCity: true,
+          locationState: true,
+          openToRemote: true,
+          openToOnsite: true,
+          currentTitle: true,
+          fieldOfStudy: true,
+          desiredSalaryMin: true,
+          desiredSalaryMax: true,
+        },
+      });
+      if (profile) {
+        relevanceProfile = profile;
+      }
+    }
+  }
 
   // Build location where clause: structured city takes priority over legacy location param
   const locationWhere: Prisma.JobWhereInput = useStructuredLocation
@@ -107,7 +135,9 @@ export async function GET(request: Request) {
 
     const whereClause = Prisma.join(conditions, " AND ");
     const orderClause =
-      sort === "relevance"
+      sort === "relevance" && relevanceProfile
+        ? buildBlendedRelevanceOrder(query, relevanceProfile)
+        : sort === "relevance"
         ? Prisma.sql`ts_rank(j."searchVector", plainto_tsquery('english', ${query})) DESC`
         : Prisma.sql`j."postedAt" DESC NULLS LAST`;
 
@@ -160,7 +190,67 @@ export async function GET(request: Request) {
     });
   }
 
-  // Non-FTS path: pure Prisma with composite indexes
+  // Non-FTS relevance path: profile-based scoring via raw SQL
+  if (sort === "relevance" && relevanceProfile) {
+    const relevanceOrder = buildRelevanceOrder(relevanceProfile);
+
+    const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];
+    if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
+    if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
+    if (dateCutoff) conditions.push(Prisma.sql`j."postedAt" >= ${dateCutoff}`);
+    if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
+    if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
+    if (useStructuredLocation && locationCity) {
+      conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + locationCity + "%"})`);
+      if (locationState) {
+        conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + locationState + "%"})`);
+      }
+    } else if (effectiveLocation) {
+      conditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + effectiveLocation + "%"})`);
+    }
+    if (department) {
+      conditions.push(Prisma.sql`LOWER(j."department") LIKE LOWER(${"%" + department + "%"})`);
+    }
+    if (company) {
+      conditions.push(
+        Prisma.sql`j."companyId" IN (SELECT id FROM "Company" WHERE LOWER(name) LIKE LOWER(${"%" + company + "%"}))`
+      );
+    }
+
+    const whereClause = Prisma.join(conditions, " AND ");
+
+    const [rawIds, countRows, facetData] = await Promise.all([
+      db.$queryRaw<Array<{ id: string }>>`
+        SELECT j.id FROM "Job" j WHERE ${whereClause} ORDER BY ${relevanceOrder} LIMIT ${limit} OFFSET ${skip}
+      `,
+      db.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count FROM "Job" j WHERE ${whereClause}
+      `,
+      isFirstPage ? buildFacets(structuralWhere) : Promise.resolve(null),
+    ]);
+
+    const ids = rawIds.map((r) => r.id);
+    const total = Number(countRows[0]?.count ?? 0);
+    const jobs =
+      ids.length > 0
+        ? await db.job.findMany({
+            where: { id: { in: ids } },
+            include: { company: true, _count: { select: { applications: true } } },
+          })
+        : [];
+
+    // Preserve score order
+    const idIndex = new Map(ids.map((id, i) => [id, i]));
+    jobs.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
+
+    return NextResponse.json<ApiResponse<JobWithCompany[]>>({
+      success: true,
+      data: jobs as JobWithCompany[],
+      meta: { total, page, limit, ...(facetData && { facets: facetData }) },
+    });
+  }
+
+  // Non-FTS path: pure Prisma with composite indexes (newest sort or unauthenticated fallback)
   const [total, jobs, facets] = await Promise.all([
     db.job.count({ where: structuralWhere }),
     db.job.findMany({

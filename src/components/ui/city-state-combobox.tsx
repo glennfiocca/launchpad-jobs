@@ -10,6 +10,8 @@ interface CityStateComboboxProps {
   value: string;
   onSelect: (city: string, state: string) => void;
   onClear: () => void;
+  /** Called on blur when user typed text without selecting a suggestion */
+  onFreeText?: (text: string) => void;
   placeholder?: string;
   className?: string;
   /** Input sizing — "sm" (default, filter bar) or "lg" (hero search) */
@@ -20,6 +22,7 @@ export function CityStateCombobox({
   value,
   onSelect,
   onClear,
+  onFreeText,
   placeholder = "City, State",
   className,
   size = "sm",
@@ -30,6 +33,8 @@ export function CityStateCombobox({
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track whether the current input came from selecting a suggestion vs typing
+  const didSelectRef = useRef(!!value);
 
   // Sync display when external value changes (e.g. clear)
   useEffect(() => {
@@ -62,6 +67,7 @@ export function CityStateCombobox({
   const handleInput = useCallback(
     (val: string) => {
       setInput(val);
+      didSelectRef.current = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => fetchSuggestions(val), 300);
     },
@@ -73,6 +79,7 @@ export function CityStateCombobox({
       setInput(suggestion.description);
       setOpen(false);
       setSuggestions([]);
+      didSelectRef.current = true;
       try {
         const res = await fetch(
           `/api/places/details?placeId=${encodeURIComponent(suggestion.placeId)}&mode=jobs`
@@ -94,10 +101,18 @@ export function CityStateCombobox({
     [onSelect]
   );
 
+  const handleBlur = useCallback(() => {
+    const trimmed = input.trim();
+    if (!didSelectRef.current && trimmed && onFreeText) {
+      onFreeText(trimmed);
+    }
+  }, [input, onFreeText]);
+
   const handleClear = useCallback(() => {
     setInput("");
     setSuggestions([]);
     setOpen(false);
+    didSelectRef.current = false;
     onClear();
   }, [onClear]);
 
@@ -124,6 +139,7 @@ export function CityStateCombobox({
             type="text"
             value={input}
             onChange={(e) => handleInput(e.target.value)}
+            onBlur={handleBlur}
             placeholder={placeholder}
             className={inputClass}
             autoComplete="off"

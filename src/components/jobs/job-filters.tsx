@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Search, Building2, Filter, X, ArrowUpDown } from "lucide-react";
 import { DatePostedChips } from "./filters/date-posted-chips";
-import { SalaryRangeSlider } from "./filters/salary-range-slider";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
 import {
@@ -71,9 +70,8 @@ export function JobFilters({ facets }: JobFiltersProps) {
     [updateFilters]
   );
 
-  const handleSalary = useCallback(
-    (min: number | undefined, max: number | undefined) =>
-      updateFilters({ salaryMin: min, salaryMax: max }),
+  const handleDepartment = useCallback(
+    (value: string) => updateFilters({ department: value || undefined }),
     [updateFilters]
   );
 
@@ -113,6 +111,9 @@ export function JobFilters({ facets }: JobFiltersProps) {
           value={locationDisplay}
           onSelect={(city, state) =>
             updateFilters({ locationCity: city, locationState: state, location: undefined })
+          }
+          onFreeText={(text) =>
+            updateFilters({ location: text, locationCity: undefined, locationState: undefined })
           }
           onClear={() =>
             updateFilters({ locationCity: undefined, locationState: undefined, location: undefined })
@@ -184,7 +185,7 @@ export function JobFilters({ facets }: JobFiltersProps) {
         </div>
       </div>
 
-      {/* Expandable: Employment type + Salary */}
+      {/* Expandable: Employment type + Department */}
       {showMore && (
         <div className="pt-3 border-t border-white/8 space-y-4">
           {/* Employment type checkboxes */}
@@ -224,17 +225,26 @@ export function JobFilters({ facets }: JobFiltersProps) {
             </div>
           </div>
 
-          {/* Salary range */}
-          <div>
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
-              Base salary
-            </p>
-            <SalaryRangeSlider
-              min={filters.salaryMin}
-              max={filters.salaryMax}
-              onChange={handleSalary}
-            />
-          </div>
+          {/* Department */}
+          {facets && facets.departments.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                Department
+              </p>
+              <select
+                value={filters.department ?? ""}
+                onChange={(e) => handleDepartment(e.target.value)}
+                className="w-full py-2.5 px-3 text-sm rounded-xl border border-white/10 bg-black text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer"
+              >
+                <option value="">All departments</option>
+                {facets.departments.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.value} ({d.count.toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
     </div>

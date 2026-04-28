@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bookmark } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
@@ -29,6 +29,12 @@ export function SaveButton({
   const { data: session } = useSession();
   const [saved, setSaved] = useState(initialSaved);
   const [pending, setPending] = useState(false);
+
+  // Sync internal state when the parent's source of truth changes
+  // (e.g., after navigating back and savedJobIds is repopulated from the API)
+  useEffect(() => {
+    setSaved(initialSaved);
+  }, [initialSaved]);
 
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();

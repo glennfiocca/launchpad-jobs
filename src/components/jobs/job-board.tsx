@@ -71,7 +71,9 @@ export function JobBoard() {
 
       const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
       if (f.query) params.set("query", f.query);
-      if (f.location) params.set("location", f.location);
+      if (f.locationCity) params.set("locationCity", f.locationCity);
+      if (f.locationState) params.set("locationState", f.locationState);
+      if (!f.locationCity && f.location) params.set("location", f.location);
       if (f.department) params.set("department", f.department);
       if (f.company) params.set("company", f.company);
       if (f.remote) params.set("remote", "true");
@@ -86,16 +88,20 @@ export function JobBoard() {
         const res = await fetch(`/api/jobs?${params}`);
         const data: ApiResponse<JobWithCompany[]> = await res.json();
         if (data.success && data.data) {
+          const newTotal = data.meta?.total ?? 0;
           if (replace) {
             setJobs(data.data);
             hasAnimatedRef.current = false;
+            hasMoreRef.current = data.data.length < newTotal;
           } else {
             setJobs((prev) => {
               const existingIds = new Set(prev.map((j) => j.id));
-              return [...prev, ...data.data!.filter((j) => !existingIds.has(j.id))];
+              const merged = [...prev, ...data.data!.filter((j) => !existingIds.has(j.id))];
+              hasMoreRef.current = merged.length < newTotal;
+              return merged;
             });
           }
-          setTotal(data.meta?.total ?? 0);
+          setTotal(newTotal);
           if (data.meta?.facets) setFacets(data.meta.facets);
         }
       } catch {

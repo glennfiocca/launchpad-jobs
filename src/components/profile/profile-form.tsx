@@ -237,7 +237,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           </div>
         </div>
         <div>
-          <label className={labelClass}>Location</label>
+          <label className={labelClass}>Address</label>
           <AddressCombobox
             value={form.location}
             onChange={(display) => set("location", display)}

@@ -189,7 +189,8 @@ function waitForCondition(condition, timeoutMs = 5000) {
 
 async function fillReactSelect(fieldId, targetValue, selectValues) {
   // Strategy 1: wait for exact id match (up to 3 s for late-mounting sections)
-  let input = await waitForElement(`#${fieldId}`, 3000)
+  // CSS.escape handles special chars like [] in field IDs (e.g. "question_65934102[]")
+  let input = await waitForElement(`#${CSS.escape(fieldId)}`, 3000)
 
   // Strategy 2: aria-labelledby fallback (react-select inputs are labelled by <label id="fieldId-label">)
   if (!(input instanceof HTMLInputElement)) {
@@ -221,6 +222,8 @@ async function fillReactSelect(fieldId, targetValue, selectValues) {
   }
 
   const openMenu = async () => {
+    // Skip if menu is already open (multi-select keeps menu open between selections)
+    if (input.getAttribute("aria-expanded") === "true") return
     const toggleBtn = control.querySelector("button[aria-label='Toggle flyout']")
     await cdpClick(toggleBtn ?? control)
   }
@@ -513,8 +516,13 @@ async function attachResume(input, presignedUrl, fileName) {
 async function waitForElement(selector, timeoutMs = 3000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    const el = document.querySelector(selector)
-    if (el) return el
+    try {
+      const el = document.querySelector(selector)
+      if (el) return el
+    } catch {
+      // Invalid selector (e.g. unescaped special chars) — return null instead of throwing
+      return null
+    }
     await new Promise(r => setTimeout(r, 100))
   }
   return null
@@ -776,49 +784,55 @@ async function fillFormFromToken(token) {
       const answer = snap.questionAnswers?.[meta.fieldName]
       if (!answer) continue
 
-      // Scroll section into view so late-mounting fields are present in the DOM
-      const fieldEl = document.getElementById(meta.fieldName)
-      if (fieldEl) {
-        fieldEl.scrollIntoView({ block: 'center', behavior: 'instant' })
-        await new Promise(r => setTimeout(r, 80))
-      }
-
-      if (meta.fieldType === "multi_value_single_select") {
-        const ok = await fillReactSelect(meta.fieldName, answer, meta.selectValues)
-        if (ok) {
-          filled++
-        } else {
-          missingFields.push(meta.label)
+      try {
+        // Scroll section into view so late-mounting fields are present in the DOM
+        const fieldEl = document.getElementById(meta.fieldName)
+        if (fieldEl) {
+          fieldEl.scrollIntoView({ block: 'center', behavior: 'instant' })
+          await new Promise(r => setTimeout(r, 80))
         }
-        continue
-      }
 
-      if (meta.fieldType === "multi_value_multi_select") {
-        const ids = String(answer).split(",").map((s) => s.trim()).filter(Boolean)
-        const ok = isCheckboxGroup(meta.fieldName)
-          ? await fillCheckboxGroup(meta.fieldName, ids)
-          : await fillReactMultiSelect(meta.fieldName, ids, meta.selectValues)
-        if (ok) {
-          filled++
-        } else {
-          missingFields.push(meta.label)
+        if (meta.fieldType === "multi_value_single_select") {
+          const ok = await fillReactSelect(meta.fieldName, answer, meta.selectValues)
+          if (ok) {
+            filled++
+          } else {
+            missingFields.push(meta.label)
+          }
+          continue
         }
-        continue
-      }
 
-      // text / textarea: try id selector first, fall back to label text
-      let field = document.getElementById(meta.fieldName)
-      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
-        field = document.querySelector(
-          `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"]`
-        )
-      }
-      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
-        field = findFieldByLabel(meta.label)
-      }
-      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
-        nativeSet(field, answer)
-        filled++
+        if (meta.fieldType === "multi_value_multi_select") {
+          const ids = String(answer).split(",").map((s) => s.trim()).filter(Boolean)
+          const ok = isCheckboxGroup(meta.fieldName)
+            ? await fillCheckboxGroup(meta.fieldName, ids)
+            : await fillReactMultiSelect(meta.fieldName, ids, meta.selectValues)
+          if (ok) {
+            filled++
+          } else {
+            missingFields.push(meta.label)
+          }
+          continue
+        }
+
+        // text / textarea: try id selector first, fall back to label text
+        let field = document.getElementById(meta.fieldName)
+        if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
+          field = document.querySelector(
+            `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"]`
+          )
+        }
+        if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
+          field = findFieldByLabel(meta.label)
+        }
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+          nativeSet(field, answer)
+          filled++
+        }
+      } catch (err) {
+        // Isolate failures — one broken field must not block remaining fields
+        console.error(`[pipeline-operator] Error filling field "${meta.fieldName}":`, err)
+        missingFields.push(meta.label)
       }
     }
   }

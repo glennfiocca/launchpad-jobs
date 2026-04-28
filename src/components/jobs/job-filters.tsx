@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Search, Building2, Filter, X, ArrowUpDown } from "lucide-react";
 import { DatePostedChips } from "./filters/date-posted-chips";
 import { useJobFilters } from "@/hooks/use-job-filters";
+import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
 import {
   EMPLOYMENT_TYPE_OPTIONS,
@@ -15,6 +16,8 @@ interface JobFiltersProps {
   facets?: JobFacets;
 }
 
+const DEBOUNCE_MS = 400;
+
 const INPUT_CLASS =
   "w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white " +
   "placeholder:text-zinc-600 transition-all duration-200 focus:outline-none " +
@@ -24,23 +27,17 @@ export function JobFilters({ facets }: JobFiltersProps) {
   const { filters, updateFilters, clearFilters, hasFilters } = useJobFilters();
   const [showMore, setShowMore] = useState(false);
 
-  // Local text state for 150ms debounce — avoids re-fetching on every keystroke
+  // Local text state — provides instant UI feedback while debouncing API calls
   const [localQuery, setLocalQuery] = useState(filters.query ?? "");
   const [localCompany, setLocalCompany] = useState(filters.company ?? "");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local text state when URL changes externally (back/forward nav, clear)
   useEffect(() => { setLocalQuery(filters.query ?? ""); }, [filters.query]);
   useEffect(() => { setLocalCompany(filters.company ?? ""); }, [filters.company]);
 
-  const scheduleUpdate = useCallback(
-    (field: "query" | "company", value: string) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        updateFilters({ [field]: value || undefined });
-      }, 150);
-    },
-    [updateFilters]
+  const debouncedUpdate = useDebouncedCallback(
+    (patch: Parameters<typeof updateFilters>[0]) => updateFilters(patch),
+    DEBOUNCE_MS
   );
 
   // Derived display value for the city/state combobox
@@ -87,7 +84,7 @@ export function JobFilters({ facets }: JobFiltersProps) {
             value={localQuery}
             onChange={(e) => {
               setLocalQuery(e.target.value);
-              scheduleUpdate("query", e.target.value);
+              debouncedUpdate({ query: e.target.value || undefined });
             }}
             className={INPUT_CLASS}
           />
@@ -128,7 +125,7 @@ export function JobFilters({ facets }: JobFiltersProps) {
             value={localCompany}
             onChange={(e) => {
               setLocalCompany(e.target.value);
-              scheduleUpdate("company", e.target.value);
+              debouncedUpdate({ company: e.target.value || undefined });
             }}
             className={INPUT_CLASS}
           />

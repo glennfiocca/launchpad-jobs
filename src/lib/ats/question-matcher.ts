@@ -150,21 +150,27 @@ export function autoAnswerQuestion(
 
   // --- Sponsorship ---
   if (/sponsor|visa sponsorship/i.test(question.label)) {
+    // If sponsorship preference is unknown (undefined/null), do NOT default to "false".
+    // Defaulting silently hides the question from operator and modal.
+    // Instead return null so the question surfaces as pending for explicit resolution.
+    if (profile.sponsorshipRequired == null) return null;
+
     // Ashby renders this as a boolean toggle (true/false), not a select
     if (question.fieldType === "boolean") {
-      return (profile.sponsorshipRequired ?? false) ? "true" : "false";
+      return profile.sponsorshipRequired ? "true" : "false";
     }
     if (question.fieldType !== "select" || opts.length === 0) return null;
-    return resolveYesNo(opts, profile.sponsorshipRequired ?? false);
+    return resolveYesNo(opts, profile.sponsorshipRequired);
   }
 
   // --- Work authorization ---
   if (/authorized to work|authorization to work/i.test(question.label)) {
+    if (profile.workAuthorized == null) return null;
     if (question.fieldType === "boolean") {
-      return (profile.workAuthorized ?? false) ? "true" : "false";
+      return profile.workAuthorized ? "true" : "false";
     }
     if (question.fieldType !== "select" || opts.length === 0) return null;
-    return resolveYesNo(opts, profile.workAuthorized ?? false);
+    return resolveYesNo(opts, profile.workAuthorized);
   }
 
   // --- Current / previous employer ---

@@ -978,22 +978,32 @@ async function fillAshbyLocationField(field, locationText) {
   // If no dropdown appeared, try keyboard selection (ArrowDown + Enter)
   if (!optionClicked) {
     console.log("[pipeline-operator] Location: no dropdown detected, trying keyboard commit")
+    const valueBefore = field.value
     field.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
-    await new Promise((r) => setTimeout(r, 200))
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
     await new Promise((r) => setTimeout(r, 300))
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    await new Promise((r) => setTimeout(r, 500))
 
-    // Check if value changed (indicating selection)
-    if (field.value && field.value !== locationText) {
-      console.log(`[pipeline-operator] Location: keyboard commit resulted in "${field.value}"`)
+    // Deterministic commit check: value must have changed OR dropdown must be provably closed
+    if (field.value && field.value !== valueBefore) {
+      // Value changed — keyboard selection worked
+      console.log(`[pipeline-operator] Location: keyboard commit changed value: "${valueBefore}" → "${field.value}"`)
       optionClicked = true
-    } else if (field.value === locationText) {
-      // Value stayed the same — might still be committed if no dropdown exists
-      // Check for aria-expanded or listbox still visible
+    } else {
+      // Value unchanged — check if this is a combobox at all
       const expandedAttr = field.getAttribute("aria-expanded")
+      const hasComboboxRole = field.getAttribute("role") === "combobox" || field.closest('[role="combobox"]')
       const listboxVisible = document.querySelector('[role="listbox"]:not([hidden])')
-      if (expandedAttr === "false" || !listboxVisible) {
-        // Dropdown closed or not present — consider committed
+
+      if (hasComboboxRole || expandedAttr !== null) {
+        // This IS a combobox — value unchanged + no selection = NOT committed
+        // Do NOT mark as committed just because aria-expanded is "false" —
+        // the dropdown may have closed without a valid selection.
+        console.warn(`[pipeline-operator] Location: combobox detected but no option selected (aria-expanded=${expandedAttr}, listbox=${!!listboxVisible})`)
+        optionClicked = false
+      } else {
+        // No combobox role detected — this may be a plain text field, consider committed
+        console.log("[pipeline-operator] Location: no combobox role detected, treating as plain text field")
         optionClicked = true
       }
     }
@@ -1504,6 +1514,32 @@ async function fillAshbyForm(snap, token) {
     nativeSet(emailField, emailValue)
   }
 
+  // ── No-silent-drops invariant ─────────────────────────────────────────────
+  // Every required question must be: filled+verified, pending/surfaced, or explicitly dropped.
+  // If any required question is neither filled nor surfaced, add it to missingFields.
+  const allRequiredQuestions = [
+    ...(Array.isArray(snap.questionMeta) ? snap.questionMeta.filter((m) => {
+      // Check if this question was required (look up in pendingQuestions or assume required if in meta with answer)
+      return true // All questionMeta entries have answers; check if fill succeeded
+    }) : []),
+  ]
+  for (const meta of allRequiredQuestions) {
+    if (!filledFieldNames.has(meta.fieldName) && !missingFields.some((m) => m.includes(meta.label))) {
+      // This answered question was neither filled nor already flagged as missing
+      console.warn(`[pipeline-operator] SILENT DROP DETECTED: "${meta.label}" (${meta.fieldName}) — answer available but not confirmed filled`)
+      missingFields.push(`${meta.label} (answer available, fill unconfirmed)`)
+    }
+  }
+  // Also check required pending questions that had userAnswer but weren't filled
+  if (Array.isArray(snap.pendingQuestions)) {
+    for (const pq of snap.pendingQuestions) {
+      if (pq.userAnswer && pq.required && !filledFieldNames.has(pq.fieldName) && !missingFields.some((m) => m.includes(pq.label))) {
+        console.warn(`[pipeline-operator] SILENT DROP DETECTED: pending "${pq.label}" had answer "${pq.userAnswer}" but was not filled`)
+        missingFields.push(`${pq.label} (pending answer not applied)`)
+      }
+    }
+  }
+
   // ── Post-fill audit banner ───────────────────────────────────────────────────
   const unansweredPending = Array.isArray(snap.pendingQuestions)
     ? snap.pendingQuestions.filter((q) => !q.userAnswer && q.required && !filledFieldNames.has(q.fieldName))
@@ -1571,10 +1607,10 @@ function tryClickAshbyToggle(labelText, answer) {
     if (!elText.includes(matchText)) continue
 
     // Walk up to the question container — Ashby nests label → div → div → buttons.
-    // Walk up to 5 levels to find a container with buttons or checkboxes inside.
+    // Walk up to 6 levels to find a container with buttons, checkboxes, or ARIA toggle controls.
     let container = labelEl.parentElement
-    for (let depth = 0; depth < 5 && container; depth++) {
-      // Check for checkbox input first
+    for (let depth = 0; depth < 6 && container; depth++) {
+      // Check for native checkbox input
       const checkbox = container.querySelector('input[type="checkbox"]')
       if (checkbox instanceof HTMLInputElement) {
         const shouldCheck = wantYes
@@ -1582,6 +1618,17 @@ function tryClickAshbyToggle(labelText, answer) {
           checkbox.click()
         }
         console.log(`[pipeline-operator] tryClickAshbyToggle: clicked checkbox for "${labelText.slice(0, 50)}…"`)
+        return true
+      }
+
+      // Check for ARIA role="switch" or role="checkbox" (custom Ashby toggle controls)
+      const ariaToggle = container.querySelector('[role="switch"], [role="checkbox"]')
+      if (ariaToggle) {
+        const isChecked = ariaToggle.getAttribute("aria-checked") === "true"
+        if (isChecked !== wantYes) {
+          ariaToggle.click()
+        }
+        console.log(`[pipeline-operator] tryClickAshbyToggle: clicked ARIA toggle (role=${ariaToggle.getAttribute("role")}) for "${labelText.slice(0, 50)}…"`)
         return true
       }
 

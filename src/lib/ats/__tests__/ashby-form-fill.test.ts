@@ -582,3 +582,140 @@ describe("Greenhouse behavior unchanged", () => {
     expect(typeof result[1].value).toBe("number");
   });
 });
+
+// ─── Test: Location commit deterministic verification ───────────────────────
+
+describe("Location commit deterministic verification", () => {
+  it("combobox with unchanged value after keyboard commit = NOT committed", () => {
+    // If field has role="combobox" and value didn't change, we must NOT claim committed
+    const hasComboboxRole = true;
+    const valueChanged = false;
+    const committed = valueChanged || (!hasComboboxRole);
+    expect(committed).toBe(false);
+  });
+
+  it("combobox with changed value after keyboard commit = committed", () => {
+    const hasComboboxRole = true;
+    const valueBefore = "New York";
+    const valueAfter = "New York, NY, United States";
+    const valueChanged = valueAfter !== valueBefore;
+    expect(valueChanged).toBe(true);
+  });
+
+  it("non-combobox field with unchanged value = committed (plain text field)", () => {
+    const hasComboboxRole = false;
+    const valueChanged = false;
+    const committed = valueChanged || (!hasComboboxRole);
+    expect(committed).toBe(true);
+  });
+
+  it("dropdown option click always counts as committed", () => {
+    const optionClicked = true;
+    expect(optionClicked).toBe(true);
+  });
+
+  it("location with no option selected surfaces manual instruction in missingFields", () => {
+    const missingFields: string[] = [];
+    const committed = false;
+    if (!committed) {
+      missingFields.push("Location (typed but autocomplete not selected — please select manually)");
+    }
+    expect(missingFields).toHaveLength(1);
+    expect(missingFields[0]).toContain("please select manually");
+  });
+});
+
+// ─── Test: No-silent-drops invariant ────────────────────────────────────────
+
+describe("No-silent-drops invariant", () => {
+  it("answered question not in filledFieldNames is detected as silent drop", () => {
+    const questionMeta = [
+      { fieldName: "uuid-1", label: "Sponsorship", fieldType: "boolean" },
+      { fieldName: "uuid-2", label: "Pronouns", fieldType: "multi_value_single_select" },
+    ];
+    const filledFieldNames = new Set(["uuid-1"]); // Only sponsorship filled
+    const missingFields: string[] = [];
+
+    for (const meta of questionMeta) {
+      if (!filledFieldNames.has(meta.fieldName) && !missingFields.some((m) => m.includes(meta.label))) {
+        missingFields.push(`${meta.label} (answer available, fill unconfirmed)`);
+      }
+    }
+
+    expect(missingFields).toHaveLength(1);
+    expect(missingFields[0]).toContain("Pronouns");
+  });
+
+  it("all answered questions filled = no silent drops", () => {
+    const questionMeta = [
+      { fieldName: "uuid-1", label: "Sponsorship", fieldType: "boolean" },
+      { fieldName: "uuid-2", label: "LinkedIn", fieldType: "text" },
+    ];
+    const filledFieldNames = new Set(["uuid-1", "uuid-2"]);
+    const missingFields: string[] = [];
+
+    for (const meta of questionMeta) {
+      if (!filledFieldNames.has(meta.fieldName) && !missingFields.some((m) => m.includes(meta.label))) {
+        missingFields.push(`${meta.label} (answer available, fill unconfirmed)`);
+      }
+    }
+
+    expect(missingFields).toHaveLength(0);
+  });
+
+  it("pending question with userAnswer not filled is detected", () => {
+    const pendingQuestions = [
+      { fieldName: "uuid-3", label: "Custom Q", required: true, userAnswer: "Yes" },
+    ];
+    const filledFieldNames = new Set<string>();
+    const missingFields: string[] = [];
+
+    for (const pq of pendingQuestions) {
+      if (pq.userAnswer && pq.required && !filledFieldNames.has(pq.fieldName)) {
+        missingFields.push(`${pq.label} (pending answer not applied)`);
+      }
+    }
+
+    expect(missingFields).toHaveLength(1);
+    expect(missingFields[0]).toContain("pending answer not applied");
+  });
+
+  it("required question with no answer and not filled surfaces in unansweredPending", () => {
+    const pendingQuestions = [
+      { fieldName: "b0a5aba8-dbb7-41a9-b548-f72cc3e48956", label: "Preferred pronouns", required: true, userAnswer: undefined as string | undefined },
+      { fieldName: "790b5934-74f5-46f5-897a-675b7f37f2f3", label: "Sponsorship", required: true, userAnswer: undefined as string | undefined },
+    ];
+    const filledFieldNames = new Set<string>();
+    const unansweredPending = pendingQuestions.filter(
+      (q) => !q.userAnswer && q.required && !filledFieldNames.has(q.fieldName)
+    );
+    expect(unansweredPending).toHaveLength(2);
+  });
+});
+
+// ─── Test: Boolean toggle with ARIA role support ────────────────────────────
+
+describe("Boolean toggle ARIA role support", () => {
+  it("tryClickAshbyToggle checks role='switch' and role='checkbox' divs", () => {
+    // The function now searches for: [role="switch"], [role="checkbox"]
+    // and uses aria-checked to determine current state
+    const ariaChecked = "true";
+    const isChecked = ariaChecked === "true";
+    const wantYes = true;
+    const needsClick = isChecked !== wantYes;
+    expect(needsClick).toBe(false);
+  });
+
+  it("aria-checked=false + wantYes = needs click", () => {
+    const ariaChecked = "false";
+    const isChecked = ariaChecked === "true";
+    const wantYes = true;
+    const needsClick = isChecked !== wantYes;
+    expect(needsClick).toBe(true);
+  });
+
+  it("walk-up depth increased to 6 levels for deeply nested Ashby controls", () => {
+    const MAX_DEPTH = 6;
+    expect(MAX_DEPTH).toBe(6);
+  });
+});

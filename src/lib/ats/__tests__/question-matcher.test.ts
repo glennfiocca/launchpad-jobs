@@ -164,6 +164,48 @@ describe("autoAnswerQuestion — sponsorship", () => {
   });
 });
 
+describe("autoAnswerQuestion — sponsorship with undefined profile", () => {
+  it("returns null for boolean sponsorship when sponsorshipRequired is undefined", () => {
+    const q = makeQuestion(
+      "Will you now or in the future require Notion to sponsor an immigration case?",
+      "boolean"
+    );
+    const profile = makeProfile({ sponsorshipRequired: undefined });
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
+  });
+
+  it("returns null for select sponsorship when sponsorshipRequired is undefined", () => {
+    const q = makeQuestion("Do you require visa sponsorship?", "select", [
+      { value: "1", label: "Yes" },
+      { value: "2", label: "No" },
+    ]);
+    const profile = makeProfile({ sponsorshipRequired: undefined });
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
+  });
+
+  it("sponsorship surfaces as pending when profile value is undefined", () => {
+    const q = makeQuestion(
+      "Will you require Notion to sponsor an immigration case?",
+      "boolean",
+      [],
+      { id: "790b5934-74f5-46f5-897a-675b7f37f2f3", required: true }
+    );
+    const profile = makeProfile({ sponsorshipRequired: undefined });
+    const result = getUnansweredQuestions([q], profile);
+    expect(result).toHaveLength(1);
+    expect(result[0].label).toContain("sponsor");
+  });
+
+  it("sponsorship is answered when profile value is explicitly false", () => {
+    const q = makeQuestion(
+      "Will you require sponsorship?",
+      "boolean"
+    );
+    const profile = makeProfile({ sponsorshipRequired: false });
+    expect(autoAnswerQuestion(q, profile)).toBe("false");
+  });
+});
+
 describe("autoAnswerQuestion — work authorization (boolean)", () => {
   it("answers 'true' for boolean work auth when authorized (Ashby)", () => {
     const q = makeQuestion(
@@ -181,6 +223,15 @@ describe("autoAnswerQuestion — work authorization (boolean)", () => {
     );
     const profile = makeProfile({ workAuthorized: false });
     expect(autoAnswerQuestion(q, profile)).toBe("false");
+  });
+
+  it("returns null for work auth when workAuthorized is undefined", () => {
+    const q = makeQuestion(
+      "Are you authorized to work in the United States?",
+      "boolean"
+    );
+    const profile = makeProfile({ workAuthorized: undefined });
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
   });
 });
 

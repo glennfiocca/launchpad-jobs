@@ -993,11 +993,14 @@ async function fillAshbyLocationField(field, locationText) {
       }
 
       if (bestMatch) {
-        // Use click + mousedown to ensure Ashby's React handlers fire
-        bestMatch.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
-        bestMatch.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
-        bestMatch.click()
-        console.log(`[pipeline-operator] Location: clicked option "${bestMatch.textContent?.trim()}" (score: ${bestScore})`)
+        // Use CDP click (Chrome DevTools Protocol) to dispatch trusted pointer/mouse
+        // events at the element's coordinates. React 18 uses pointer events for its
+        // synthetic event system — plain .click() dispatches untrusted events that
+        // React may ignore. CDP click is what makes react-select work in Greenhouse.
+        console.log(`[pipeline-operator] Location: clicking option "${bestMatch.textContent?.trim()}" (score: ${bestScore}) via CDP`)
+        await cdpClick(bestMatch)
+        // Small settle for React state update after click
+        await new Promise((r) => setTimeout(r, 300))
         optionClicked = true
         break
       }

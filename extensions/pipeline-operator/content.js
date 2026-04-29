@@ -1380,23 +1380,9 @@ async function fillAshbyForm(snap, token) {
     console.log("[pipeline-operator] Filled: website")
   }
 
-  // Location
-  // Location — Ashby uses a combobox with autocomplete suggestions.
-  // Typing alone leaves the value uncommitted; we must explicitly select an option.
-  const locationField = findAshbyField("_systemfield_location", "location", "city", "where are you located")
-  if (locationField instanceof HTMLInputElement && snap.location) {
-    const locationCommitted = await fillAshbyLocationField(locationField, snap.location)
-    if (locationCommitted) {
-      filled++
-      fillLog.location = { status: "committed", value: locationField.value }
-      console.log("[pipeline-operator] Filled + committed: location")
-    } else {
-      // Typed but not committed — surface as unresolved
-      fillLog.location = { status: "typed_not_committed", typed: snap.location, fieldValue: locationField.value }
-      missingFields.push("Location (typed but autocomplete not selected — please select manually)")
-      console.warn("[pipeline-operator] Location typed but autocomplete option not committed")
-    }
-  }
+  // NOTE: Location fill is DEFERRED to after resume upload + email guard.
+  // Ashby's resume parser overwrites the location field after upload,
+  // so filling location before upload is pointless.
 
   // ── Resume upload ────────────────────────────────────────────────────────────
   // Ashby pages may contain multiple file inputs — an "autofill from resume"
@@ -1494,6 +1480,24 @@ async function fillAshbyForm(snap, token) {
     }
   }
 
+  // ── Location fill (AFTER resume upload + email guard) ──────────────────────
+  // Location must be filled AFTER resume upload because Ashby's resume parser
+  // overwrites the location field with data extracted from the resume PDF.
+  // Filling before upload is pointless — it gets overwritten.
+  const locationField = findAshbyField("_systemfield_location", "location", "city", "where are you located")
+  if (locationField instanceof HTMLInputElement && snap.location) {
+    const locationCommitted = await fillAshbyLocationField(locationField, snap.location)
+    if (locationCommitted) {
+      filled++
+      fillLog.location = { status: "committed", value: locationField.value }
+      console.log("[pipeline-operator] Filled + committed: location (post-resume)")
+    } else {
+      fillLog.location = { status: "typed_not_committed", typed: snap.location, fieldValue: locationField.value }
+      missingFields.push("Location (typed but autocomplete not selected — please select manually)")
+      console.warn("[pipeline-operator] Location typed but autocomplete option not committed")
+    }
+  }
+
   // Track which questionMeta fields were already filled by core section
   // (e.g., LinkedIn might be filled above AND appear in questionMeta)
   const filledFieldNames = new Set()
@@ -1543,7 +1547,7 @@ async function fillAshbyForm(snap, token) {
           // No native element found — try Ashby-specific controls
 
           // FIX B: Boolean toggle buttons (Yes/No)
-          const clickedToggle = tryClickAshbyToggle(meta.label, answer, meta.fieldName)
+          const clickedToggle = await tryClickAshbyToggle(meta.label, answer, meta.fieldName)
           if (clickedToggle) {
             filled++
             filledFieldNames.add(meta.fieldName)
@@ -1551,7 +1555,7 @@ async function fillAshbyForm(snap, token) {
           }
           // FIX C: Ashby custom dropdown for ValueSelect (pronouns, etc.)
           else if (meta.fieldType === "multi_value_single_select" || meta.selectValues) {
-            const clickedOption = tryClickAshbyDropdownOption(meta.fieldName, meta.label, answer, meta.selectValues)
+            const clickedOption = await tryClickAshbyDropdownOption(meta.fieldName, meta.label, answer, meta.selectValues)
             if (clickedOption) {
               filled++
               filledFieldNames.add(meta.fieldName)
@@ -1594,7 +1598,7 @@ async function fillAshbyForm(snap, token) {
       }
 
       // Try Yes/No toggle buttons
-      const clickedToggle = tryClickAshbyToggle(pq.label, pq.userAnswer, pq.fieldName)
+      const clickedToggle = await tryClickAshbyToggle(pq.label, pq.userAnswer, pq.fieldName)
       if (clickedToggle) {
         filled++
         filledFieldNames.add(pq.fieldName)
@@ -1604,7 +1608,7 @@ async function fillAshbyForm(snap, token) {
 
       // Try dropdown for select-type pending questions
       if (pq.selectValues) {
-        const clickedOption = tryClickAshbyDropdownOption(pq.fieldName, pq.label, pq.userAnswer, pq.selectValues)
+        const clickedOption = await tryClickAshbyDropdownOption(pq.fieldName, pq.label, pq.userAnswer, pq.selectValues)
         if (clickedOption) {
           filled++
           filledFieldNames.add(pq.fieldName)
@@ -1704,97 +1708,59 @@ async function fillAshbyForm(snap, token) {
  * @param {string} [fieldPath] - UUID field path (e.g. "790b5934-...")
  * @returns {boolean}
  */
-function tryClickAshbyToggle(labelText, answer, fieldPath) {
+async function tryClickAshbyToggle(labelText, answer, fieldPath) {
   const answerLower = String(answer).toLowerCase()
   const wantYes = answerLower === "true" || answerLower === "yes"
   const wantNo = answerLower === "false" || answerLower === "no"
   const matchText = labelText.toLowerCase().slice(0, 80)
+  const targetBtnText = wantYes ? "yes" : "no"
 
-  console.log(`[pipeline-operator] tryClickAshbyToggle: looking for "${matchText.slice(0, 50)}…" (want=${wantYes ? "Yes" : "No"}, path=${fieldPath ?? "none"})`)
+  console.log(`[pipeline-operator] tryClickAshbyToggle: looking for "${matchText.slice(0, 50)}…" (want=${targetBtnText}, path=${fieldPath ?? "none"})`)
 
-  // Strategy 1: Find container by field path attribute
-  if (fieldPath) {
-    const pathContainer =
-      document.querySelector(`[name="${fieldPath}"]`)?.closest("[class]")?.parentElement ??
-      document.querySelector(`[id="${fieldPath}"]`)?.closest("[class]")?.parentElement ??
-      document.querySelector(`[data-path="${fieldPath}"]`)?.parentElement ??
-      document.querySelector(`[data-field="${fieldPath}"]`)?.parentElement
-    if (pathContainer) {
-      const clicked = clickToggleInContainer(pathContainer, wantYes, wantNo, answerLower, labelText)
-      if (clicked) return true
-    }
-  }
-
-  // Strategy 2: Find ALL "Yes"/"No" button pairs on the page, then check which
-  // pair is near the question text. This avoids the fragile label-search-then-walk-up.
+  // Find ALL Yes/No buttons on the page, then determine which pair belongs to this question.
   const allButtons = Array.from(document.querySelectorAll("button"))
-  const yesButtons = allButtons.filter((b) => (b.textContent ?? "").trim().toLowerCase() === "yes")
+  const targetButtons = allButtons.filter((b) => {
+    const t = (b.textContent ?? "").trim().toLowerCase()
+    return t === "yes" || t === "no"
+  })
 
-  for (const yesBtn of yesButtons) {
-    // Find the containing question block — walk up until we find one that has the question text
-    let container = yesBtn.parentElement
-    for (let depth = 0; depth < 8 && container; depth++) {
+  console.log(`[pipeline-operator] tryClickAshbyToggle: found ${targetButtons.length} yes/no buttons on page`)
+
+  // For each button matching our target text, check if it's near the question text
+  for (const btn of targetButtons) {
+    const btnText = (btn.textContent ?? "").trim().toLowerCase()
+    if (btnText !== targetBtnText) continue
+
+    // Walk up to find a container that includes the question text
+    let container = btn.parentElement
+    for (let depth = 0; depth < 10 && container; depth++) {
       const containerText = (container.textContent ?? "").toLowerCase()
       if (containerText.includes(matchText)) {
-        // This container has both the question text AND a Yes button — this is our target
-        const clicked = clickToggleInContainer(container, wantYes, wantNo, answerLower, labelText)
-        if (clicked) return true
-        break
-      }
-      container = container.parentElement
-    }
-  }
-
-  // Strategy 3: Find checkboxes or ARIA toggles near the label text
-  for (const el of document.querySelectorAll('input[type="checkbox"], [role="switch"], [role="checkbox"]')) {
-    let container = el.parentElement
-    for (let depth = 0; depth < 6 && container; depth++) {
-      if ((container.textContent ?? "").toLowerCase().includes(matchText)) {
-        if (el instanceof HTMLInputElement && el.type === "checkbox") {
-          if (el.checked !== wantYes) el.click()
-          console.log(`[pipeline-operator] tryClickAshbyToggle: clicked checkbox near "${labelText.slice(0, 50)}…"`)
-          return true
-        }
-        const isChecked = el.getAttribute("aria-checked") === "true"
-        if (isChecked !== wantYes) el.click()
-        console.log(`[pipeline-operator] tryClickAshbyToggle: clicked ARIA toggle near "${labelText.slice(0, 50)}…"`)
+        // Found it — use CDP click (trusted event) since React ignores .click()
+        console.log(`[pipeline-operator] tryClickAshbyToggle: CDP clicking "${btnText}" for "${labelText.slice(0, 50)}…"`)
+        await cdpClick(btn)
+        await new Promise((r) => setTimeout(r, 200))
         return true
       }
       container = container.parentElement
     }
   }
 
-  console.warn(`[pipeline-operator] tryClickAshbyToggle: FAILED for "${labelText.slice(0, 50)}…"`)
-  return false
-}
-
-/** Click a Yes/No toggle button or checkbox within a container element. */
-function clickToggleInContainer(container, wantYes, wantNo, answerLower, labelText) {
-  // Check for checkbox
-  const checkbox = container.querySelector('input[type="checkbox"]')
-  if (checkbox instanceof HTMLInputElement) {
-    if (checkbox.checked !== wantYes) checkbox.click()
-    console.log(`[pipeline-operator] clickToggleInContainer: checkbox for "${labelText.slice(0, 40)}…"`)
-    return true
-  }
-  // Check ARIA toggle
-  const ariaToggle = container.querySelector('[role="switch"], [role="checkbox"]')
-  if (ariaToggle) {
-    const isChecked = ariaToggle.getAttribute("aria-checked") === "true"
-    if (isChecked !== wantYes) ariaToggle.click()
-    console.log(`[pipeline-operator] clickToggleInContainer: ARIA toggle for "${labelText.slice(0, 40)}…"`)
-    return true
-  }
-  // Check Yes/No buttons
-  const buttons = container.querySelectorAll("button")
-  for (const btn of buttons) {
-    const btnText = (btn.textContent ?? "").trim().toLowerCase()
-    if ((wantYes && btnText === "yes") || (wantNo && btnText === "no") || btnText === answerLower) {
-      btn.click()
-      console.log(`[pipeline-operator] clickToggleInContainer: clicked "${btnText}" for "${labelText.slice(0, 40)}…"`)
-      return true
+  // Fallback: checkboxes or ARIA toggles near the question text
+  for (const el of document.querySelectorAll('input[type="checkbox"], [role="switch"], [role="checkbox"]')) {
+    let container = el.parentElement
+    for (let depth = 0; depth < 8 && container; depth++) {
+      if ((container.textContent ?? "").toLowerCase().includes(matchText)) {
+        console.log(`[pipeline-operator] tryClickAshbyToggle: CDP clicking checkbox/toggle near "${labelText.slice(0, 50)}…"`)
+        await cdpClick(el)
+        await new Promise((r) => setTimeout(r, 200))
+        return true
+      }
+      container = container.parentElement
     }
   }
+
+  console.warn(`[pipeline-operator] tryClickAshbyToggle: FAILED — no yes/no buttons or toggles found near "${labelText.slice(0, 50)}…"`)
   return false
 }
 
@@ -1810,72 +1776,62 @@ function clickToggleInContainer(container, wantYes, wantNo, answerLower, labelTe
  * @param {Array} selectValues - Available options [{value, label}]
  * @returns {boolean} true if an option was selected
  */
-function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues) {
+async function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues) {
   const answerStr = String(answer)
 
-  // Find the target option label from selectValues.
-  // Use String() coercion for comparison: values may be string or number depending on ATS.
   const targetOption = selectValues?.find((sv) => String(sv.value) === answerStr)
-  // Also try matching by label text (for cases where answer is the label, not the value)
   const targetByLabel = !targetOption ? selectValues?.find((sv) => sv.label.toLowerCase() === answerStr.toLowerCase()) : null
   const resolvedOption = targetOption ?? targetByLabel
   const targetLabel = resolvedOption?.label ?? answerStr
+  const matchText = labelText.toLowerCase().slice(0, 60)
+  const targetLabelLower = targetLabel.toLowerCase()
 
-  console.log(`[pipeline-operator] tryClickAshbyDropdownOption: looking for "${targetLabel}" in "${labelText.slice(0, 50)}…"`)
+  console.log(`[pipeline-operator] tryClickAshbyDropdownOption: looking for "${targetLabel}" near "${matchText.slice(0, 50)}…" (path=${fieldName})`)
 
-  // Strategy 1: Find a radio/button group by field name attribute
+  // Strategy 1: Find radio inputs by field path
   const radioInputs = document.querySelectorAll(
     `input[type="radio"][name="${fieldName}"], input[type="radio"][id*="${fieldName}"]`
   )
   if (radioInputs.length > 0) {
     for (const radio of radioInputs) {
-      if (radio instanceof HTMLInputElement) {
-        // Match by value or by associated label text
-        if (radio.value === answerStr) {
-          radio.click()
-          return true
-        }
-        const radioLabel = radio.closest("label")?.textContent?.trim()
-        if (radioLabel?.toLowerCase() === targetLabel.toLowerCase()) {
-          radio.click()
-          return true
-        }
+      if (!(radio instanceof HTMLInputElement)) continue
+      const radioLabel = radio.closest("label")?.textContent?.trim()?.toLowerCase() ?? ""
+      if (radio.value === answerStr || radioLabel === targetLabelLower) {
+        console.log(`[pipeline-operator] tryClickAshbyDropdownOption: CDP clicking radio for "${targetLabel}"`)
+        await cdpClick(radio)
+        return true
       }
     }
   }
 
-  // Strategy 2: Find ALL clickable elements whose text matches the target label,
-  // then verify they're inside a container that also contains the question text.
-  // This is more reliable than finding the question text first and walking up.
-  const matchText = labelText.toLowerCase().slice(0, 60)
-  const targetLabelLower = targetLabel.toLowerCase()
-
-  // Search for buttons, radios, options, and any clickable element matching targetLabel
+  // Strategy 2: Find ANY element on the page whose text exactly matches the
+  // target option label AND that is near the question text.
+  // Use CDP click since React ignores untrusted .click() events.
   const allClickables = document.querySelectorAll(
-    "button, [role='option'], [role='radio'], [role='menuitem'], input[type='radio'], label"
+    "button, [role='option'], [role='radio'], [role='menuitem'], [role='tab'], " +
+    "input[type='radio'], label, span, div"
   )
   for (const el of allClickables) {
-    const elText = (el.textContent ?? "").trim().toLowerCase()
-    if (elText !== targetLabelLower) continue
+    const elText = (el.textContent ?? "").trim()
+    if (elText.toLowerCase() !== targetLabelLower) continue
+    // Skip elements that are too large (containers, not individual options)
+    if (elText.length > targetLabel.length + 20) continue
 
     // Verify this element is inside a container with the question text
     let container = el.parentElement
-    for (let depth = 0; depth < 8 && container; depth++) {
+    for (let depth = 0; depth < 10 && container; depth++) {
       const containerText = (container.textContent ?? "").toLowerCase()
       if (containerText.includes(matchText)) {
-        console.log(`[pipeline-operator] tryClickAshbyDropdownOption: clicking "${el.textContent?.trim()}" (strategy 2: text match near question)`)
-        if (el instanceof HTMLInputElement) {
-          el.click()
-        } else {
-          el.click()
-        }
+        console.log(`[pipeline-operator] tryClickAshbyDropdownOption: CDP clicking "${elText}" (near question text)`)
+        await cdpClick(el)
+        await new Promise((r) => setTimeout(r, 200))
         return true
       }
       container = container.parentElement
     }
   }
 
-  // Strategy 3: If Ashby uses a native <select> (fallback — less common)
+  // Strategy 3: Native <select> fallback
   const selectEl = document.querySelector(`select[name="${fieldName}"], select[id="${fieldName}"]`)
   if (selectEl instanceof HTMLSelectElement) {
     selectEl.value = answerStr
@@ -1883,6 +1839,7 @@ function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues)
     return true
   }
 
+  console.warn(`[pipeline-operator] tryClickAshbyDropdownOption: FAILED for "${targetLabel}" near "${matchText.slice(0, 50)}…"`)
   return false
 }
 

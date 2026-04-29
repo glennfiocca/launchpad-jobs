@@ -1540,34 +1540,31 @@ async function fillAshbyForm(snap, token) {
         const isSelectType = meta.fieldType === "multi_value_single_select" || meta.fieldType === "multi_value_multi_select"
         const hasSelectValues = !!meta.selectValues
 
-        // For Location fields in questionAnswers, use autocomplete commit
+        // Skip _systemfield_location — already handled by core location fill above
         if (meta.fieldName === "_systemfield_location") {
-          const locField = findAshbyField("_systemfield_location", "location")
-          if (locField instanceof HTMLInputElement) {
-            const committed = await fillAshbyLocationField(locField, String(answer))
-            if (committed) {
-              filled++
-              filledFieldNames.add(meta.fieldName)
-              fillLog.location = { status: "committed", value: locField.value }
-              console.log(`[pipeline-operator] Filled custom (location autocomplete): ${meta.label} → ${locField.value}`)
-            } else {
-              missingFields.push("Location (autocomplete not committed)")
-            }
-          }
+          filledFieldNames.add(meta.fieldName)
           continue
         }
 
         // For Boolean/ValueSelect types: go DIRECTLY to visual control interaction.
         // Do NOT write to the hidden native input — it doesn't update the UI.
         if (isSelectType || hasSelectValues) {
-          // Try Yes/No toggle first (for Boolean rendered as button pairs)
-          const clickedToggle = await tryClickAshbyToggle(meta.label, answer, meta.fieldName)
-          if (clickedToggle) {
-            filled++
-            filledFieldNames.add(meta.fieldName)
-            console.log(`[pipeline-operator] Filled custom (toggle): ${meta.label}`)
-            continue
+          // Determine if the answer is boolean-like ("true"/"false"/"yes"/"no").
+          // Only try Yes/No toggle for boolean answers — NOT for option labels like "He/Him".
+          const answerLower = String(answer).toLowerCase()
+          const isBooleanAnswer = answerLower === "true" || answerLower === "false" || answerLower === "yes" || answerLower === "no"
+
+          if (isBooleanAnswer) {
+            // Try Yes/No toggle (for Boolean rendered as button pairs)
+            const clickedToggle = await tryClickAshbyToggle(meta.label, answer, meta.fieldName)
+            if (clickedToggle) {
+              filled++
+              filledFieldNames.add(meta.fieldName)
+              console.log(`[pipeline-operator] Filled custom (toggle): ${meta.label}`)
+              continue
+            }
           }
+
           // Try dropdown/radio option selection (for ValueSelect/MultiValueSelect)
           const clickedOption = await tryClickAshbyDropdownOption(meta.fieldName, meta.label, answer, meta.selectValues)
           if (clickedOption) {

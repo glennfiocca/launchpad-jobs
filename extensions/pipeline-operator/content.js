@@ -907,28 +907,57 @@ function detectAtsProvider() {
  * @returns {Promise<boolean>} true if an option was explicitly selected/committed
  */
 async function fillAshbyLocationField(field, locationText) {
-  // Clear existing value and type the location text
-  nativeSet(field, "")
+  // Ashby's Location field is a React-controlled city autocomplete.
+  // It requires keystroke-level events to trigger the autocomplete API call.
+  // Plain nativeSet + input event is NOT enough — React's onChange won't fire
+  // the API lookup without simulated keyboard interaction.
+
+  // Focus the field first
+  field.focus()
+  field.dispatchEvent(new FocusEvent("focus", { bubbles: true }))
   await new Promise((r) => setTimeout(r, 100))
-  nativeSet(field, locationText)
 
-  // Dispatch input event to trigger autocomplete
+  // Clear existing value
+  field.value = ""
   field.dispatchEvent(new Event("input", { bubbles: true }))
-  field.dispatchEvent(new Event("change", { bubbles: true }))
+  await new Promise((r) => setTimeout(r, 100))
 
-  // Wait for autocomplete dropdown to appear (Ashby renders options as role="option" or listbox items)
-  const AUTOCOMPLETE_WAIT = 2000
+  // Type the location text character by character (triggers React's onChange per keystroke)
+  // Use batched typing — type in chunks to balance speed and trigger reliability
+  const CHUNK_SIZE = 5
+  for (let i = 0; i < locationText.length; i += CHUNK_SIZE) {
+    const chunk = locationText.slice(0, i + CHUNK_SIZE)
+    nativeSet(field, chunk)
+    // Dispatch keydown/keyup for the last char to trigger debounced autocomplete
+    const lastChar = chunk.slice(-1)
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: lastChar, bubbles: true }))
+    field.dispatchEvent(new KeyboardEvent("keyup", { key: lastChar, bubbles: true }))
+    await new Promise((r) => setTimeout(r, 50))
+  }
+
+  // Final value set + input event
+  nativeSet(field, locationText)
+  await new Promise((r) => setTimeout(r, 200))
+
+  console.log(`[pipeline-operator] Location: typed "${locationText}", waiting for autocomplete dropdown...`)
+
+  // Wait for autocomplete dropdown to appear
+  // Ashby may use: [role="listbox"] > [role="option"], custom divs, or li elements
+  const AUTOCOMPLETE_WAIT = 3000
   const pollStart = Date.now()
   let optionClicked = false
 
   while (Date.now() - pollStart < AUTOCOMPLETE_WAIT) {
-    await new Promise((r) => setTimeout(r, 200))
+    await new Promise((r) => setTimeout(r, 250))
 
-    // Look for autocomplete options in multiple possible locations
-    // Ashby combobox renders: [role="listbox"] > [role="option"], or div with class containing "option"
+    // Broad selector: any option-like element that appeared after typing
     const options = document.querySelectorAll(
-      '[role="option"], [role="listbox"] [role="option"], [class*="combobox"] [role="option"], ' +
-      '[class*="autocomplete"] li, [class*="suggestion"] li, [class*="location"] [role="option"]'
+      '[role="option"], [role="listbox"] [role="option"], ' +
+      '[class*="combobox"] [role="option"], [class*="combobox"] li, ' +
+      '[class*="autocomplete"] li, [class*="suggestion"] li, ' +
+      '[class*="location"] [role="option"], [class*="location"] li, ' +
+      '[class*="dropdown"] li, [class*="menu"] [role="option"], ' +
+      'ul[role="listbox"] li'
     )
 
     if (options.length > 0) {
@@ -1090,64 +1119,109 @@ async function fillAshbyForm(snap, token) {
   const fillLog = {}
 
   /**
-   * Find the canonical resume file input, skipping "autofill from resume" uploaders.
-   * Priority: (1) _systemfield_resume, (2) name="resume", (3) file input with
-   * accept containing pdf, (4) file input NOT inside an autofill/parse container.
-   * Returns null if ambiguous or only autofill inputs exist.
+   * Find the canonical resume file input on Ashby forms.
+   *
+   * Ashby's React SPA renders file inputs dynamically. The canonical resume field
+   * has path=_systemfield_resume in __appData, but the rendered <input type="file">
+   * may or may not have name/id attributes matching that path.
+   *
+   * When showAutofillApplicationsBox=true, Ashby also renders a parser/autofill
+   * uploader that auto-fills form fields from a parsed resume — we must NEVER
+   * upload to that one.
+   *
+   * Strategy:
+   *  1. name/id attribute match for _systemfield_resume
+   *  2. Find the file input that lives in the "Resume" labeled section
+   *  3. Among all file inputs, pick the one whose nearest label/heading says "Resume"
+   *  4. Exclude any file input whose nearest label says "autofill"/"import"/"parse"
    */
   function findCanonicalResumeInput() {
-    // Priority 1: Ashby system field for resume
-    const bySystemField = document.querySelector('input[type="file"][name="_systemfield_resume"]')
-    if (bySystemField) return bySystemField
-
-    // Priority 2: Named "resume"
-    const byName = document.querySelector('input[type="file"][name="resume"]')
-    if (byName) return byName
-
-    // Collect all visible file inputs
-    const allFileInputs = Array.from(document.querySelectorAll('input[type="file"]'))
-    if (allFileInputs.length === 0) return null
-
-    // Filter out inputs inside parser/autofill/import uploader regions.
-    // Ashby's showAutofillApplicationsBox renders an "import" uploader that
-    // auto-parses and overwrites form fields — must NEVER upload to it.
-    const AUTOFILL_MARKERS = [
-      "autofill", "auto-fill", "auto fill",
-      "parse resume", "parse your resume",
-      "upload to autofill", "fill from",
-      "import resume", "import your resume",
-      "prefill", "pre-fill",
-    ]
-    const candidateInputs = allFileInputs.filter((input) => {
-      // Walk up to check container text for autofill markers
-      let el = input.parentElement
-      for (let depth = 0; depth < 6 && el; depth++) {
-        const containerText = (el.textContent ?? "").toLowerCase()
-        if (AUTOFILL_MARKERS.some((m) => containerText.includes(m))) {
-          console.log(`[pipeline-operator] Skipping file input inside autofill container: "${containerText.slice(0, 80)}…"`)
-          return false
-        }
-        // Stop at form boundary
-        if (el.tagName === "FORM" || el.tagName === "SECTION") break
-        el = el.parentElement
-      }
-      return true
-    })
-
-    // Priority 3: PDF-accepting input
-    const pdfInput = candidateInputs.find((i) => (i.getAttribute("accept") ?? "").includes("pdf"))
-    if (pdfInput) return pdfInput
-
-    // Priority 4: Single unambiguous candidate
-    if (candidateInputs.length === 1) return candidateInputs[0]
-
-    // Ambiguous: multiple candidates — fail safely
-    if (candidateInputs.length > 1) {
-      console.warn(`[pipeline-operator] ${candidateInputs.length} file inputs found — cannot safely determine resume input`)
-      return null
+    // Strategy 1: Direct attribute match (most reliable if Ashby sets name/id)
+    const byAttr =
+      document.querySelector('input[type="file"][name="_systemfield_resume"]') ??
+      document.querySelector('input[type="file"][id="_systemfield_resume"]') ??
+      document.querySelector('input[type="file"][name="resume"]')
+    if (byAttr) {
+      console.log("[pipeline-operator] Resume: found by direct attribute match")
+      return byAttr
     }
 
-    return null
+    // Collect ALL file inputs on the page
+    const allFileInputs = Array.from(document.querySelectorAll('input[type="file"]'))
+    console.log(`[pipeline-operator] Resume: found ${allFileInputs.length} file input(s) on page`)
+    if (allFileInputs.length === 0) return null
+
+    // Strategy 2: Find by nearby label text. For each file input, walk up and
+    // check the closest text content to classify it as "resume" or "autofill".
+    const RESUME_MARKERS = ["resume", "cv", "curriculum"]
+    const AUTOFILL_MARKERS = ["autofill", "auto-fill", "auto fill", "import", "parse", "prefill", "pre-fill"]
+
+    let resumeInput = null
+    for (const input of allFileInputs) {
+      // Get the nearest meaningful text by checking:
+      // 1. The immediate parent chain (up to 4 levels) for the CLOSEST small-scope text
+      // 2. Look for label elements, headings, or span text near this input
+      const nearbyText = getNearbyLabelText(input)
+      const textLower = nearbyText.toLowerCase()
+
+      console.log(`[pipeline-operator] Resume: file input nearby text = "${textLower.slice(0, 100)}"`)
+
+      // Check if this is an autofill/parser uploader
+      const isAutofill = AUTOFILL_MARKERS.some((m) => textLower.includes(m))
+      if (isAutofill) {
+        console.log("[pipeline-operator] Resume: skipping autofill/parser uploader")
+        continue
+      }
+
+      // Check if this is the resume section
+      const isResume = RESUME_MARKERS.some((m) => textLower.includes(m))
+      if (isResume) {
+        console.log("[pipeline-operator] Resume: found canonical resume input by label text")
+        resumeInput = input
+        break
+      }
+
+      // If only one non-autofill input and no label match, keep as candidate
+      if (!resumeInput) {
+        resumeInput = input
+      }
+    }
+
+    return resumeInput
+  }
+
+  /**
+   * Get the nearest label/heading text for a form control.
+   * Walks up the DOM looking for labels, headings, or small-scope text containers.
+   */
+  function getNearbyLabelText(input) {
+    // Check aria-label
+    const ariaLabel = input.getAttribute("aria-label")
+    if (ariaLabel) return ariaLabel
+
+    // Check associated <label>
+    const id = input.id
+    if (id) {
+      const label = document.querySelector(`label[for="${id}"]`)
+      if (label) return label.textContent ?? ""
+    }
+
+    // Walk up looking for the nearest small text container
+    let el = input.parentElement
+    for (let depth = 0; depth < 4 && el; depth++) {
+      // Look for a label or heading INSIDE this container
+      const label = el.querySelector("label, h1, h2, h3, h4, h5, h6, [class*='label'], [class*='title'], [class*='heading']")
+      if (label && label.textContent) {
+        return label.textContent.trim()
+      }
+      // Use the container's own text if it's reasonably short (not the whole page)
+      const text = (el.textContent ?? "").trim()
+      if (text.length > 0 && text.length < 200) {
+        return text
+      }
+      el = el.parentElement
+    }
+    return ""
   }
 
   // Build a lookup of questionMeta fieldName → label for UUID-keyed fields.
@@ -1307,7 +1381,18 @@ async function fillAshbyForm(snap, token) {
   // uploader (which auto-parses and overwrites fields) and the canonical resume
   // upload section. We must target ONLY the canonical resume input.
   if (snap.presignedResumeUrl) {
-    const resumeInput = findCanonicalResumeInput()
+    // Ashby renders file inputs via React — may not exist immediately.
+    // Retry with increasing waits.
+    let resumeInput = findCanonicalResumeInput()
+    if (!resumeInput) {
+      console.log("[pipeline-operator] Resume: not found on first attempt, waiting for React render...")
+      await new Promise((r) => setTimeout(r, 1500))
+      resumeInput = findCanonicalResumeInput()
+    }
+    if (!resumeInput) {
+      await new Promise((r) => setTimeout(r, 2000))
+      resumeInput = findCanonicalResumeInput()
+    }
     if (resumeInput instanceof HTMLInputElement) {
       await attachResume(resumeInput, snap.presignedResumeUrl, snap.resumeFileName ?? "resume.pdf")
       // Post-upload verification: confirm the canonical field has files attached
@@ -1601,10 +1686,14 @@ function tryClickAshbyToggle(labelText, answer) {
   // Truncate label for substring matching (long policy texts)
   const matchText = labelText.toLowerCase().slice(0, 80)
 
-  // Find the label/heading element for this question
-  for (const labelEl of document.querySelectorAll("label, legend")) {
+  // Find the label/heading element for this question.
+  // Ashby uses various elements for question titles — not just <label> and <legend>.
+  // Search broadly: label, legend, div, span, p, h1-h6.
+  for (const labelEl of document.querySelectorAll("label, legend, p, span, div, h1, h2, h3, h4, h5, h6")) {
     const elText = labelEl.textContent?.toLowerCase() ?? ""
     if (!elText.includes(matchText)) continue
+    // Skip elements whose text is way too long (likely a large container, not a label)
+    if (elText.length > 500) continue
 
     // Walk up to the question container — Ashby nests label → div → div → buttons.
     // Walk up to 6 levels to find a container with buttons, checkboxes, or ARIA toggle controls.
@@ -1703,9 +1792,10 @@ function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues)
 
   // Strategy 2: Find the question container by label text and look for clickable options
   const matchText = labelText.toLowerCase().slice(0, 60)
-  for (const labelEl of document.querySelectorAll("label, legend")) {
+  for (const labelEl of document.querySelectorAll("label, legend, p, span, div, h1, h2, h3, h4, h5, h6")) {
     const elText = labelEl.textContent?.toLowerCase() ?? ""
     if (!elText.includes(matchText)) continue
+    if (elText.length > 500) continue // Skip large containers
 
     // Walk up to find the question container
     let container = labelEl.parentElement

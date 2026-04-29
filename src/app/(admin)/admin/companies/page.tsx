@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight } from "lucide-react"
 import type { AdminCompanyBoard } from "@/types"
+import { LogoBackfillButton } from "@/components/admin/logo-backfill-button"
 
 interface BoardForm {
   name: string
@@ -99,13 +100,16 @@ export default function AdminCompaniesPage() {
           <h1 className="text-2xl font-bold text-white">Companies</h1>
           <p className="text-zinc-400 text-sm mt-1">{boards.length} boards</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add Board
-        </button>
+        <div className="flex items-center gap-3">
+          <LogoBackfillButton />
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Board
+          </button>
+        </div>
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">

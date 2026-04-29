@@ -63,6 +63,7 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
       publicJobId: app.job.publicJobId,
       boardToken: app.job.boardToken,
       externalId: app.job.externalId,
+      provider: app.job.provider,
       company: {
         id: app.job.company.id,
         name: app.job.company.name,

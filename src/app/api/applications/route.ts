@@ -326,7 +326,7 @@ async function runPlaywrightSubmission(opts: {
         data: {
           applicationId: opts.applicationId,
           toStatus: "APPLIED",
-          reason: "Application submitted to Greenhouse successfully",
+          reason: `Application submitted to ${opts.provider} successfully`,
           triggeredBy: "system",
         },
       });

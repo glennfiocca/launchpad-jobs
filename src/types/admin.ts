@@ -1,4 +1,4 @@
-import type { ApplicationStatus, SubscriptionStatus, Role, ReportCategory, ReportStatus } from "@prisma/client"
+import type { ApplicationStatus, AtsProvider, SubscriptionStatus, Role, ReportCategory, ReportStatus } from "@prisma/client"
 
 export type { ReportCategory, ReportStatus }
 
@@ -21,6 +21,7 @@ export interface AdminApplication {
     publicJobId: string
     boardToken: string
     externalId: string
+    provider: AtsProvider
     company: { id: string; name: string; logoUrl: string | null }
   }
   _count: { emails: number; statusHistory: number }

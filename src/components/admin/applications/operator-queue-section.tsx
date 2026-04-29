@@ -29,6 +29,8 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
   const isClaimed = !!application.claimedByUserId
   const isClaimedByMe = application.claimedByUserId === currentUserId
   const snapshot = application.applicationSnapshot as Record<string, string> | null
+  const provider = application.job.provider ?? "GREENHOUSE"
+  const providerLabel = provider === "ASHBY" ? "Ashby" : "Greenhouse"
 
   async function handleClaim() {
     setClaiming(true)
@@ -75,16 +77,20 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
       // detail page which may require an extra click-through on some boards.
       const boardToken = snapshot?.boardToken
       const externalId = snapshot?.externalId
-      const greenhouseUrl = boardToken && externalId
-        ? `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(boardToken)}&token=${encodeURIComponent(externalId)}`
-        : snapshot?.manualApplyUrl
-      if (!greenhouseUrl) {
-        setMsg("No Greenhouse URL in snapshot — cannot open prefilled form.")
+      const atsUrl = provider === "ASHBY"
+        ? (boardToken && externalId
+          ? `https://jobs.ashbyhq.com/${encodeURIComponent(boardToken)}/${encodeURIComponent(externalId)}/application`
+          : snapshot?.manualApplyUrl)
+        : (boardToken && externalId
+          ? `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(boardToken)}&token=${encodeURIComponent(externalId)}`
+          : snapshot?.manualApplyUrl)
+      if (!atsUrl) {
+        setMsg(`No ${providerLabel} URL in snapshot — cannot open prefilled form.`)
         return
       }
       // Pass the token in the URL hash — avoids unreliable cross-origin
-      // window.opener postMessage. Hash is never sent to Greenhouse's server.
-      const fillUrl = `${greenhouseUrl}#pipelineFill=${encodeURIComponent(token)}`
+      // window.opener postMessage. Hash is never sent to the ATS server.
+      const fillUrl = `${atsUrl}#pipelineFill=${encodeURIComponent(token)}`
       const tab = window.open(fillUrl, "_blank")
       if (!tab) {
         setMsg("Popup blocked — allow popups for this site and try again.")
@@ -101,7 +107,7 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
       window.addEventListener("message", handleMessage)
       setTimeout(() => window.removeEventListener("message", handleMessage), 120_000)
 
-      setMsg("Greenhouse tab opened — extension will pre-fill once the page loads.")
+      setMsg(`${providerLabel} tab opened — extension will pre-fill once the page loads.`)
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Request failed")
     } finally {
@@ -256,7 +262,7 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
           disabled={fetchingPackage}
           className="px-3 py-1.5 text-sm rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
         >
-          {fetchingPackage ? "Generating..." : "Open Greenhouse (prefilled)"}
+          {fetchingPackage ? "Generating..." : `Open ${providerLabel} (prefilled)`}
         </button>
 
         <button
@@ -282,7 +288,7 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md space-y-4">
             <h2 className="text-white font-semibold">Mark as Submitted</h2>
             <div>
-              <label className="text-xs text-zinc-400 block mb-1">Greenhouse Application ID (optional)</label>
+              <label className="text-xs text-zinc-400 block mb-1">External Application ID (optional)</label>
               <input
                 value={completeExtId}
                 onChange={(e) => setCompleteExtId(e.target.value)}

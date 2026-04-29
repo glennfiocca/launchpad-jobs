@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
             publicJobId: true,
             boardToken: true,
             externalId: true,
+            provider: true,
             company: { select: { id: true, name: true, logoUrl: true } },
           },
         },

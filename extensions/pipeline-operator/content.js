@@ -1483,16 +1483,21 @@ async function fillAshbyForm(snap, token) {
   // ── Location fill (AFTER resume upload + email guard) ──────────────────────
   // Location must be filled AFTER resume upload because Ashby's resume parser
   // overwrites the location field with data extracted from the resume PDF.
-  // Filling before upload is pointless — it gets overwritten.
+  //
+  // Use questionAnswers._systemfield_location (city, e.g. "New York, New York")
+  // instead of snap.location (full home address, e.g. "29-60 162nd St, Flushing, NY...").
+  // Ashby's Location field accepts city-level only.
+  const locationAnswer = snap.questionAnswers?.["_systemfield_location"] ?? snap.location
   const locationField = findAshbyField("_systemfield_location", "location", "city", "where are you located")
-  if (locationField instanceof HTMLInputElement && snap.location) {
-    const locationCommitted = await fillAshbyLocationField(locationField, snap.location)
+  if (locationField instanceof HTMLInputElement && locationAnswer) {
+    console.log(`[pipeline-operator] Location: using "${locationAnswer}" (from ${snap.questionAnswers?.["_systemfield_location"] ? "questionAnswers" : "profile"})`)
+    const locationCommitted = await fillAshbyLocationField(locationField, locationAnswer)
     if (locationCommitted) {
       filled++
       fillLog.location = { status: "committed", value: locationField.value }
       console.log("[pipeline-operator] Filled + committed: location (post-resume)")
     } else {
-      fillLog.location = { status: "typed_not_committed", typed: snap.location, fieldValue: locationField.value }
+      fillLog.location = { status: "typed_not_committed", typed: locationAnswer, fieldValue: locationField.value }
       missingFields.push("Location (typed but autocomplete not selected — please select manually)")
       console.warn("[pipeline-operator] Location typed but autocomplete option not committed")
     }
@@ -1526,62 +1531,73 @@ async function fillAshbyForm(snap, token) {
       if (!answer) continue
 
       try {
-        // Try to find by field name/id attributes (UUID paths)
-        let field = document.querySelector(
-          `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"], select[name="${meta.fieldName}"], ` +
-          `input[id="${meta.fieldName}"], textarea[id="${meta.fieldName}"], select[id="${meta.fieldName}"]`
-        )
+        // CRITICAL: Ashby renders hidden <input> elements with name=<fieldPath> for
+        // ALL field types — including Boolean (hidden checkbox) and ValueSelect
+        // (hidden text input). Writing to these hidden inputs does NOTHING visually.
+        // For select/boolean types, we MUST skip the hidden input and interact with
+        // the actual visible controls (Yes/No buttons, radio buttons, etc.).
 
-        // Fallback: search by label text
-        if (!field) {
-          field = findFieldByLabel(meta.label)
+        const isSelectType = meta.fieldType === "multi_value_single_select" || meta.fieldType === "multi_value_multi_select"
+        const hasSelectValues = !!meta.selectValues
+
+        // For Location fields in questionAnswers, use autocomplete commit
+        if (meta.fieldName === "_systemfield_location") {
+          const locField = findAshbyField("_systemfield_location", "location")
+          if (locField instanceof HTMLInputElement) {
+            const committed = await fillAshbyLocationField(locField, String(answer))
+            if (committed) {
+              filled++
+              filledFieldNames.add(meta.fieldName)
+              fillLog.location = { status: "committed", value: locField.value }
+              console.log(`[pipeline-operator] Filled custom (location autocomplete): ${meta.label} → ${locField.value}`)
+            } else {
+              missingFields.push("Location (autocomplete not committed)")
+            }
+          }
+          continue
         }
 
-        if (field instanceof HTMLSelectElement) {
-          field.value = String(answer)
-          field.dispatchEvent(new Event("change", { bubbles: true }))
-          filled++
-          filledFieldNames.add(meta.fieldName)
-          console.log(`[pipeline-operator] Filled custom (select): ${meta.label}`)
-        } else if (field instanceof HTMLInputElement && field.type === "checkbox") {
-          // Ashby boolean checkbox — check/uncheck based on answer
-          const shouldCheck = answer === "true" || answer === "yes" || answer === true
-          if (field.checked !== shouldCheck) {
-            field.click()
-          }
-          filled++
-          filledFieldNames.add(meta.fieldName)
-          console.log(`[pipeline-operator] Filled custom (checkbox): ${meta.label} = ${shouldCheck}`)
-        } else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
-          nativeSet(field, String(answer))
-          filled++
-          filledFieldNames.add(meta.fieldName)
-          console.log(`[pipeline-operator] Filled custom (input): ${meta.label}`)
-        } else {
-          // No native element found — try Ashby-specific controls
-
-          // FIX B: Boolean toggle buttons (Yes/No)
+        // For Boolean/ValueSelect types: go DIRECTLY to visual control interaction.
+        // Do NOT write to the hidden native input — it doesn't update the UI.
+        if (isSelectType || hasSelectValues) {
+          // Try Yes/No toggle first (for Boolean rendered as button pairs)
           const clickedToggle = await tryClickAshbyToggle(meta.label, answer, meta.fieldName)
           if (clickedToggle) {
             filled++
             filledFieldNames.add(meta.fieldName)
             console.log(`[pipeline-operator] Filled custom (toggle): ${meta.label}`)
+            continue
           }
-          // FIX C: Ashby custom dropdown for ValueSelect (pronouns, etc.)
-          else if (meta.fieldType === "multi_value_single_select" || meta.selectValues) {
-            const clickedOption = await tryClickAshbyDropdownOption(meta.fieldName, meta.label, answer, meta.selectValues)
-            if (clickedOption) {
-              filled++
-              filledFieldNames.add(meta.fieldName)
-              console.log(`[pipeline-operator] Filled custom (dropdown): ${meta.label}`)
-            } else {
-              console.warn(`[pipeline-operator] Could not find field for: ${meta.label} (path: ${meta.fieldName}, type: dropdown)`)
-              missingFields.push(meta.label)
-            }
-          } else {
-            console.warn(`[pipeline-operator] Could not find field for: ${meta.label} (path: ${meta.fieldName})`)
-            missingFields.push(meta.label)
+          // Try dropdown/radio option selection (for ValueSelect/MultiValueSelect)
+          const clickedOption = await tryClickAshbyDropdownOption(meta.fieldName, meta.label, answer, meta.selectValues)
+          if (clickedOption) {
+            filled++
+            filledFieldNames.add(meta.fieldName)
+            console.log(`[pipeline-operator] Filled custom (dropdown): ${meta.label}`)
+            continue
           }
+          console.warn(`[pipeline-operator] Could not fill select/boolean: ${meta.label} (path: ${meta.fieldName}, answer: ${answer})`)
+          missingFields.push(meta.label)
+          continue
+        }
+
+        // For text/textarea types: find the visible input and fill it
+        let field = document.querySelector(
+          `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"], ` +
+          `input[id="${meta.fieldName}"], textarea[id="${meta.fieldName}"]`
+        )
+        if (!field) {
+          field = findFieldByLabel(meta.label)
+        }
+
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+          nativeSet(field, String(answer))
+          filled++
+          filledFieldNames.add(meta.fieldName)
+          console.log(`[pipeline-operator] Filled custom (input): ${meta.label}`)
+        } else {
+          console.warn(`[pipeline-operator] Could not find field for: ${meta.label} (path: ${meta.fieldName})`)
+          missingFields.push(meta.label)
         }
       } catch (err) {
         console.error(`[pipeline-operator] Error filling Ashby field "${meta.fieldName}":`, err)

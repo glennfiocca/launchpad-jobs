@@ -154,10 +154,10 @@ export function JobDetail({ job, hasPriorApplication, onClose, isSaved = false, 
               {job.department}
             </span>
           )}
-          {job.postedAt && (
+          {job.createdAt && (
             <span className="flex items-center gap-1.5 text-sm text-zinc-500">
               <Calendar className="w-4 h-4" />
-              {timeAgo(job.postedAt)}
+              {timeAgo(job.createdAt)}
             </span>
           )}
           <span className="text-xs font-mono text-zinc-500 tabular-nums tracking-tight">

@@ -92,7 +92,7 @@ export async function GET(request: Request) {
     isActive: true,
     ...(remote === "true" && { remote: true }),
     ...(employmentType && { employmentType }),
-    ...(dateCutoff && { postedAt: { gte: dateCutoff } }),
+    ...(dateCutoff && { createdAt: { gte: dateCutoff } }),
     ...(salaryMin !== undefined && { salaryMin: { gte: salaryMin } }),
     ...(salaryMax !== undefined && { salaryMax: { lte: salaryMax } }),
     ...(effectiveLocation && locationWhere),
@@ -113,7 +113,7 @@ export async function GET(request: Request) {
 
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
     if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
-    if (dateCutoff) conditions.push(Prisma.sql`j."postedAt" >= ${dateCutoff}`);
+    if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
     if (useStructuredLocation && locationCity) {
@@ -139,7 +139,7 @@ export async function GET(request: Request) {
         ? buildBlendedRelevanceOrder(query, relevanceProfile)
         : sort === "relevance"
         ? Prisma.sql`ts_rank(j."searchVector", plainto_tsquery('english', ${query})) DESC`
-        : Prisma.sql`j."postedAt" DESC NULLS LAST`;
+        : Prisma.sql`j."createdAt" DESC NULLS LAST`;
 
     const [rawIds, countRows, facets] = await Promise.all([
       db.$queryRaw<Array<{ id: string }>>`
@@ -197,7 +197,7 @@ export async function GET(request: Request) {
     const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
     if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
-    if (dateCutoff) conditions.push(Prisma.sql`j."postedAt" >= ${dateCutoff}`);
+    if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
     if (useStructuredLocation && locationCity) {
@@ -259,7 +259,7 @@ export async function GET(request: Request) {
         company: true,
         _count: { select: { applications: true } },
       },
-      orderBy: { postedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       skip,
       take: limit,
     }),

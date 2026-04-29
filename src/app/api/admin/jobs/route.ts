@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
         company: { select: { id: true, name: true } },
         _count: { select: { applications: true } },
       },
-      orderBy: { postedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       skip,
       take: limit,
     }),

@@ -98,10 +98,12 @@ export async function syncGreenhouseBoard(
       });
 
       if (existing) {
+        // Preserve original postedAt — don't overwrite with Greenhouse updated_at
+        const { postedAt: _ignored, ...updateData } = jobData;
         await db.job.update({
           where: { id: existing.id },
           data: {
-            ...jobData,
+            ...updateData,
             ...(!existing.publicJobId
               ? { publicJobId: await generateUniquePublicJobId() }
               : {}),

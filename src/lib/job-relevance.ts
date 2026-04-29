@@ -13,13 +13,13 @@ export interface RelevanceProfile {
 }
 
 /** Fallback ORDER BY when no profile signals are available. */
-const RECENCY_FALLBACK = Prisma.sql`j."postedAt" DESC NULLS LAST`;
+const RECENCY_FALLBACK = Prisma.sql`j."createdAt" DESC NULLS LAST`;
 
 /**
  * Recency boost: newer jobs get up to 15 bonus points, decaying 1 pt/day.
  * Jobs older than 15 days receive 0.
  */
-const RECENCY_BOOST = Prisma.sql`GREATEST(0, 15 - EXTRACT(DAY FROM NOW() - COALESCE(j."postedAt", '1970-01-01'::timestamptz)))`;
+const RECENCY_BOOST = Prisma.sql`GREATEST(0, 15 - EXTRACT(DAY FROM NOW() - j."createdAt"))`;
 
 /** Assemble profile-based scoring fragments from a RelevanceProfile. */
 function buildProfileScoreParts(profile: RelevanceProfile): Prisma.Sql[] {
@@ -97,10 +97,10 @@ function hasProfileSignals(profile: RelevanceProfile): boolean {
  * Build a raw SQL ORDER BY clause for job relevance based on user profile.
  *
  * When the profile has scoring signals the result looks like:
- *   `(score_expr) DESC, j."postedAt" DESC NULLS LAST`
+ *   `(score_expr) DESC, j."createdAt" DESC NULLS LAST`
  *
  * When the profile is empty (all null/false) it falls back to:
- *   `j."postedAt" DESC NULLS LAST`
+ *   `j."createdAt" DESC NULLS LAST`
  *
  * The caller uses this directly after ORDER BY in a raw query where
  * the Job table is aliased as `j`.
@@ -113,7 +113,7 @@ export function buildRelevanceOrder(profile: RelevanceProfile): Prisma.Sql {
   const parts = buildProfileScoreParts(profile);
   const scoreExpr = Prisma.join(parts, " + ");
 
-  return Prisma.sql`(${scoreExpr}) DESC, j."postedAt" DESC NULLS LAST`;
+  return Prisma.sql`(${scoreExpr}) DESC, j."createdAt" DESC NULLS LAST`;
 }
 
 /**
@@ -137,5 +137,5 @@ export function buildBlendedRelevanceOrder(
   const allParts = [textRank, ...profileParts];
   const scoreExpr = Prisma.join(allParts, " + ");
 
-  return Prisma.sql`(${scoreExpr}) DESC, j."postedAt" DESC NULLS LAST`;
+  return Prisma.sql`(${scoreExpr}) DESC, j."createdAt" DESC NULLS LAST`;
 }

@@ -43,8 +43,8 @@ export function JobCard({ job, selected, onClick, isSaved = false, onSaveToggle 
               <h3 className="text-sm font-semibold text-white leading-tight">{job.title}</h3>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              {job.postedAt && (
-                <span className="text-xs text-zinc-500 mr-1">{timeAgo(job.postedAt)}</span>
+              {job.createdAt && (
+                <span className="text-xs text-zinc-500 mr-1">{timeAgo(job.createdAt)}</span>
               )}
               <SaveButton
                 jobId={job.id}

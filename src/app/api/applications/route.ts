@@ -148,12 +148,19 @@ function toGreenhouseFieldType(
   }
 }
 
-/** Convert normalized options to Greenhouse-style selectValues for snapshot */
+/** Convert normalized options to selectValues for snapshot.
+ *  Preserves original value type — Ashby uses string IDs (e.g. UUIDs),
+ *  Greenhouse uses numeric IDs. Coercing to Number() corrupts non-numeric values to NaN. */
 function toSelectValues(
   options?: ReadonlyArray<{ value: string; label: string }>
-): Array<{ value: number; label: string }> | undefined {
+): Array<{ value: string | number; label: string }> | undefined {
   if (!options || options.length === 0) return undefined;
-  return options.map((o) => ({ value: Number(o.value), label: o.label }));
+  return options.map((o) => {
+    const asNum = Number(o.value);
+    // Keep as number only if the original is purely numeric (Greenhouse compat)
+    const value = !isNaN(asNum) && String(asNum) === o.value ? asNum : o.value;
+    return { value, label: o.label };
+  });
 }
 
 /** Map UserProfile → QuestionMatchProfile for ATS-agnostic question matching */

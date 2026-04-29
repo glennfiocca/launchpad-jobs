@@ -899,6 +899,114 @@ function detectAtsProvider() {
 }
 
 /**
+ * Fill an Ashby location combobox: type text, wait for autocomplete suggestions,
+ * select the best match, and verify committed state.
+ *
+ * @param {HTMLInputElement} field - The location input element
+ * @param {string} locationText - The location text to fill (e.g. "New York, New York")
+ * @returns {Promise<boolean>} true if an option was explicitly selected/committed
+ */
+async function fillAshbyLocationField(field, locationText) {
+  // Clear existing value and type the location text
+  nativeSet(field, "")
+  await new Promise((r) => setTimeout(r, 100))
+  nativeSet(field, locationText)
+
+  // Dispatch input event to trigger autocomplete
+  field.dispatchEvent(new Event("input", { bubbles: true }))
+  field.dispatchEvent(new Event("change", { bubbles: true }))
+
+  // Wait for autocomplete dropdown to appear (Ashby renders options as role="option" or listbox items)
+  const AUTOCOMPLETE_WAIT = 2000
+  const pollStart = Date.now()
+  let optionClicked = false
+
+  while (Date.now() - pollStart < AUTOCOMPLETE_WAIT) {
+    await new Promise((r) => setTimeout(r, 200))
+
+    // Look for autocomplete options in multiple possible locations
+    // Ashby combobox renders: [role="listbox"] > [role="option"], or div with class containing "option"
+    const options = document.querySelectorAll(
+      '[role="option"], [role="listbox"] [role="option"], [class*="combobox"] [role="option"], ' +
+      '[class*="autocomplete"] li, [class*="suggestion"] li, [class*="location"] [role="option"]'
+    )
+
+    if (options.length > 0) {
+      const locationLower = locationText.toLowerCase()
+      let bestMatch = null
+      let bestScore = -1
+
+      for (const opt of options) {
+        const optText = (opt.textContent ?? "").trim().toLowerCase()
+        if (!optText) continue
+        // Exact match is ideal
+        if (optText === locationLower) {
+          bestMatch = opt
+          bestScore = 100
+          break
+        }
+        // Starts-with match
+        if (optText.startsWith(locationLower) || locationLower.startsWith(optText)) {
+          const score = 50
+          if (score > bestScore) { bestMatch = opt; bestScore = score }
+        }
+        // Contains match
+        if (optText.includes(locationLower) || locationLower.includes(optText)) {
+          const score = 30
+          if (score > bestScore) { bestMatch = opt; bestScore = score }
+        }
+      }
+
+      // If no text match, pick the first option (most relevant autocomplete result)
+      if (!bestMatch && options.length > 0) {
+        bestMatch = options[0]
+        bestScore = 10
+      }
+
+      if (bestMatch) {
+        // Use click + mousedown to ensure Ashby's React handlers fire
+        bestMatch.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+        bestMatch.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+        bestMatch.click()
+        console.log(`[pipeline-operator] Location: clicked option "${bestMatch.textContent?.trim()}" (score: ${bestScore})`)
+        optionClicked = true
+        break
+      }
+    }
+  }
+
+  // If no dropdown appeared, try keyboard selection (ArrowDown + Enter)
+  if (!optionClicked) {
+    console.log("[pipeline-operator] Location: no dropdown detected, trying keyboard commit")
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
+    await new Promise((r) => setTimeout(r, 200))
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    await new Promise((r) => setTimeout(r, 300))
+
+    // Check if value changed (indicating selection)
+    if (field.value && field.value !== locationText) {
+      console.log(`[pipeline-operator] Location: keyboard commit resulted in "${field.value}"`)
+      optionClicked = true
+    } else if (field.value === locationText) {
+      // Value stayed the same — might still be committed if no dropdown exists
+      // Check for aria-expanded or listbox still visible
+      const expandedAttr = field.getAttribute("aria-expanded")
+      const listboxVisible = document.querySelector('[role="listbox"]:not([hidden])')
+      if (expandedAttr === "false" || !listboxVisible) {
+        // Dropdown closed or not present — consider committed
+        optionClicked = true
+      }
+    }
+  }
+
+  // Final settle
+  await new Promise((r) => setTimeout(r, 300))
+  field.dispatchEvent(new Event("blur", { bubbles: true }))
+
+  return optionClicked
+}
+
+/**
  * Fill an Ashby application form from the decoded snapshot.
  *
  * Ashby uses standard HTML inputs (not React-Select), and has a single "Name"
@@ -968,6 +1076,69 @@ async function fillAshbyForm(snap, token) {
 
   let filled = 0
   const missingFields = []
+  /** Coverage accounting: tracks every field's fill outcome for operator visibility. */
+  const fillLog = {}
+
+  /**
+   * Find the canonical resume file input, skipping "autofill from resume" uploaders.
+   * Priority: (1) _systemfield_resume, (2) name="resume", (3) file input with
+   * accept containing pdf, (4) file input NOT inside an autofill/parse container.
+   * Returns null if ambiguous or only autofill inputs exist.
+   */
+  function findCanonicalResumeInput() {
+    // Priority 1: Ashby system field for resume
+    const bySystemField = document.querySelector('input[type="file"][name="_systemfield_resume"]')
+    if (bySystemField) return bySystemField
+
+    // Priority 2: Named "resume"
+    const byName = document.querySelector('input[type="file"][name="resume"]')
+    if (byName) return byName
+
+    // Collect all visible file inputs
+    const allFileInputs = Array.from(document.querySelectorAll('input[type="file"]'))
+    if (allFileInputs.length === 0) return null
+
+    // Filter out inputs inside parser/autofill/import uploader regions.
+    // Ashby's showAutofillApplicationsBox renders an "import" uploader that
+    // auto-parses and overwrites form fields — must NEVER upload to it.
+    const AUTOFILL_MARKERS = [
+      "autofill", "auto-fill", "auto fill",
+      "parse resume", "parse your resume",
+      "upload to autofill", "fill from",
+      "import resume", "import your resume",
+      "prefill", "pre-fill",
+    ]
+    const candidateInputs = allFileInputs.filter((input) => {
+      // Walk up to check container text for autofill markers
+      let el = input.parentElement
+      for (let depth = 0; depth < 6 && el; depth++) {
+        const containerText = (el.textContent ?? "").toLowerCase()
+        if (AUTOFILL_MARKERS.some((m) => containerText.includes(m))) {
+          console.log(`[pipeline-operator] Skipping file input inside autofill container: "${containerText.slice(0, 80)}…"`)
+          return false
+        }
+        // Stop at form boundary
+        if (el.tagName === "FORM" || el.tagName === "SECTION") break
+        el = el.parentElement
+      }
+      return true
+    })
+
+    // Priority 3: PDF-accepting input
+    const pdfInput = candidateInputs.find((i) => (i.getAttribute("accept") ?? "").includes("pdf"))
+    if (pdfInput) return pdfInput
+
+    // Priority 4: Single unambiguous candidate
+    if (candidateInputs.length === 1) return candidateInputs[0]
+
+    // Ambiguous: multiple candidates — fail safely
+    if (candidateInputs.length > 1) {
+      console.warn(`[pipeline-operator] ${candidateInputs.length} file inputs found — cannot safely determine resume input`)
+      return null
+    }
+
+    return null
+  }
 
   // Build a lookup of questionMeta fieldName → label for UUID-keyed fields.
   // Used to find fields by their Ashby path attribute when label matching isn't enough.
@@ -1031,6 +1202,7 @@ async function fillAshbyForm(snap, token) {
     const fullName = [snap.firstName, snap.lastName].filter(Boolean).join(" ")
     nativeSet(nameField, fullName)
     filled++
+    fillLog.name = { status: "filled" }
     console.log("[pipeline-operator] Filled: name")
   }
 
@@ -1041,17 +1213,35 @@ async function fillAshbyForm(snap, token) {
   if (emailField instanceof HTMLInputElement && emailValue) {
     nativeSet(emailField, emailValue)
     filled++
+    fillLog.email = { status: "filled", isTracking: !!snap.trackingEmail }
     console.log("[pipeline-operator] Filled: email")
   }
 
-  // Phone — Ashby uses a UUID path (not _systemfield_phone), so rely on label + type=tel
-  const phoneField =
-    document.querySelector('input[type="tel"]') ??
-    findAshbyField(null, "phone", "phone number", "mobile")
+  // Phone — Ashby uses a UUID path (e.g. 8039f8aa-...), not _systemfield_phone.
+  // Phone is a core field filtered from questionMeta, so metaByLabel won't have it.
+  // Strategy: (1) _systemfield_phone, (2) label-based search, (3) type=tel,
+  // (4) wait + retry type=tel (Ashby SPA may render phone field late).
+  let phoneField =
+    findAshbyField("_systemfield_phone", "phone", "phone number", "mobile") ??
+    document.querySelector('input[type="tel"]')
+  // Retry: Ashby may render phone field after initial hydration
+  if (!phoneField && snap.phone) {
+    await new Promise((r) => setTimeout(r, 1000))
+    phoneField =
+      findAshbyField("_systemfield_phone", "phone", "phone number", "mobile") ??
+      document.querySelector('input[type="tel"]')
+  }
   if (phoneField instanceof HTMLInputElement && snap.phone) {
     nativeSet(phoneField, snap.phone)
+    // Verify the value was set
+    const phoneVerified = phoneField.value === snap.phone
     filled++
-    console.log("[pipeline-operator] Filled: phone")
+    fillLog.phone = { status: phoneVerified ? "verified" : "filled_unverified", selector: phoneField.name || phoneField.id || "tel", value: phoneField.value }
+    console.log(`[pipeline-operator] Filled: phone (${phoneField.name || phoneField.id || "tel"})${phoneVerified ? " ✓" : " (unverified)"}`)
+  } else if (snap.phone) {
+    fillLog.phone = { status: "failed", reason: "no phone field found after retry" }
+    missingFields.push("Phone")
+    console.warn("[pipeline-operator] Phone value exists but no field found after retry")
   }
 
   // LinkedIn — try UUID from questionMeta first (most reliable), then label fallback.
@@ -1085,42 +1275,105 @@ async function fillAshbyForm(snap, token) {
   }
 
   // Location
+  // Location — Ashby uses a combobox with autocomplete suggestions.
+  // Typing alone leaves the value uncommitted; we must explicitly select an option.
   const locationField = findAshbyField("_systemfield_location", "location", "city", "where are you located")
   if (locationField instanceof HTMLInputElement && snap.location) {
-    nativeSet(locationField, snap.location)
-    filled++
-    console.log("[pipeline-operator] Filled: location")
-  }
-
-  // ── Resume upload ────────────────────────────────────────────────────────────
-  if (snap.presignedResumeUrl) {
-    const resumeInput = document.querySelector("input[type='file']")
-    if (resumeInput instanceof HTMLInputElement) {
-      await attachResume(resumeInput, snap.presignedResumeUrl, snap.resumeFileName ?? "resume.pdf")
+    const locationCommitted = await fillAshbyLocationField(locationField, snap.location)
+    if (locationCommitted) {
       filled++
-      console.log("[pipeline-operator] Filled: resume")
+      fillLog.location = { status: "committed", value: locationField.value }
+      console.log("[pipeline-operator] Filled + committed: location")
+    } else {
+      // Typed but not committed — surface as unresolved
+      fillLog.location = { status: "typed_not_committed", typed: snap.location, fieldValue: locationField.value }
+      missingFields.push("Location (typed but autocomplete not selected — please select manually)")
+      console.warn("[pipeline-operator] Location typed but autocomplete option not committed")
     }
   }
 
-  // ── FIX D: Re-assert tracking email after resume upload ─────────────────────
-  // Ashby auto-parses resume metadata and may overwrite email with the personal
-  // email found in the PDF, breaking the closed-loop tracking system.
-  if (emailField instanceof HTMLInputElement && emailValue) {
-    // Wait for Ashby's auto-parse to complete
-    await new Promise((r) => setTimeout(r, 1500))
-    const currentEmail = emailField.value
-    if (currentEmail !== emailValue) {
-      console.warn(`[pipeline-operator] Email was overwritten by resume parse: "${currentEmail}" → re-asserting "${emailValue}"`)
-      nativeSet(emailField, emailValue)
-      // Second check after React re-render
-      await new Promise((r) => setTimeout(r, 300))
-      if (emailField.value !== emailValue) {
-        console.error("[pipeline-operator] Email re-assertion failed — tracking email may be lost")
+  // ── Resume upload ────────────────────────────────────────────────────────────
+  // Ashby pages may contain multiple file inputs — an "autofill from resume"
+  // uploader (which auto-parses and overwrites fields) and the canonical resume
+  // upload section. We must target ONLY the canonical resume input.
+  if (snap.presignedResumeUrl) {
+    const resumeInput = findCanonicalResumeInput()
+    if (resumeInput instanceof HTMLInputElement) {
+      await attachResume(resumeInput, snap.presignedResumeUrl, snap.resumeFileName ?? "resume.pdf")
+      // Post-upload verification: confirm the canonical field has files attached
+      await new Promise((r) => setTimeout(r, 500))
+      const hasFile = resumeInput.files && resumeInput.files.length > 0
+      if (hasFile) {
+        filled++
+        fillLog.resume = { status: "verified", selector: resumeInput.name || resumeInput.id || "file-input", fileName: resumeInput.files[0]?.name }
+        console.log(`[pipeline-operator] Resume verified on canonical input: ${resumeInput.files[0]?.name}`)
       } else {
-        console.log("[pipeline-operator] Email re-assertion succeeded")
+        fillLog.resume = { status: "attached_unverified", selector: resumeInput.name || resumeInput.id || "file-input" }
+        filled++
+        console.warn("[pipeline-operator] Resume attached but file count unverified (DataTransfer may not reflect)")
       }
     } else {
-      console.log("[pipeline-operator] Email unchanged after resume upload — tracking email preserved")
+      fillLog.resume = { status: "FAILED", reason: "no canonical resume input found — parser uploader blocked" }
+      missingFields.push("Resume upload (BLOCKED — only parser uploader found, no canonical field)")
+      console.error("[pipeline-operator] BLOCKED: No canonical resume input found. Refusing to upload to parser/autofill uploader.")
+    }
+  }
+
+  // ── Tracking email guard ────────────────────────────────────────────────────
+  // Ashby auto-parses resume metadata and may overwrite email with the personal
+  // email found in the PDF, breaking the closed-loop tracking system.
+  // Strategy: MutationObserver + polling to catch async overwrites from resume parse.
+  if (emailField instanceof HTMLInputElement && emailValue) {
+    let emailGuardActive = true
+    let emailReassertions = 0
+    const MAX_REASSERTIONS = 5
+
+    // MutationObserver watches for attribute changes (value via React setState)
+    const emailObserver = new MutationObserver(() => {
+      if (!emailGuardActive) return
+      if (emailField.value !== emailValue && emailReassertions < MAX_REASSERTIONS) {
+        console.warn(`[pipeline-operator] Email mutated to "${emailField.value}" — re-asserting tracking email (attempt ${emailReassertions + 1})`)
+        nativeSet(emailField, emailValue)
+        emailReassertions++
+      }
+    })
+    emailObserver.observe(emailField, { attributes: true, attributeFilter: ["value"] })
+
+    // Also poll — React may update value property without triggering attribute mutation
+    const emailPollStart = Date.now()
+    const EMAIL_GUARD_DURATION = 4000 // 4s covers Ashby's async resume parse
+    const emailPollId = setInterval(() => {
+      if (!emailGuardActive || Date.now() - emailPollStart > EMAIL_GUARD_DURATION) {
+        clearInterval(emailPollId)
+        return
+      }
+      if (emailField.value !== emailValue && emailReassertions < MAX_REASSERTIONS) {
+        console.warn(`[pipeline-operator] Email poll detected overwrite: "${emailField.value}" — re-asserting`)
+        nativeSet(emailField, emailValue)
+        emailReassertions++
+      }
+    }, 500)
+
+    // Wait for guard duration, then do final verification
+    await new Promise((r) => setTimeout(r, EMAIL_GUARD_DURATION))
+    emailGuardActive = false
+    emailObserver.disconnect()
+    clearInterval(emailPollId)
+
+    // Final verification with one retry
+    if (emailField.value !== emailValue) {
+      console.warn("[pipeline-operator] Final email check failed — one last re-assertion")
+      nativeSet(emailField, emailValue)
+      await new Promise((r) => setTimeout(r, 300))
+    }
+
+    if (emailField.value === emailValue) {
+      fillLog.trackingEmail = { status: "verified", reassertions: emailReassertions }
+      console.log(`[pipeline-operator] Tracking email verified (${emailReassertions} re-assertions needed)`)
+    } else {
+      fillLog.trackingEmail = { status: "FAILED", finalValue: emailField.value, expected: emailValue }
+      missingFields.push("Tracking email (CRITICAL)")
+      console.error(`[pipeline-operator] CRITICAL: Tracking email could not be preserved. Final: "${emailField.value}", expected: "${emailValue}"`)
     }
   }
 
@@ -1262,9 +1515,24 @@ async function fillAshbyForm(snap, token) {
   ]
   const uniqueMissing = [...new Set(allMissing)]
 
-  console.log(`[pipeline-operator] Fill complete: ${filled} filled, ${uniqueMissing.length} missing`)
+  // ── Coverage accounting ───────────────────────────────────────────────────────
+  // Log full fill audit to console for operator diagnostics
+  console.log("[pipeline-operator] Fill coverage audit:", JSON.stringify(fillLog, null, 2))
 
-  if (filled > 0) {
+  // Detect critical failures
+  const criticalFailures = []
+  if (fillLog.trackingEmail?.status === "FAILED") criticalFailures.push("Tracking email NOT set")
+  if (fillLog.resume?.status === "FAILED") criticalFailures.push("Resume blocked — parser uploader only, no canonical field")
+  if (fillLog.location?.status === "typed_not_committed") criticalFailures.push("Location not committed")
+
+  console.log(`[pipeline-operator] Fill complete: ${filled} filled, ${uniqueMissing.length} missing, ${criticalFailures.length} critical`)
+
+  if (criticalFailures.length > 0) {
+    showBanner(
+      `⚠ CRITICAL: ${criticalFailures.join("; ")}. Pre-filled ${filled} field${filled !== 1 ? "s" : ""} — DO NOT SUBMIT until resolved.`,
+      "error"
+    )
+  } else if (filled > 0) {
     const pendingMsg = uniqueMissing.length > 0
       ? ` — ${uniqueMissing.length} required field(s) need manual entry: ${uniqueMissing.join(", ")}`
       : ""
@@ -1355,9 +1623,13 @@ function tryClickAshbyToggle(labelText, answer) {
 function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues) {
   const answerStr = String(answer)
 
-  // Find the target option label from selectValues
-  const targetOption = selectValues?.find((sv) => sv.value === answerStr)
-  const targetLabel = targetOption?.label ?? answerStr
+  // Find the target option label from selectValues.
+  // Use String() coercion for comparison: values may be string or number depending on ATS.
+  const targetOption = selectValues?.find((sv) => String(sv.value) === answerStr)
+  // Also try matching by label text (for cases where answer is the label, not the value)
+  const targetByLabel = !targetOption ? selectValues?.find((sv) => sv.label.toLowerCase() === answerStr.toLowerCase()) : null
+  const resolvedOption = targetOption ?? targetByLabel
+  const targetLabel = resolvedOption?.label ?? answerStr
 
   console.log(`[pipeline-operator] tryClickAshbyDropdownOption: looking for "${targetLabel}" in "${labelText.slice(0, 50)}…"`)
 

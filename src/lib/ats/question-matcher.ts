@@ -279,6 +279,13 @@ export function autoAnswerQuestion(
     return profile.preferredFirstName ?? null;
   }
 
+  // --- Pronouns ---
+  // No auto-answer: pronouns are personal and not stored in profile.
+  // Returning null ensures the question surfaces as pending for operator/user.
+  if (/\bpronoun/i.test(question.label)) {
+    return null;
+  }
+
   // --- EEOC: gender identity ---
   if (/\bgender\b/i.test(question.label)) {
     if (question.fieldType !== "select" || opts.length === 0) return null;

@@ -210,14 +210,18 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
         tempResumeFile = path.join(os.tmpdir(), `resume-${Date.now()}${ext}`);
         fs.writeFileSync(tempResumeFile, resumeBuffer);
 
+        // Target ONLY the canonical resume field — never the parser/autofill uploader.
+        // Ashby's showAutofillApplicationsBox renders a separate uploader that
+        // auto-parses and overwrites form fields. Generic input[type="file"] MUST NOT
+        // be used as a fallback since it could match the parser uploader.
         const resumeInput = await page.$(
-          'input[type="file"][name="_systemfield_resume"], input[type="file"][name="resume"], input[type="file"][accept*="pdf"], input[type="file"]'
+          'input[type="file"][name="_systemfield_resume"], input[type="file"][name="resume"]'
         );
         if (resumeInput) {
           await resumeInput.setInputFiles(tempResumeFile);
-          console.log("[ashby-apply] Resume uploaded");
+          console.log("[ashby-apply] Resume uploaded to canonical field");
         } else {
-          console.log("[ashby-apply] Resume input not found — skipping");
+          console.log("[ashby-apply] Canonical resume input (_systemfield_resume) not found — skipping upload to avoid parser uploader");
         }
       }
 

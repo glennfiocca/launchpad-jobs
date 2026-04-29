@@ -370,6 +370,37 @@ describe("Ashby question matching — UUID-keyed fields", () => {
   });
 });
 
+// --- Pronouns ---
+
+describe("autoAnswerQuestion — pronouns", () => {
+  it("returns null for pronoun select question (surfaces as pending)", () => {
+    const q = makeQuestion("Preferred pronouns", "select", [
+      { value: "he_him", label: "He/Him" },
+      { value: "she_her", label: "She/Her" },
+      { value: "they_them", label: "They/Them" },
+    ]);
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
+  });
+
+  it("returns null for pronoun text question", () => {
+    const q = makeQuestion("What are your pronouns?", "text");
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
+  });
+
+  it("pronoun question appears in unanswered list", () => {
+    const q = makeQuestion("Preferred pronouns", "select", [
+      { value: "he_him", label: "He/Him" },
+      { value: "she_her", label: "She/Her" },
+    ], { required: true });
+    const profile = makeProfile();
+    const result = getUnansweredQuestions([q], profile);
+    expect(result).toHaveLength(1);
+    expect(result[0].label).toBe("Preferred pronouns");
+  });
+});
+
 // --- stripHtml ---
 
 describe("stripHtml", () => {

@@ -76,7 +76,7 @@ export interface QuestionMeta {
   label: string;
   fieldName: string;
   fieldType: GreenhouseQuestionField["type"];
-  selectValues?: Array<{ value: number; label: string }>;
+  selectValues?: Array<{ value: string | number; label: string }>;
 }
 
 export interface PendingQuestion {
@@ -85,7 +85,7 @@ export interface PendingQuestion {
   fieldType: GreenhouseQuestionField["type"];
   required: boolean;
   description: string | null;
-  selectValues?: Array<{ value: number; label: string }>;
+  selectValues?: Array<{ value: string | number; label: string }>;
   userAnswer?: string;
 }
 

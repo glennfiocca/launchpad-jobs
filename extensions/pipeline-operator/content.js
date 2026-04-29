@@ -993,14 +993,33 @@ async function fillAshbyLocationField(field, locationText) {
       }
 
       if (bestMatch) {
-        // Use CDP click (Chrome DevTools Protocol) to dispatch trusted pointer/mouse
-        // events at the element's coordinates. React 18 uses pointer events for its
-        // synthetic event system — plain .click() dispatches untrusted events that
-        // React may ignore. CDP click is what makes react-select work in Greenhouse.
-        console.log(`[pipeline-operator] Location: clicking option "${bestMatch.textContent?.trim()}" (score: ${bestScore}) via CDP`)
-        await cdpClick(bestMatch)
-        // Small settle for React state update after click
-        await new Promise((r) => setTimeout(r, 300))
+        // Use multiple click strategies — Ashby's React components may respond to
+        // different event types depending on their implementation.
+        console.log(`[pipeline-operator] Location: selecting option "${bestMatch.textContent?.trim()}" (score: ${bestScore})`)
+
+        // Strategy A: CDP click (trusted mouse events at real coordinates)
+        const cdpWorked = await cdpClick(bestMatch)
+        await new Promise((r) => setTimeout(r, 200))
+
+        // Strategy B: If CDP didn't change the field value, try pointer events
+        if (field.value === locationText || !field.value) {
+          console.log("[pipeline-operator] Location: CDP click may not have worked, trying pointer events")
+          bestMatch.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }))
+          bestMatch.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true }))
+          bestMatch.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
+          await new Promise((r) => setTimeout(r, 200))
+        }
+
+        // Strategy C: If still unchanged, use keyboard — focus the field, ArrowDown to highlight, Enter to select
+        if (field.value === locationText || !field.value) {
+          console.log("[pipeline-operator] Location: pointer events didn't work, trying keyboard selection")
+          field.focus()
+          field.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", keyCode: 40, bubbles: true }))
+          await new Promise((r) => setTimeout(r, 150))
+          field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true }))
+          await new Promise((r) => setTimeout(r, 300))
+        }
+
         optionClicked = true
         break
       }
@@ -1524,7 +1543,7 @@ async function fillAshbyForm(snap, token) {
           // No native element found — try Ashby-specific controls
 
           // FIX B: Boolean toggle buttons (Yes/No)
-          const clickedToggle = tryClickAshbyToggle(meta.label, answer)
+          const clickedToggle = tryClickAshbyToggle(meta.label, answer, meta.fieldName)
           if (clickedToggle) {
             filled++
             filledFieldNames.add(meta.fieldName)
@@ -1575,7 +1594,7 @@ async function fillAshbyForm(snap, token) {
       }
 
       // Try Yes/No toggle buttons
-      const clickedToggle = tryClickAshbyToggle(pq.label, pq.userAnswer)
+      const clickedToggle = tryClickAshbyToggle(pq.label, pq.userAnswer, pq.fieldName)
       if (clickedToggle) {
         filled++
         filledFieldNames.add(pq.fieldName)
@@ -1673,75 +1692,107 @@ async function fillAshbyForm(snap, token) {
 }
 
 /**
- * Try to click an Ashby boolean toggle button matching the given label and answer.
- * Ashby renders boolean questions as two buttons ("Yes"/"No") or a single checkbox
- * inside a form field container. Walks up multiple DOM levels to find the question
- * boundary, then searches for clickable controls within.
+ * Try to click an Ashby boolean toggle button.
  *
- * Returns true if a toggle was clicked.
+ * Ashby Boolean fields render as Yes/No button pairs or checkboxes inside a
+ * question container. The container can be found by:
+ *   1. The field's UUID path (used as name/id/data attribute on some element)
+ *   2. Searching for "Yes"/"No" button pairs near the question label text
+ *
+ * @param {string} labelText - Question label
+ * @param {string} answer - "true"/"false"/"yes"/"no"
+ * @param {string} [fieldPath] - UUID field path (e.g. "790b5934-...")
+ * @returns {boolean}
  */
-function tryClickAshbyToggle(labelText, answer) {
+function tryClickAshbyToggle(labelText, answer, fieldPath) {
   const answerLower = String(answer).toLowerCase()
-  // Determine which button text to look for
   const wantYes = answerLower === "true" || answerLower === "yes"
   const wantNo = answerLower === "false" || answerLower === "no"
-
-  // Truncate label for substring matching (long policy texts)
   const matchText = labelText.toLowerCase().slice(0, 80)
 
-  // Find the label/heading element for this question.
-  // Ashby uses various elements for question titles — not just <label> and <legend>.
-  // Search broadly: label, legend, div, span, p, h1-h6.
-  for (const labelEl of document.querySelectorAll("label, legend, p, span, div, h1, h2, h3, h4, h5, h6")) {
-    const elText = labelEl.textContent?.toLowerCase() ?? ""
-    if (!elText.includes(matchText)) continue
-    // Skip elements whose text is way too long (likely a large container, not a label)
-    if (elText.length > 500) continue
+  console.log(`[pipeline-operator] tryClickAshbyToggle: looking for "${matchText.slice(0, 50)}…" (want=${wantYes ? "Yes" : "No"}, path=${fieldPath ?? "none"})`)
 
-    // Walk up to the question container — Ashby nests label → div → div → buttons.
-    // Walk up to 6 levels to find a container with buttons, checkboxes, or ARIA toggle controls.
-    let container = labelEl.parentElement
-    for (let depth = 0; depth < 6 && container; depth++) {
-      // Check for native checkbox input
-      const checkbox = container.querySelector('input[type="checkbox"]')
-      if (checkbox instanceof HTMLInputElement) {
-        const shouldCheck = wantYes
-        if (checkbox.checked !== shouldCheck) {
-          checkbox.click()
-        }
-        console.log(`[pipeline-operator] tryClickAshbyToggle: clicked checkbox for "${labelText.slice(0, 50)}…"`)
-        return true
+  // Strategy 1: Find container by field path attribute
+  if (fieldPath) {
+    const pathContainer =
+      document.querySelector(`[name="${fieldPath}"]`)?.closest("[class]")?.parentElement ??
+      document.querySelector(`[id="${fieldPath}"]`)?.closest("[class]")?.parentElement ??
+      document.querySelector(`[data-path="${fieldPath}"]`)?.parentElement ??
+      document.querySelector(`[data-field="${fieldPath}"]`)?.parentElement
+    if (pathContainer) {
+      const clicked = clickToggleInContainer(pathContainer, wantYes, wantNo, answerLower, labelText)
+      if (clicked) return true
+    }
+  }
+
+  // Strategy 2: Find ALL "Yes"/"No" button pairs on the page, then check which
+  // pair is near the question text. This avoids the fragile label-search-then-walk-up.
+  const allButtons = Array.from(document.querySelectorAll("button"))
+  const yesButtons = allButtons.filter((b) => (b.textContent ?? "").trim().toLowerCase() === "yes")
+
+  for (const yesBtn of yesButtons) {
+    // Find the containing question block — walk up until we find one that has the question text
+    let container = yesBtn.parentElement
+    for (let depth = 0; depth < 8 && container; depth++) {
+      const containerText = (container.textContent ?? "").toLowerCase()
+      if (containerText.includes(matchText)) {
+        // This container has both the question text AND a Yes button — this is our target
+        const clicked = clickToggleInContainer(container, wantYes, wantNo, answerLower, labelText)
+        if (clicked) return true
+        break
       }
-
-      // Check for ARIA role="switch" or role="checkbox" (custom Ashby toggle controls)
-      const ariaToggle = container.querySelector('[role="switch"], [role="checkbox"]')
-      if (ariaToggle) {
-        const isChecked = ariaToggle.getAttribute("aria-checked") === "true"
-        if (isChecked !== wantYes) {
-          ariaToggle.click()
-        }
-        console.log(`[pipeline-operator] tryClickAshbyToggle: clicked ARIA toggle (role=${ariaToggle.getAttribute("role")}) for "${labelText.slice(0, 50)}…"`)
-        return true
-      }
-
-      // Check for Yes/No buttons
-      const buttons = container.querySelectorAll("button")
-      if (buttons.length >= 2) {
-        for (const btn of buttons) {
-          const btnText = (btn.textContent ?? "").trim().toLowerCase()
-          if (
-            (wantYes && btnText === "yes") ||
-            (wantNo && btnText === "no") ||
-            btnText === answerLower
-          ) {
-            btn.click()
-            console.log(`[pipeline-operator] tryClickAshbyToggle: clicked "${btnText}" for "${labelText.slice(0, 50)}…"`)
-            return true
-          }
-        }
-      }
-
       container = container.parentElement
+    }
+  }
+
+  // Strategy 3: Find checkboxes or ARIA toggles near the label text
+  for (const el of document.querySelectorAll('input[type="checkbox"], [role="switch"], [role="checkbox"]')) {
+    let container = el.parentElement
+    for (let depth = 0; depth < 6 && container; depth++) {
+      if ((container.textContent ?? "").toLowerCase().includes(matchText)) {
+        if (el instanceof HTMLInputElement && el.type === "checkbox") {
+          if (el.checked !== wantYes) el.click()
+          console.log(`[pipeline-operator] tryClickAshbyToggle: clicked checkbox near "${labelText.slice(0, 50)}…"`)
+          return true
+        }
+        const isChecked = el.getAttribute("aria-checked") === "true"
+        if (isChecked !== wantYes) el.click()
+        console.log(`[pipeline-operator] tryClickAshbyToggle: clicked ARIA toggle near "${labelText.slice(0, 50)}…"`)
+        return true
+      }
+      container = container.parentElement
+    }
+  }
+
+  console.warn(`[pipeline-operator] tryClickAshbyToggle: FAILED for "${labelText.slice(0, 50)}…"`)
+  return false
+}
+
+/** Click a Yes/No toggle button or checkbox within a container element. */
+function clickToggleInContainer(container, wantYes, wantNo, answerLower, labelText) {
+  // Check for checkbox
+  const checkbox = container.querySelector('input[type="checkbox"]')
+  if (checkbox instanceof HTMLInputElement) {
+    if (checkbox.checked !== wantYes) checkbox.click()
+    console.log(`[pipeline-operator] clickToggleInContainer: checkbox for "${labelText.slice(0, 40)}…"`)
+    return true
+  }
+  // Check ARIA toggle
+  const ariaToggle = container.querySelector('[role="switch"], [role="checkbox"]')
+  if (ariaToggle) {
+    const isChecked = ariaToggle.getAttribute("aria-checked") === "true"
+    if (isChecked !== wantYes) ariaToggle.click()
+    console.log(`[pipeline-operator] clickToggleInContainer: ARIA toggle for "${labelText.slice(0, 40)}…"`)
+    return true
+  }
+  // Check Yes/No buttons
+  const buttons = container.querySelectorAll("button")
+  for (const btn of buttons) {
+    const btnText = (btn.textContent ?? "").trim().toLowerCase()
+    if ((wantYes && btnText === "yes") || (wantNo && btnText === "no") || btnText === answerLower) {
+      btn.click()
+      console.log(`[pipeline-operator] clickToggleInContainer: clicked "${btnText}" for "${labelText.slice(0, 40)}…"`)
+      return true
     }
   }
   return false
@@ -1793,40 +1844,33 @@ function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues)
     }
   }
 
-  // Strategy 2: Find the question container by label text and look for clickable options
+  // Strategy 2: Find ALL clickable elements whose text matches the target label,
+  // then verify they're inside a container that also contains the question text.
+  // This is more reliable than finding the question text first and walking up.
   const matchText = labelText.toLowerCase().slice(0, 60)
-  for (const labelEl of document.querySelectorAll("label, legend, p, span, div, h1, h2, h3, h4, h5, h6")) {
-    const elText = labelEl.textContent?.toLowerCase() ?? ""
-    if (!elText.includes(matchText)) continue
-    if (elText.length > 500) continue // Skip large containers
+  const targetLabelLower = targetLabel.toLowerCase()
 
-    // Walk up to find the question container
-    let container = labelEl.parentElement
-    for (let depth = 0; depth < 5 && container; depth++) {
-      // Look for radio buttons in this container
-      const radios = container.querySelectorAll('input[type="radio"]')
-      if (radios.length > 0) {
-        for (const radio of radios) {
-          if (!(radio instanceof HTMLInputElement)) continue
-          const radioParent = radio.closest("label") ?? radio.parentElement
-          const radioText = radioParent?.textContent?.trim()?.toLowerCase() ?? ""
-          if (radio.value === answerStr || radioText === targetLabel.toLowerCase()) {
-            radio.click()
-            return true
-          }
+  // Search for buttons, radios, options, and any clickable element matching targetLabel
+  const allClickables = document.querySelectorAll(
+    "button, [role='option'], [role='radio'], [role='menuitem'], input[type='radio'], label"
+  )
+  for (const el of allClickables) {
+    const elText = (el.textContent ?? "").trim().toLowerCase()
+    if (elText !== targetLabelLower) continue
+
+    // Verify this element is inside a container with the question text
+    let container = el.parentElement
+    for (let depth = 0; depth < 8 && container; depth++) {
+      const containerText = (container.textContent ?? "").toLowerCase()
+      if (containerText.includes(matchText)) {
+        console.log(`[pipeline-operator] tryClickAshbyDropdownOption: clicking "${el.textContent?.trim()}" (strategy 2: text match near question)`)
+        if (el instanceof HTMLInputElement) {
+          el.click()
+        } else {
+          el.click()
         }
+        return true
       }
-
-      // Look for option buttons/divs with matching text
-      const optionEls = container.querySelectorAll("button, [role='option'], [role='radio']")
-      for (const optEl of optionEls) {
-        const optText = (optEl.textContent ?? "").trim()
-        if (optText.toLowerCase() === targetLabel.toLowerCase()) {
-          optEl.click()
-          return true
-        }
-      }
-
       container = container.parentElement
     }
   }

@@ -5,7 +5,10 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getApplyStrategy } from "@/lib/ats/registry";
 import { initializeAtsProviders } from "@/lib/ats/init";
-import { autoAnswerQuestion, getUnansweredQuestions } from "@/lib/greenhouse/questions";
+import {
+  autoAnswerQuestion,
+  getUnansweredQuestions,
+} from "@/lib/ats/question-matcher";
 import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
 import { createNotification } from "@/lib/notifications";
@@ -13,7 +16,9 @@ import { getPresignedGetUrl } from "@/lib/spaces";
 import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { handleFirstApplicationConversion, isFirstApplication } from "@/lib/referral";
 import { z } from "zod";
-import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion, QuestionMeta, PendingQuestion } from "@/types";
+import type { ApiResponse, ApplicationWithJob, QuestionMeta, PendingQuestion } from "@/types";
+import type { NormalizedQuestion, NormalizedFieldType } from "@/lib/ats/types";
+import type { QuestionMatchProfile } from "@/lib/ats/question-matcher";
 import type { AtsProvider, UserProfile } from "@prisma/client";
 
 // Error codes that route to the operator queue instead of hard-failing
@@ -121,11 +126,63 @@ function normalizeCountry(raw: string): string {
   return COUNTRY_ALIASES[key] ?? raw
 }
 
+/** Map NormalizedFieldType → Greenhouse field type string for snapshot compat */
+function toGreenhouseFieldType(
+  ft: NormalizedFieldType
+): "input_text" | "input_file" | "textarea" | "multi_value_single_select" | "multi_value_multi_select" {
+  switch (ft) {
+    case "select":
+    case "boolean":
+      return "multi_value_single_select";
+    case "multiselect":
+      return "multi_value_multi_select";
+    case "textarea":
+      return "textarea";
+    case "file":
+      return "input_file";
+    default:
+      return "input_text";
+  }
+}
+
+/** Convert normalized options to Greenhouse-style selectValues for snapshot */
+function toSelectValues(
+  options?: ReadonlyArray<{ value: string; label: string }>
+): Array<{ value: number; label: string }> | undefined {
+  if (!options || options.length === 0) return undefined;
+  return options.map((o) => ({ value: Number(o.value), label: o.label }));
+}
+
+/** Map UserProfile → QuestionMatchProfile for ATS-agnostic question matching */
+function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
+  return {
+    linkedInUrl: profile.linkedinUrl,
+    githubUrl: profile.githubUrl,
+    websiteUrl: profile.portfolioUrl,
+    phone: profile.phone,
+    location: profile.location,
+    locationFormatted: profile.locationFormatted,
+    locationState: profile.locationState,
+    currentCompany: profile.currentCompany,
+    currentTitle: profile.currentTitle,
+    university: profile.university,
+    highestDegree: profile.highestDegree,
+    preferredFirstName: profile.preferredFirstName,
+    sponsorshipRequired: profile.requiresSponsorship,
+    workAuthorized: !!profile.workAuthorization,
+    openToRemote: profile.openToRemote,
+    gender: profile.voluntaryGender,
+    race: profile.voluntaryRace,
+    veteranStatus: profile.voluntaryVeteranStatus,
+    disability: profile.voluntaryDisability,
+  };
+}
+
 function buildSnapshot(
   profile: UserProfile,
   boardToken: string,
   externalId: string,
-  questions: GreenhouseQuestion[],
+  questions: readonly NormalizedQuestion[],
   questionAnswers: Record<string, string | number>,
   trackingEmail: string,
   manualApplyUrl?: string
@@ -140,40 +197,37 @@ function buildSnapshot(
     stringAnswers[k] = String(v);
   }
 
-  // Build questionMeta: one entry per answered field (supports multi-field questions)
+  // Build questionMeta: one entry per answered normalized question
   const questionMeta: QuestionMeta[] = [];
   for (const question of questions) {
-    for (const field of question.fields) {
-      if (!(field.name in stringAnswers)) continue;
-      questionMeta.push({
-        label: question.label,
-        fieldName: field.name,
-        fieldType: field.type,
-        ...(field.type === "multi_value_single_select" || field.type === "multi_value_multi_select"
-          ? { selectValues: field.values }
-          : {}),
-      });
-    }
+    if (!(question.id in stringAnswers)) continue;
+    const ghFieldType = toGreenhouseFieldType(question.fieldType);
+    questionMeta.push({
+      label: question.label,
+      fieldName: question.id,
+      fieldType: ghFieldType,
+      ...(ghFieldType === "multi_value_single_select" || ghFieldType === "multi_value_multi_select"
+        ? { selectValues: toSelectValues(question.options) }
+        : {}),
+    });
   }
 
-  // Build pendingQuestions: one entry per field for unanswered questions
-  const unanswered = getUnansweredQuestions(questions, profile);
-  const pendingQuestions: PendingQuestion[] = unanswered.flatMap((q) => {
-    if (q.fields.length === 0) {
-      return [{ label: q.label, fieldName: "", fieldType: "input_text" as const, required: q.required, description: q.description }];
-    }
-    return q.fields.map((field) => ({
+  // Build pendingQuestions: unanswered questions for operator/extension
+  const matchProfile = toMatchProfile(profile);
+  const unanswered = getUnansweredQuestions(questions, matchProfile, stringAnswers);
+  const pendingQuestions: PendingQuestion[] = unanswered.map((q) => {
+    const ghFieldType = toGreenhouseFieldType(q.fieldType);
+    return {
       label: q.label,
-      fieldName: field.name,
-      fieldType: field.type,
+      fieldName: q.id,
+      fieldType: ghFieldType,
       required: q.required,
       description: q.description,
-      ...(field.type === "multi_value_single_select" || field.type === "multi_value_multi_select"
-        ? { selectValues: field.values }
+      ...(ghFieldType === "multi_value_single_select" || ghFieldType === "multi_value_multi_select"
+        ? { selectValues: toSelectValues(q.options) }
         : {}),
-      // Hydrate userAnswer if modal already answered this field
-      ...(field.name && stringAnswers[field.name] ? { userAnswer: stringAnswers[field.name] } : {}),
-    }));
+      ...(q.id && stringAnswers[q.id] ? { userAnswer: stringAnswers[q.id] } : {}),
+    };
   });
 
   // Build coreFieldExtras: preferred name, country, EEOC for extension/operator
@@ -227,7 +281,7 @@ async function runPlaywrightSubmission(opts: {
   resumeBuffer: Buffer | undefined;
   resumeFileName: string;
   questionAnswers: Record<string, string | number>;
-  questions: GreenhouseQuestion[];
+  questions: readonly NormalizedQuestion[];
   userId: string;
   jobTitle: string;
   companyName: string;
@@ -566,14 +620,21 @@ export async function POST(request: Request) {
   }
 
   // Build question answers: auto-answer from profile, then overlay user-provided answers
-  const storedQuestions = job.applicationQuestions
-    ? (job.applicationQuestions as unknown as GreenhouseQuestion[])
-    : [];
+  // Skip stale Greenhouse-format cached questions (they lack `id`/`fieldType` fields)
+  let storedQuestions: NormalizedQuestion[] = [];
+  if (job.applicationQuestions) {
+    const cached = job.applicationQuestions as unknown as Record<string, unknown>[];
+    const isNormalized = cached.length === 0 || ("id" in cached[0] && "fieldType" in cached[0]);
+    if (isNormalized) {
+      storedQuestions = cached as unknown as NormalizedQuestion[];
+    }
+  }
 
+  const matchProfile = toMatchProfile(profile);
   const questionAnswers: Record<string, string | number> = {};
   for (const question of storedQuestions) {
-    const auto = autoAnswerQuestion(question, profile);
-    if (auto) Object.assign(questionAnswers, auto);
+    const answer = autoAnswerQuestion(question, matchProfile);
+    if (answer !== null) questionAnswers[question.id] = answer;
   }
   Object.assign(questionAnswers, parsed.data.additionalAnswers ?? {});
 

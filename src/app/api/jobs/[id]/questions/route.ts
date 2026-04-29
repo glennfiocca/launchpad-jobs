@@ -6,7 +6,7 @@ import { getClient } from "@/lib/ats/registry";
 import { initializeAtsProviders } from "@/lib/ats/init";
 import { findJobByRouteId } from "@/lib/job-lookup";
 import { Prisma } from "@prisma/client";
-import type { ApiResponse, GreenhouseQuestion } from "@/types";
+import type { ApiResponse } from "@/types";
 import type { NormalizedQuestion } from "@/lib/ats/types";
 
 export async function GET(
@@ -33,12 +33,17 @@ export async function GET(
 
   const internalId = job.id;
 
-  // Return cached questions if available
+  // Return cached questions if available (skip stale Greenhouse-format cache)
   if (job.applicationQuestions) {
-    return NextResponse.json<ApiResponse<GreenhouseQuestion[]>>({
-      success: true,
-      data: job.applicationQuestions as unknown as GreenhouseQuestion[],
-    });
+    const cached = job.applicationQuestions as unknown as Record<string, unknown>[];
+    const isNormalized = cached.length === 0 || ("id" in cached[0] && "fieldType" in cached[0]);
+    if (isNormalized) {
+      return NextResponse.json<ApiResponse<NormalizedQuestion[]>>({
+        success: true,
+        data: cached as unknown as NormalizedQuestion[],
+      });
+    }
+    // Old GreenhouseQuestion format detected — clear cache and re-fetch below
   }
 
   // Fetch from ATS provider and cache
@@ -53,15 +58,14 @@ export async function GET(
       data: { applicationQuestions: normalizedQuestions as unknown as Prisma.InputJsonValue },
     });
 
-    // Return as GreenhouseQuestion[] for backward compat with existing frontend
-    return NextResponse.json<ApiResponse<GreenhouseQuestion[]>>({
+    return NextResponse.json<ApiResponse<NormalizedQuestion[]>>({
       success: true,
-      data: normalizedQuestions as unknown as GreenhouseQuestion[],
+      data: [...normalizedQuestions],
     });
   } catch (error) {
     // Return empty array on fetch failure — non-fatal
     console.error("Failed to fetch application questions:", error);
-    return NextResponse.json<ApiResponse<GreenhouseQuestion[]>>({
+    return NextResponse.json<ApiResponse<NormalizedQuestion[]>>({
       success: true,
       data: [],
     });

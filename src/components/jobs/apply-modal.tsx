@@ -2,9 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
-import { getUnansweredQuestions, stripHtml } from "@/lib/greenhouse/questions";
+import {
+  getUnansweredQuestions,
+  stripHtml,
+} from "@/lib/ats/question-matcher";
 import { UpgradeModal } from "@/components/billing/upgrade-modal";
-import type { GreenhouseQuestion, GreenhouseQuestionField, JobWithCompany } from "@/types";
+import type { NormalizedQuestion } from "@/lib/ats/types";
+import type { QuestionMatchProfile } from "@/lib/ats/question-matcher";
+import type { JobWithCompany } from "@/types";
 import type { UserProfile } from "@prisma/client";
 
 interface ApplyModalProps {
@@ -13,17 +18,44 @@ interface ApplyModalProps {
   onApplied: (applicationId: string, warning?: string) => void;
 }
 
+// --- Profile mapping ---
+
+function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
+  return {
+    linkedInUrl: profile.linkedinUrl,
+    githubUrl: profile.githubUrl,
+    websiteUrl: profile.portfolioUrl,
+    phone: profile.phone,
+    location: profile.location,
+    locationFormatted: profile.locationFormatted,
+    locationState: profile.locationState,
+    currentCompany: profile.currentCompany,
+    currentTitle: profile.currentTitle,
+    university: profile.university,
+    highestDegree: profile.highestDegree,
+    preferredFirstName: profile.preferredFirstName,
+    sponsorshipRequired: profile.requiresSponsorship,
+    workAuthorized: !!profile.workAuthorization,
+    openToRemote: profile.openToRemote,
+    gender: profile.voluntaryGender,
+    race: profile.voluntaryRace,
+    veteranStatus: profile.voluntaryVeteranStatus,
+    disability: profile.voluntaryDisability,
+  };
+}
+
 // --- Question field renderers ---
 
 interface FieldProps {
-  field: GreenhouseQuestionField;
-  value: string | number | undefined;
-  onChange: (fieldName: string, value: string | number) => void;
+  question: NormalizedQuestion;
+  value: string | undefined;
+  onChange: (fieldId: string, value: string) => void;
 }
 
-function YesNoToggle({ field, value, onChange }: FieldProps) {
-  const yes = field.values.find((v) => v.label.toLowerCase() === "yes");
-  const no = field.values.find((v) => v.label.toLowerCase() === "no");
+function YesNoToggle({ question, value, onChange }: FieldProps) {
+  const opts = question.options ?? [];
+  const yes = opts.find((v) => v.label.toLowerCase() === "yes");
+  const no = opts.find((v) => v.label.toLowerCase() === "no");
 
   const baseClass =
     "flex-1 py-2 px-4 rounded-lg border text-sm transition-colors";
@@ -37,7 +69,7 @@ function YesNoToggle({ field, value, onChange }: FieldProps) {
         <button
           type="button"
           className={`${baseClass} ${value === yes.value ? activeClass : inactiveClass}`}
-          onClick={() => onChange(field.name, yes.value)}
+          onClick={() => onChange(question.id, yes.value)}
         >
           Yes
         </button>
@@ -46,7 +78,7 @@ function YesNoToggle({ field, value, onChange }: FieldProps) {
         <button
           type="button"
           className={`${baseClass} ${value === no.value ? activeClass : inactiveClass}`}
-          onClick={() => onChange(field.name, no.value)}
+          onClick={() => onChange(question.id, no.value)}
         >
           No
         </button>
@@ -55,19 +87,20 @@ function YesNoToggle({ field, value, onChange }: FieldProps) {
   );
 }
 
-function SelectField({ field, value, onChange }: FieldProps) {
+function SelectField({ question, value, onChange }: FieldProps) {
+  const opts = question.options ?? [];
   return (
     <select
-      value={value !== undefined ? String(value) : ""}
+      value={value ?? ""}
       onChange={(e) => {
-        const opt = field.values.find((v) => String(v.value) === e.target.value);
-        if (opt !== undefined) onChange(field.name, opt.value);
+        const opt = opts.find((v) => v.value === e.target.value);
+        if (opt !== undefined) onChange(question.id, opt.value);
       }}
       className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
     >
       <option value="">Select an option...</option>
-      {field.values.map((v) => (
-        <option key={v.value} value={String(v.value)}>
+      {opts.map((v) => (
+        <option key={v.value} value={v.value}>
           {v.label}
         </option>
       ))}
@@ -75,25 +108,20 @@ function SelectField({ field, value, onChange }: FieldProps) {
   );
 }
 
-function MultiSelectField({ field, value, onChange }: FieldProps) {
-  // value stored as comma-separated numeric values string
-  const selected = value
-    ? String(value)
-        .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => !isNaN(n))
-    : [];
+function MultiSelectField({ question, value, onChange }: FieldProps) {
+  const opts = question.options ?? [];
+  const selected = value ? value.split(",").map((s) => s.trim()) : [];
 
-  const toggle = (numVal: number) => {
-    const next = selected.includes(numVal)
-      ? selected.filter((v) => v !== numVal)
-      : [...selected, numVal];
-    onChange(field.name, next.join(","));
+  const toggle = (optVal: string) => {
+    const next = selected.includes(optVal)
+      ? selected.filter((v) => v !== optVal)
+      : [...selected, optVal];
+    onChange(question.id, next.join(","));
   };
 
   return (
     <div className="space-y-2">
-      {field.values.map((v) => (
+      {opts.map((v) => (
         <label key={v.value} className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -108,52 +136,49 @@ function MultiSelectField({ field, value, onChange }: FieldProps) {
   );
 }
 
-function isYesNo(field: GreenhouseQuestionField): boolean {
-  if (field.type !== "multi_value_single_select") return false;
-  if (field.values.length !== 2) return false;
-  const labels = field.values.map((v) => v.label.toLowerCase());
+function isYesNo(question: NormalizedQuestion): boolean {
+  if (question.fieldType !== "select") return false;
+  const opts = question.options ?? [];
+  if (opts.length !== 2) return false;
+  const labels = opts.map((v) => v.label.toLowerCase());
   return labels.includes("yes") && labels.includes("no");
 }
 
-function FieldRenderer({
-  field,
-  value,
-  onChange,
-}: FieldProps) {
-  if (field.type === "input_file") return null;
+function FieldRenderer({ question, value, onChange }: FieldProps) {
+  if (question.fieldType === "file") return null;
 
-  if (field.type === "input_text") {
+  if (question.fieldType === "text" || question.fieldType === "email" || question.fieldType === "url" || question.fieldType === "phone") {
     return (
       <input
         type="text"
-        value={value !== undefined ? String(value) : ""}
-        onChange={(e) => onChange(field.name, e.target.value)}
+        value={value ?? ""}
+        onChange={(e) => onChange(question.id, e.target.value)}
         className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
       />
     );
   }
 
-  if (field.type === "textarea") {
+  if (question.fieldType === "textarea") {
     return (
       <textarea
         rows={4}
-        value={value !== undefined ? String(value) : ""}
-        onChange={(e) => onChange(field.name, e.target.value)}
+        value={value ?? ""}
+        onChange={(e) => onChange(question.id, e.target.value)}
         className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 resize-y transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
       />
     );
   }
 
-  if (field.type === "multi_value_single_select") {
-    return isYesNo(field) ? (
-      <YesNoToggle field={field} value={value} onChange={onChange} />
+  if (question.fieldType === "select") {
+    return isYesNo(question) ? (
+      <YesNoToggle question={question} value={value} onChange={onChange} />
     ) : (
-      <SelectField field={field} value={value} onChange={onChange} />
+      <SelectField question={question} value={value} onChange={onChange} />
     );
   }
 
-  if (field.type === "multi_value_multi_select") {
-    return <MultiSelectField field={field} value={value} onChange={onChange} />;
+  if (question.fieldType === "multiselect") {
+    return <MultiSelectField question={question} value={value} onChange={onChange} />;
   }
 
   return null;
@@ -164,16 +189,12 @@ function QuestionInput({
   answers,
   onChange,
 }: {
-  question: GreenhouseQuestion;
-  answers: Record<string, string | number>;
-  onChange: (fieldName: string, value: string | number) => void;
+  question: NormalizedQuestion;
+  answers: Record<string, string>;
+  onChange: (fieldId: string, value: string) => void;
 }) {
-  const allFileFields =
-    question.fields.length > 0 &&
-    question.fields.every((f) => f.type === "input_file");
-
-  // Optional file-only question → hide entirely
-  if (allFileFields && !question.required) return null;
+  // File-only question that's optional → hide entirely
+  if (question.fieldType === "file" && !question.required) return null;
 
   const helpText = question.description ? stripHtml(question.description) : null;
 
@@ -189,19 +210,16 @@ function QuestionInput({
         <p className="text-xs text-zinc-600">{helpText}</p>
       )}
 
-      {allFileFields && question.required ? (
+      {question.fieldType === "file" && question.required ? (
         <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-sm text-yellow-400">
-          <strong>{question.label}</strong> — File upload required. Attach this document directly on the Greenhouse page after the form opens.
+          <strong>{question.label}</strong> — File upload required. Attach this document directly on the application page after the form opens.
         </div>
       ) : (
-        question.fields.map((field) => (
-          <FieldRenderer
-            key={field.name}
-            field={field}
-            value={answers[field.name]}
-            onChange={onChange}
-          />
-        ))
+        <FieldRenderer
+          question={question}
+          value={answers[question.id]}
+          onChange={onChange}
+        />
       )}
     </div>
   );
@@ -211,8 +229,8 @@ function QuestionInput({
 
 export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
   const [loading, setLoading] = useState(true);
-  const [unanswered, setUnanswered] = useState<GreenhouseQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string | number>>({});
+  const [unanswered, setUnanswered] = useState<NormalizedQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creditLimitResetsAt, setCreditLimitResetsAt] = useState<Date | null>(null);
@@ -229,7 +247,7 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
 
         const questionsData = (await questionsRes.json()) as {
           success: boolean;
-          data?: GreenhouseQuestion[];
+          data?: NormalizedQuestion[];
         };
         const profileData = (await profileRes.json()) as {
           success: boolean;
@@ -247,7 +265,8 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
           return;
         }
 
-        const remaining = getUnansweredQuestions(questions, profile);
+        const matchProfile = toMatchProfile(profile);
+        const remaining = getUnansweredQuestions(questions, matchProfile);
         setUnanswered(remaining);
         setLoading(false);
 
@@ -272,7 +291,7 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
   }, [job.id]);
 
   async function submitApplication(
-    additionalAnswers: Record<string, string | number>
+    additionalAnswers: Record<string, string>
   ) {
     setSubmitting(true);
     setError(null);
@@ -312,19 +331,16 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
     }
   }
 
-  const handleAnswerChange = (fieldName: string, value: string | number) => {
-    setAnswers((prev) => ({ ...prev, [fieldName]: value }));
+  const handleAnswerChange = (fieldId: string, value: string) => {
+    setAnswers((prev) => ({ ...prev, [fieldId]: value }));
   };
 
   const handleSubmit = async () => {
     // Validate required questions have answers
     const missing = unanswered.filter((q) => {
       if (!q.required) return false;
-      return q.fields.some(
-        (f) =>
-          f.type !== "input_file" &&
-          (answers[f.name] === undefined || answers[f.name] === "")
-      );
+      if (q.fieldType === "file") return false;
+      return answers[q.id] === undefined || answers[q.id] === "";
     });
 
     if (missing.length > 0) {
@@ -385,7 +401,7 @@ export function ApplyModal({ job, onClose, onApplied }: ApplyModalProps) {
 
           {unanswered.map((question) => (
             <QuestionInput
-              key={question.fields[0]?.name ?? question.label}
+              key={question.id}
               question={question}
               answers={answers}
               onChange={handleAnswerChange}

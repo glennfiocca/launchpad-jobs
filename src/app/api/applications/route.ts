@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applyToGreenhouseJob } from "@/lib/greenhouse";
+import { getApplyStrategy } from "@/lib/ats/registry";
+import { initializeAtsProviders } from "@/lib/ats/init";
 import { autoAnswerQuestion, getUnansweredQuestions } from "@/lib/greenhouse/questions";
 import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
@@ -13,7 +14,7 @@ import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { handleFirstApplicationConversion, isFirstApplication } from "@/lib/referral";
 import { z } from "zod";
 import type { ApiResponse, ApplicationWithJob, GreenhouseQuestion, QuestionMeta, PendingQuestion } from "@/types";
-import type { UserProfile } from "@prisma/client";
+import type { AtsProvider, UserProfile } from "@prisma/client";
 
 // Error codes that route to the operator queue instead of hard-failing
 const OPERATOR_QUEUE_CODES = new Set(
@@ -217,8 +218,10 @@ const applySchema = z.object({
 
 async function runPlaywrightSubmission(opts: {
   applicationId: string;
+  provider: AtsProvider;
   boardToken: string;
   externalJobId: string;
+  applyUrl: string | null;
   profile: UserProfile;
   trackingEmail: string;
   resumeBuffer: Buffer | undefined;
@@ -232,15 +235,27 @@ async function runPlaywrightSubmission(opts: {
   userName: string;
 }): Promise<void> {
   try {
-    const applyResult = await applyToGreenhouseJob({
+    initializeAtsProviders();
+    const strategy = getApplyStrategy(opts.provider);
+    const applyResult = await strategy.apply({
       boardToken: opts.boardToken,
-      jobId: opts.externalJobId,
-      profile: opts.profile,
+      jobExternalId: opts.externalJobId,
+      applyUrl: opts.applyUrl ?? `https://boards.greenhouse.io/${opts.boardToken}/jobs/${opts.externalJobId}`,
+      profile: {
+        firstName: opts.profile.firstName,
+        lastName: opts.profile.lastName,
+        email: opts.profile.email,
+        phone: opts.profile.phone,
+        location: opts.profile.locationFormatted ?? opts.profile.location ?? null,
+        linkedInUrl: opts.profile.linkedinUrl ?? null,
+        githubUrl: opts.profile.githubUrl ?? null,
+        websiteUrl: opts.profile.portfolioUrl ?? null,
+        preferredFirstName: opts.profile.preferredFirstName,
+      },
       trackingEmail: opts.trackingEmail,
       resumeBuffer: opts.resumeBuffer,
       resumeFileName: opts.resumeFileName,
       questionAnswers: opts.questionAnswers,
-      preferredFirstName: opts.profile.preferredFirstName ?? undefined,
     });
 
     if (applyResult.success) {
@@ -570,8 +585,10 @@ export async function POST(request: Request) {
   // We return 200 immediately; the background task updates the DB when done.
   void runPlaywrightSubmission({
     applicationId: application.id,
+    provider: job.provider ?? "GREENHOUSE",
     boardToken: job.boardToken,
     externalJobId: job.externalId,
+    applyUrl: job.absoluteUrl,
     profile,
     trackingEmail,
     resumeBuffer,

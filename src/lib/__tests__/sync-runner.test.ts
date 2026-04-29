@@ -23,18 +23,29 @@ vi.mock("@/lib/db", () => ({
     syncBoardResult: {
       create: vi.fn(),
     },
+    companyBoard: {
+      findMany: vi.fn(),
+    },
     $executeRaw: vi.fn(),
   },
 }))
 
-vi.mock("@/lib/greenhouse", () => ({
+vi.mock("@/lib/greenhouse/sync", () => ({
   getActiveBoards: vi.fn(),
-  syncGreenhouseBoard: vi.fn(),
+}))
+
+vi.mock("@/lib/ats/init", () => ({
+  initializeAtsProviders: vi.fn(),
+}))
+
+vi.mock("@/lib/ats/sync", () => ({
+  syncBoard: vi.fn(),
 }))
 
 // Helper to get typed mock references after import
 import { db } from "@/lib/db"
-import { getActiveBoards, syncGreenhouseBoard } from "@/lib/greenhouse"
+import { getActiveBoards } from "@/lib/greenhouse/sync"
+import { syncBoard } from "@/lib/ats/sync"
 
 const mockDb = db as unknown as {
   syncLog: {
@@ -48,10 +59,13 @@ const mockDb = db as unknown as {
   syncBoardResult: {
     create: ReturnType<typeof vi.fn>
   }
+  companyBoard: {
+    findMany: ReturnType<typeof vi.fn>
+  }
   $executeRaw: ReturnType<typeof vi.fn>
 }
 const mockGetActiveBoards = getActiveBoards as ReturnType<typeof vi.fn>
-const mockSyncGreenhouseBoard = syncGreenhouseBoard as ReturnType<typeof vi.fn>
+const mockSyncBoard = syncBoard as ReturnType<typeof vi.fn>
 
 // --- Test helpers ---
 
@@ -83,6 +97,7 @@ describe("runSync", () => {
     // Default: lock acquired, no boards
     setupLockAcquired()
     mockDb.syncLog.update.mockResolvedValue({ status: "SUCCESS" })
+    mockDb.companyBoard.findMany.mockResolvedValue([])
     mockGetActiveBoards.mockResolvedValue([])
   })
 
@@ -108,8 +123,8 @@ describe("runSync", () => {
   })
 
   describe("terminal status on fatal error", () => {
-    it("marks SyncLog as FAILURE if getActiveBoards throws", async () => {
-      mockGetActiveBoards.mockRejectedValue(new Error("DB connection lost"))
+    it("marks SyncLog as FAILURE if board loading throws", async () => {
+      mockDb.companyBoard.findMany.mockRejectedValue(new Error("DB connection lost"))
 
       await expect(runSync("cron")).rejects.toThrow("DB connection lost")
 
@@ -124,7 +139,7 @@ describe("runSync", () => {
     })
 
     it("sets completedAt on the FAILURE update", async () => {
-      mockGetActiveBoards.mockRejectedValue(new Error("timeout"))
+      mockDb.companyBoard.findMany.mockRejectedValue(new Error("timeout"))
 
       await expect(runSync("cron")).rejects.toThrow()
 
@@ -133,11 +148,11 @@ describe("runSync", () => {
       expect(typeof updateCall.data.durationMs).toBe("number")
     })
 
-    it("does not leave the log in RUNNING state when syncGreenhouseBoard throws mid-loop", async () => {
-      const board = { token: "acme", name: "Acme Corp", logoUrl: null, id: "b1", isActive: true, website: null, createdAt: new Date(), updatedAt: new Date() }
-      mockGetActiveBoards.mockResolvedValue([board])
+    it("does not leave the log in RUNNING state when syncBoard throws mid-loop", async () => {
+      const board = { boardToken: "acme", name: "Acme Corp", logoUrl: null, provider: "GREENHOUSE" }
+      mockDb.companyBoard.findMany.mockResolvedValue([board])
       mockDb.syncBoardResult.create.mockResolvedValue({})
-      mockSyncGreenhouseBoard.mockRejectedValue(new Error("network error"))
+      mockSyncBoard.mockRejectedValue(new Error("network error"))
 
       const result = await runSync("cron")
 
@@ -156,9 +171,9 @@ describe("runSync", () => {
 
   describe("success path", () => {
     it("returns SUCCESS when all boards sync cleanly", async () => {
-      const board = { token: "acme", name: "Acme Corp", logoUrl: null, id: "b1", isActive: true, website: null, createdAt: new Date(), updatedAt: new Date() }
-      mockGetActiveBoards.mockResolvedValue([board])
-      mockSyncGreenhouseBoard.mockResolvedValue({
+      const board = { boardToken: "acme", name: "Acme Corp", logoUrl: null, provider: "GREENHOUSE" }
+      mockDb.companyBoard.findMany.mockResolvedValue([board])
+      mockSyncBoard.mockResolvedValue({
         jobsAdded: 5,
         jobsUpdated: 2,
         jobsDeactivated: 1,
@@ -177,11 +192,11 @@ describe("runSync", () => {
 
     it("returns PARTIAL_FAILURE when some boards succeed and some fail", async () => {
       const boards = [
-        { token: "acme", name: "Acme Corp", logoUrl: null, id: "b1", isActive: true, website: null, createdAt: new Date(), updatedAt: new Date() },
-        { token: "beta", name: "Beta Inc", logoUrl: null, id: "b2", isActive: true, website: null, createdAt: new Date(), updatedAt: new Date() },
+        { boardToken: "acme", name: "Acme Corp", logoUrl: null, provider: "GREENHOUSE" },
+        { boardToken: "beta", name: "Beta Inc", logoUrl: null, provider: "GREENHOUSE" },
       ]
-      mockGetActiveBoards.mockResolvedValue(boards)
-      mockSyncGreenhouseBoard
+      mockDb.companyBoard.findMany.mockResolvedValue(boards)
+      mockSyncBoard
         .mockResolvedValueOnce({ jobsAdded: 1, jobsUpdated: 0, jobsDeactivated: 0, applicationsUpdated: 0, errors: [] })
         .mockRejectedValueOnce(new Error("beta failed"))
       mockDb.syncBoardResult.create.mockResolvedValue({})
@@ -194,9 +209,9 @@ describe("runSync", () => {
     })
 
     it("returns FAILURE when no boards sync cleanly and some fail", async () => {
-      const board = { token: "acme", name: "Acme Corp", logoUrl: null, id: "b1", isActive: true, website: null, createdAt: new Date(), updatedAt: new Date() }
-      mockGetActiveBoards.mockResolvedValue([board])
-      mockSyncGreenhouseBoard.mockResolvedValue({
+      const board = { boardToken: "acme", name: "Acme Corp", logoUrl: null, provider: "GREENHOUSE" }
+      mockDb.companyBoard.findMany.mockResolvedValue([board])
+      mockSyncBoard.mockResolvedValue({
         jobsAdded: 0, jobsUpdated: 0, jobsDeactivated: 0, applicationsUpdated: 0,
         errors: ["fetch failed"],
       })
@@ -315,24 +330,17 @@ describe("executeSyncWork", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockDb.syncLog.update.mockResolvedValue({ status: "SUCCESS" })
+    mockDb.companyBoard.findMany.mockResolvedValue([])
+    mockGetActiveBoards.mockResolvedValue([])
   })
 
   it("fetches SyncLog by ID and runs boards", async () => {
     mockDb.syncLog.findUniqueOrThrow.mockResolvedValue({
       startedAt: new Date(),
     })
-    const board = {
-      token: "acme",
-      name: "Acme Corp",
-      logoUrl: null,
-      id: "b1",
-      isActive: true,
-      website: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-    mockGetActiveBoards.mockResolvedValue([board])
-    mockSyncGreenhouseBoard.mockResolvedValue({
+    const board = { boardToken: "acme", name: "Acme Corp", logoUrl: null, provider: "GREENHOUSE" }
+    mockDb.companyBoard.findMany.mockResolvedValue([board])
+    mockSyncBoard.mockResolvedValue({
       jobsAdded: 3,
       jobsUpdated: 1,
       jobsDeactivated: 0,
@@ -353,7 +361,7 @@ describe("executeSyncWork", () => {
     mockDb.syncLog.findUniqueOrThrow.mockResolvedValue({
       startedAt: new Date(),
     })
-    mockGetActiveBoards.mockRejectedValue(new Error("boom"))
+    mockDb.companyBoard.findMany.mockRejectedValue(new Error("boom"))
 
     await expect(executeSyncWork("test-id")).rejects.toThrow("boom")
 

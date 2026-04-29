@@ -1,7 +1,7 @@
 /**
  * Pipeline Operator — content script
  *
- * Injected into https://job-boards.greenhouse.io/* pages.
+ * Injected into https://job-boards.greenhouse.io/* and https://jobs.ashbyhq.com/* pages.
  *
  * Token delivery uses window.opener postMessage:
  *   1. This script sends PIPELINE_REQUEST_TOKEN to window.opener (the admin tab).
@@ -885,7 +885,198 @@ async function tryFormNavigation(token, snap) {
 }
 
 /**
- * Main fill routine.
+ * Detect which ATS provider the current page belongs to.
+ * @returns {'greenhouse' | 'ashby' | null}
+ */
+function detectAtsProvider() {
+  if (window.location.hostname === 'job-boards.greenhouse.io') return 'greenhouse'
+  if (window.location.hostname === 'jobs.ashbyhq.com') return 'ashby'
+  return null
+}
+
+/**
+ * Fill an Ashby application form from the decoded snapshot.
+ *
+ * Ashby uses standard HTML inputs (not React-Select), and has a single "Name"
+ * field instead of separate first/last. Submit is NOT automated.
+ *
+ * @param {object} snap - The decoded JWT snapshot
+ * @param {string} token - The raw JWT string (for navigation fallback)
+ */
+async function fillAshbyForm(snap, token) {
+  showBanner("Pre-filling Ashby form…", "info")
+
+  // Wait for Ashby form fields to appear (SPA hydration)
+  let formEl = await waitForElement(
+    'input[name*="_systemfield_name"], input[name*="_systemfield_email"], input[type="email"]',
+    8000
+  )
+
+  // If form not found, look for an Apply CTA
+  if (!formEl) {
+    const allClickables = document.querySelectorAll("a, button")
+    for (const el of allClickables) {
+      const text = (el.textContent ?? "").trim().toLowerCase()
+      if (text === "apply" || text === "apply now" || text === "apply for this job") {
+        await chrome.storage.session.set({
+          pipelineFillToken: token,
+          pipelineFillExpiry: Date.now() + 120_000,
+        })
+        el.click()
+        await new Promise((r) => setTimeout(r, 2000))
+        // Re-check for form fields after CTA click
+        formEl = await waitForElement(
+          'input[name*="_systemfield_name"], input[name*="_systemfield_email"], input[type="email"]',
+          5000
+        )
+        break
+      }
+    }
+  }
+
+  if (!formEl) {
+    showBanner("Could not detect Ashby form fields — fill manually or try refreshing.", "error")
+    return
+  }
+
+  await new Promise((r) => setTimeout(r, 400))
+
+  let filled = 0
+  const missingFields = []
+
+  // ── Core fields ─────────────────────────────────────────────────────────────
+
+  // Name (Ashby uses a single combined name field)
+  const nameField = document.querySelector('input[name*="_systemfield_name"]')
+  if (nameField instanceof HTMLInputElement && (snap.firstName || snap.lastName)) {
+    const fullName = [snap.firstName, snap.lastName].filter(Boolean).join(" ")
+    nativeSet(nameField, fullName)
+    filled++
+  }
+
+  // Email — use tracking email so confirmations route back to the app
+  const emailField =
+    document.querySelector('input[name*="_systemfield_email"]') ??
+    document.querySelector('input[type="email"]')
+  const emailValue = snap.trackingEmail ?? snap.email
+  if (emailField instanceof HTMLInputElement && emailValue) {
+    nativeSet(emailField, emailValue)
+    filled++
+  }
+
+  // Phone
+  const phoneField = document.querySelector('input[name*="_systemfield_phone"]')
+  if (phoneField instanceof HTMLInputElement && snap.phone) {
+    nativeSet(phoneField, snap.phone)
+    filled++
+  }
+
+  // LinkedIn
+  const linkedinField = document.querySelector('input[name*="_systemfield_linkedin"]')
+  if (linkedinField instanceof HTMLInputElement && snap.coreFieldExtras?.linkedIn) {
+    nativeSet(linkedinField, snap.coreFieldExtras.linkedIn)
+    filled++
+  }
+
+  // GitHub
+  const githubField = document.querySelector('input[name*="_systemfield_github"]')
+  if (githubField instanceof HTMLInputElement && snap.coreFieldExtras?.github) {
+    nativeSet(githubField, snap.coreFieldExtras.github)
+    filled++
+  }
+
+  // Website / Portfolio
+  const websiteField = document.querySelector('input[name*="_systemfield_website"]')
+  if (websiteField instanceof HTMLInputElement && snap.coreFieldExtras?.website) {
+    nativeSet(websiteField, snap.coreFieldExtras.website)
+    filled++
+  }
+
+  // Location (Ashby may use a standard text input)
+  const locationField =
+    document.querySelector('input[name*="_systemfield_location"]') ??
+    findFieldByLabel("location") ??
+    findFieldByLabel("city")
+  if (locationField instanceof HTMLInputElement && snap.location) {
+    nativeSet(locationField, snap.location)
+    filled++
+  }
+
+  // ── Resume upload ────────────────────────────────────────────────────────────
+  if (snap.presignedResumeUrl) {
+    const resumeInput = document.querySelector("input[type='file']")
+    if (resumeInput instanceof HTMLInputElement) {
+      await attachResume(resumeInput, snap.presignedResumeUrl, snap.resumeFileName ?? "resume.pdf")
+      filled++
+    }
+  }
+
+  // ── Custom question answers ─────────────────────────────────────────────────
+  // Ashby uses standard HTML selects (not react-select), so we can set value directly.
+  if (Array.isArray(snap.questionMeta)) {
+    for (const meta of snap.questionMeta) {
+      const answer = snap.questionAnswers?.[meta.fieldName]
+      if (!answer) continue
+
+      try {
+        // Try to find by field name/id
+        let field = document.querySelector(
+          `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"], select[name="${meta.fieldName}"], ` +
+          `input[id="${meta.fieldName}"], textarea[id="${meta.fieldName}"], select[id="${meta.fieldName}"]`
+        )
+
+        // Fallback: search by label text
+        if (!field) {
+          field = findFieldByLabel(meta.label)
+        }
+
+        if (field instanceof HTMLSelectElement) {
+          // Standard HTML select — set value directly
+          field.value = String(answer)
+          field.dispatchEvent(new Event("change", { bubbles: true }))
+          filled++
+        } else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+          nativeSet(field, String(answer))
+          filled++
+        } else {
+          missingFields.push(meta.label)
+        }
+      } catch (err) {
+        console.error(`[pipeline-operator] Error filling Ashby field "${meta.fieldName}":`, err)
+        missingFields.push(meta.label)
+      }
+    }
+  }
+
+  // ── Post-fill audit banner ───────────────────────────────────────────────────
+  const unansweredPending = Array.isArray(snap.pendingQuestions)
+    ? snap.pendingQuestions.filter((q) => !q.userAnswer && q.required)
+    : []
+
+  const allMissing = [
+    ...missingFields,
+    ...unansweredPending.map((q) => q.label),
+  ]
+  const uniqueMissing = [...new Set(allMissing)]
+
+  if (filled > 0) {
+    const pendingMsg = uniqueMissing.length > 0
+      ? ` — ${uniqueMissing.length} required field(s) need manual entry: ${uniqueMissing.join(", ")}`
+      : ""
+    showBanner(
+      `Pre-filled ${filled} field${filled !== 1 ? "s" : ""}${pendingMsg} — review all fields, then submit manually.`,
+      uniqueMissing.length > 0 ? "info" : "success"
+    )
+  } else {
+    showBanner(
+      "Could not detect form fields — Ashby layout may have changed. Fill manually.",
+      "error"
+    )
+  }
+}
+
+/**
+ * Main fill routine — dispatches to ATS-specific handler.
  */
 async function fillFormFromToken(token) {
   const payload = decodePayload(token)
@@ -901,6 +1092,15 @@ async function fillFormFromToken(token) {
   }
 
   const snap = payload.snapshot
+
+  // Dispatch to ATS-specific handler if on Ashby
+  const provider = detectAtsProvider()
+  if (provider === 'ashby') {
+    await fillAshbyForm(snap, token)
+    return
+  }
+
+  // ── Greenhouse fill (default) ───────────────────────────────────────────────
   showBanner("Pre-filling form…", "info")
 
   // Wait for actual input fields to appear (SPA hydration)

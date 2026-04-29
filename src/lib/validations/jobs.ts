@@ -38,6 +38,7 @@ export const jobsQuerySchema = z.object({
   salaryMin: z.coerce.number().int().min(0).max(10_000_000).optional(),
   salaryMax: z.coerce.number().int().min(0).max(10_000_000).optional(),
   sort: z.enum(SORT_OPTIONS).default("newest"),
+  provider: z.enum(["GREENHOUSE", "ASHBY"]).optional(), // filter by ATS provider
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });

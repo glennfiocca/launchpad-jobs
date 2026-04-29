@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { requireAdminSession, notFound } from "../../../_helpers"
-import { applyToGreenhouseJob } from "@/lib/greenhouse/apply"
+import { getApplyStrategy } from "@/lib/ats/registry"
+import { initializeAtsProviders } from "@/lib/ats/init"
 import { getPresignedGetUrl } from "@/lib/spaces"
 import type { ApiResponse } from "@/types"
 
@@ -59,10 +60,24 @@ export async function POST(
   // Use the application's tracking email so recruiter replies route correctly
   const trackingEmail = app.trackingEmail ?? profile.email
 
-  const applyResult = await applyToGreenhouseJob({
+  initializeAtsProviders()
+  const provider = app.job.provider ?? "GREENHOUSE"
+  const strategy = getApplyStrategy(provider)
+  const applyResult = await strategy.apply({
     boardToken: app.job.boardToken,
-    jobId: app.job.externalId,
-    profile,
+    jobExternalId: app.job.externalId,
+    applyUrl: app.job.absoluteUrl ?? `https://boards.greenhouse.io/${app.job.boardToken}/jobs/${app.job.externalId}`,
+    profile: {
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: profile.email,
+      phone: profile.phone,
+      location: profile.locationFormatted ?? profile.location ?? null,
+      linkedInUrl: profile.linkedinUrl ?? null,
+      githubUrl: profile.githubUrl ?? null,
+      websiteUrl: profile.portfolioUrl ?? null,
+      preferredFirstName: profile.preferredFirstName,
+    },
     trackingEmail,
     resumeBuffer,
     resumeFileName: profile.resumeFileName ?? "resume.pdf",
@@ -122,7 +137,7 @@ export async function POST(
   return NextResponse.json<ApiResponse<{ errorCode?: string; manualApplyUrl?: string }>>(
     {
       success: false,
-      error: `Greenhouse dispatch failed: ${applyResult.error ?? "Unknown error"}`,
+      error: `${provider} dispatch failed: ${applyResult.error ?? "Unknown error"}`,
       data: {
         errorCode: applyResult.errorCode,
         manualApplyUrl: applyResult.manualApplyUrl,

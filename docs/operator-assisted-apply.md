@@ -87,12 +87,44 @@ The presigned resume URL has a **300-second (5-minute) TTL**.
 
 See `extensions/pipeline-operator/README.md` for installation instructions.
 
-The extension:
+The extension supports **Greenhouse** and **Ashby** apply pages.
+
+### Greenhouse (`job-boards.greenhouse.io`)
+
 1. Receives a JWT fill-package token from the admin page.
 2. Decodes the snapshot (no re-verification needed — server validates before signing).
 3. Fetches the presigned resume URL and attaches the file to the `<input type="file">`.
-4. Fills name, email (uses tracking email), phone, location, custom question answers.
-5. **Does not auto-submit** — operator reviews and clicks Submit.
+4. Fills first name, last name, email (uses tracking email), phone, location, custom question answers.
+5. Handles react-select dropdowns via CDP click simulation.
+6. Fills EEOC demographic fields from Remix page context.
+7. **Does not auto-submit** — operator reviews and clicks Submit.
+
+### Ashby (`jobs.ashbyhq.com`)
+
+1. Same JWT fill-package token delivery (URL hash or session storage).
+2. Fills name (single combined field: `_systemfield_name`), email (`_systemfield_email`), phone (`_systemfield_phone`).
+3. Fills LinkedIn (`_systemfield_linkedin`), GitHub (`_systemfield_github`), website (`_systemfield_website`) when present.
+4. Fetches presigned resume URL and attaches via `input[type="file"]`.
+5. Custom questions: matched by field name/id, supports standard HTML selects (no react-select).
+6. **Does not auto-submit** — operator reviews and clicks Submit.
+
+#### Ashby-specific selectors
+
+| Field | Selector pattern |
+|---|---|
+| Name | `input[name*="_systemfield_name"]` |
+| Email | `input[name*="_systemfield_email"]` |
+| Phone | `input[name*="_systemfield_phone"]` |
+| LinkedIn | `input[name*="_systemfield_linkedin"]` |
+| GitHub | `input[name*="_systemfield_github"]` |
+| Website | `input[name*="_systemfield_website"]` |
+| Resume | `input[type="file"]` |
+
+#### Known limitations (Ashby)
+
+- EEOC/demographic fields are not auto-filled (Ashby uses a different survey format).
+- No navigation cascade to embed URLs (Ashby does not use the same embed pattern as Greenhouse).
+- CDP click simulation is not used — Ashby uses standard HTML form elements.
 
 ---
 

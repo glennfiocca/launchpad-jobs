@@ -1,9 +1,9 @@
 /**
- * Source C: Discover Greenhouse board tokens by crawling company career pages.
- * For companies whose slug guesses didn't work, fetches their career pages
- * and searches for Greenhouse URLs.
+ * Source C: Discover board tokens by crawling company career pages.
+ * Searches for both Greenhouse and Ashby URLs in career page HTML.
  */
 
+import type { AtsProvider } from "@prisma/client";
 import type { TokenValidator, ValidationResult } from "./validate-token";
 
 const GREENHOUSE_URL_REGEX =
@@ -11,6 +11,12 @@ const GREENHOUSE_URL_REGEX =
 
 const GREENHOUSE_EMBED_REGEX =
   /greenhouse\.io\/(?:embed\/)?job_board\/js\?for=([a-z0-9][a-z0-9-]{1,50})/gi;
+
+const ASHBY_URL_REGEX =
+  /jobs\.ashbyhq\.com\/([a-z0-9][a-z0-9-]{1,50})/gi;
+
+const ASHBY_API_REGEX =
+  /api\.ashbyhq\.com\/posting-api\/job-board\/([a-z0-9][a-z0-9-]{1,50})/gi;
 
 const CAREER_PAGE_PATHS = ["/careers", "/jobs", "/join", "/work-with-us", "/about/careers"];
 
@@ -24,6 +30,8 @@ const SKIP_TOKENS = new Set([
   "null",
   "example",
   "test",
+  "posting-api",
+  "job-board",
 ]);
 
 interface CompanyToCheck {
@@ -31,21 +39,44 @@ interface CompanyToCheck {
   readonly website: string;
 }
 
-function extractTokensFromHtml(html: string): readonly string[] {
-  const tokens = new Set<string>();
+interface CareerPageCandidate {
+  readonly token: string;
+  readonly provider: AtsProvider;
+}
 
+function extractTokensFromHtml(html: string): readonly CareerPageCandidate[] {
+  const seen = new Set<string>();
+  const candidates: CareerPageCandidate[] = [];
+
+  // Greenhouse patterns
   for (const regex of [GREENHOUSE_URL_REGEX, GREENHOUSE_EMBED_REGEX]) {
     regex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(html)) !== null) {
       const token = match[1].toLowerCase();
-      if (!SKIP_TOKENS.has(token) && token.length >= 2) {
-        tokens.add(token);
+      const key = `GREENHOUSE:${token}`;
+      if (!SKIP_TOKENS.has(token) && token.length >= 2 && !seen.has(key)) {
+        seen.add(key);
+        candidates.push({ token, provider: "GREENHOUSE" });
       }
     }
   }
 
-  return [...tokens];
+  // Ashby patterns
+  for (const regex of [ASHBY_URL_REGEX, ASHBY_API_REGEX]) {
+    regex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(html)) !== null) {
+      const token = match[1].toLowerCase();
+      const key = `ASHBY:${token}`;
+      if (!SKIP_TOKENS.has(token) && token.length >= 2 && !seen.has(key)) {
+        seen.add(key);
+        candidates.push({ token, provider: "ASHBY" });
+      }
+    }
+  }
+
+  return candidates;
 }
 
 async function fetchCareerPage(
@@ -145,7 +176,8 @@ export interface CareerPageResult {
 export async function discoverFromCareerPages(
   validator: TokenValidator,
   additionalCompanies?: readonly CompanyToCheck[],
-  onProgress?: (completed: number, total: number, current: string) => void
+  onProgress?: (completed: number, total: number, current: string) => void,
+  ashbyValidator?: TokenValidator
 ): Promise<CareerPageResult> {
   const companies = [
     ...WELL_KNOWN_COMPANIES,
@@ -154,7 +186,7 @@ export async function discoverFromCareerPages(
 
   console.log(`Checking career pages for ${companies.length} companies...`);
 
-  const allTokens = new Set<string>();
+  const allCandidates = new Map<string, CareerPageCandidate>();
   let pagesChecked = 0;
 
   for (let i = 0; i < companies.length; i++) {
@@ -165,13 +197,19 @@ export async function discoverFromCareerPages(
       const html = await fetchCareerPage(company.website, careerPath);
       if (html) {
         pagesChecked++;
-        const tokens = extractTokensFromHtml(html);
-        for (const token of tokens) {
-          allTokens.add(token);
+        const candidates = extractTokensFromHtml(html);
+        for (const c of candidates) {
+          const key = `${c.provider}:${c.token}`;
+          if (!allCandidates.has(key)) {
+            allCandidates.set(key, c);
+          }
         }
-        if (tokens.length > 0) {
+        if (candidates.length > 0) {
+          const labels = candidates.map(
+            (c) => `[${c.provider}] ${c.token}`
+          );
           console.log(
-            `  FOUND on ${company.name}${careerPath}: ${tokens.join(", ")}`
+            `  FOUND on ${company.name}${careerPath}: ${labels.join(", ")}`
           );
           break; // Found tokens, skip other career paths for this company
         }
@@ -179,22 +217,27 @@ export async function discoverFromCareerPages(
     }
   }
 
-  const tokenList = [...allTokens];
+  const candidateList = [...allCandidates.values()];
   console.log(
-    `Found ${tokenList.length} tokens from ${pagesChecked} career pages`
+    `Found ${candidateList.length} tokens from ${pagesChecked} career pages`
   );
 
-  // Validate all candidates
+  // Validate all candidates, dispatching to the appropriate validator
   const results: ValidationResult[] = [];
 
-  for (let i = 0; i < tokenList.length; i++) {
-    const token = tokenList[i];
-    const result = await validator.validate(token);
+  for (let i = 0; i < candidateList.length; i++) {
+    const candidate = candidateList[i];
+    const activeValidator =
+      candidate.provider === "ASHBY" && ashbyValidator
+        ? ashbyValidator
+        : validator;
+
+    const result = await activeValidator.validate(candidate.token);
     results.push(result);
 
     if (result.valid && result.board) {
       console.log(
-        `  VALID: ${token} -> ${result.board.name} (${result.board.jobCount} jobs)`
+        `  VALID: [${candidate.provider}] ${candidate.token} -> ${result.board.name} (${result.board.jobCount} jobs)`
       );
     }
   }
@@ -202,7 +245,7 @@ export async function discoverFromCareerPages(
   return {
     source: "career-pages",
     pagesChecked,
-    tokensFound: tokenList.length,
+    tokensFound: candidateList.length,
     results,
   };
 }

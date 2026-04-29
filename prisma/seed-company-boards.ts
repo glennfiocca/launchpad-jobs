@@ -14,7 +14,7 @@ async function main() {
 
   for (const board of SEED_BOARDS) {
     const result = await db.companyBoard.upsert({
-      where: { boardToken: board.token },
+      where: { provider_boardToken: { provider: "GREENHOUSE", boardToken: board.token } },
       create: {
         name: board.name,
         boardToken: board.token,

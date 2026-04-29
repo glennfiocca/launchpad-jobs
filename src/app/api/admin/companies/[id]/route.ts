@@ -23,7 +23,7 @@ export async function PATCH(
   // Enforce boardToken uniqueness if changing it
   if (parsed.data.boardToken && parsed.data.boardToken !== board.boardToken) {
     const duplicate = await db.companyBoard.findUnique({
-      where: { boardToken: parsed.data.boardToken },
+      where: { provider_boardToken: { provider: board.provider, boardToken: parsed.data.boardToken } },
     })
     if (duplicate) {
       return NextResponse.json<ApiResponse<never>>(

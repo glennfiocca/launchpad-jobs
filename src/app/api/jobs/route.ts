@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     salaryMin,
     salaryMax,
     sort,
+    provider,
     page,
     limit,
   } = parsed.data;
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
   // Structural where clause (shared by Prisma path and facets)
   const structuralWhere: Prisma.JobWhereInput = {
     isActive: true,
+    ...(provider && { provider }),
     ...(remote === "true" && { remote: true }),
     ...(employmentType && { employmentType }),
     ...(dateCutoff && { createdAt: { gte: dateCutoff } }),
@@ -111,6 +113,7 @@ export async function GET(request: Request) {
       Prisma.sql`j."searchVector" @@ plainto_tsquery('english', ${query})`,
     ];
 
+    if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
     if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
@@ -195,6 +198,7 @@ export async function GET(request: Request) {
     const relevanceOrder = buildRelevanceOrder(relevanceProfile);
 
     const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];
+    if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
     if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);

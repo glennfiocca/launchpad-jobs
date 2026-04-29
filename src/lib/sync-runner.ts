@@ -1,5 +1,8 @@
+import type { AtsProvider } from "@prisma/client"
 import { db } from "@/lib/db"
-import { getActiveBoards, syncGreenhouseBoard } from "@/lib/greenhouse/sync"
+import { getActiveBoards } from "@/lib/greenhouse/sync"
+import { initializeAtsProviders } from "@/lib/ats/init"
+import { syncBoard } from "@/lib/ats/sync"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,13 +144,23 @@ export async function acquireSyncLock(
 export async function executeSyncWork(
   syncLogId: string,
 ): Promise<SyncRunResult> {
+  // Ensure all ATS providers are registered before syncing
+  initializeAtsProviders()
+
   const syncLog = await db.syncLog.findUniqueOrThrow({
     where: { id: syncLogId },
     select: { startedAt: true },
   })
   const startedAt = syncLog.startedAt
 
-  let boards: Awaited<ReturnType<typeof getActiveBoards>> = []
+  interface BoardEntry {
+    token: string
+    name: string
+    provider: AtsProvider
+    logoUrl?: string
+  }
+
+  let boards: BoardEntry[] = []
   let totalAdded = 0
   let totalUpdated = 0
   let totalDeactivated = 0
@@ -157,7 +170,32 @@ export async function executeSyncWork(
   const errorSummaries: string[] = []
 
   try {
-    boards = await getActiveBoards()
+    // Load all active boards from CompanyBoard (multi-provider)
+    const dbBoards = await db.companyBoard.findMany({
+      where: { isActive: true },
+      select: { boardToken: true, name: true, provider: true, logoUrl: true },
+    })
+
+    boards = dbBoards.map((b) => ({
+      token: b.boardToken,
+      name: b.name,
+      provider: b.provider,
+      ...(b.logoUrl ? { logoUrl: b.logoUrl } : {}),
+    }))
+
+    // Fallback: if no Greenhouse boards in DB, use SEED_BOARDS via getActiveBoards()
+    const hasGreenhouseFromDb = boards.some((b) => b.provider === "GREENHOUSE")
+    if (!hasGreenhouseFromDb) {
+      const seedBoards = await getActiveBoards()
+      const seedEntries: BoardEntry[] = seedBoards.map((b) => ({
+        token: b.token,
+        name: b.name,
+        provider: "GREENHOUSE" as AtsProvider,
+        ...(b.logoUrl ? { logoUrl: b.logoUrl } : {}),
+      }))
+      boards = [...boards, ...seedEntries]
+    }
+
     console.log(
       `[sync] Boards fetched: syncLogId=${syncLogId} count=${boards.length}`,
     )
@@ -165,7 +203,7 @@ export async function executeSyncWork(
     for (const board of boards) {
       const boardStart = new Date()
       try {
-        const result = await syncGreenhouseBoard(board.token, board.name, board.logoUrl)
+        const result = await syncBoard(board.provider, board.token, board.name, board.logoUrl)
         const boardEnd = new Date()
         const boardDuration = boardEnd.getTime() - boardStart.getTime()
 
@@ -191,12 +229,12 @@ export async function executeSyncWork(
           boardsFailed++
           errorSummaries.push(`${board.name}: ${result.errors.join("; ")}`)
           console.warn(
-            `[sync] Board failed: syncLogId=${syncLogId} board=${board.name} errors=${result.errors.length} durationMs=${boardDuration}`,
+            `[sync] Board failed: syncLogId=${syncLogId} board=${board.name} provider=${board.provider} errors=${result.errors.length} durationMs=${boardDuration}`,
           )
         } else {
           boardsSynced++
           console.log(
-            `[sync] Board synced: syncLogId=${syncLogId} board=${board.name} added=${result.jobsAdded} updated=${result.jobsUpdated} deactivated=${result.jobsDeactivated} durationMs=${boardDuration}`,
+            `[sync] Board synced: syncLogId=${syncLogId} board=${board.name} provider=${board.provider} added=${result.jobsAdded} updated=${result.jobsUpdated} deactivated=${result.jobsDeactivated} durationMs=${boardDuration}`,
           )
         }
 
@@ -222,7 +260,7 @@ export async function executeSyncWork(
         boardsFailed++
         errorSummaries.push(`${board.name}: ${errMsg}`)
         console.error(
-          `[sync] Board exception: syncLogId=${syncLogId} board=${board.name} error=${errMsg}`,
+          `[sync] Board exception: syncLogId=${syncLogId} board=${board.name} provider=${board.provider} error=${errMsg}`,
         )
       }
     }

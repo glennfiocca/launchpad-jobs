@@ -193,7 +193,7 @@ export async function POST(request: Request) {
 
   // Auto-confirm operator-queue applications when a submission confirmation arrives.
   // Any inbound email at the tracking address with a forward-moving classification
-  // is ground truth that Greenhouse accepted the form — the operator submitted successfully.
+  // is ground truth that the ATS accepted the form — the operator submitted successfully.
   // This is idempotent: if operator-complete already ran, submissionStatus !== AWAITING_OPERATOR
   // and this block is skipped. If this runs first, operator-complete returns 400.
   if (

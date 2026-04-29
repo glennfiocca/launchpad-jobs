@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { requireAdminSession } from "../../_helpers"
 import { acquireSyncLock, executeSyncWork } from "@/lib/sync-runner"
+import { initializeAtsProviders } from "@/lib/ats/init"
 import type { ApiResponse } from "@/types"
 
 export async function POST() {
   const { error, session } = await requireAdminSession()
   if (error) return error
+
+  initializeAtsProviders()
 
   const triggeredBy = `admin:${session?.user?.email ?? "unknown"}`
   const lock = await acquireSyncLock(triggeredBy)

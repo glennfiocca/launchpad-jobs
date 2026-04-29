@@ -12,6 +12,7 @@ export const updateJobSchema = z.object({
 export const createCompanyBoardSchema = z.object({
   name: z.string().min(1).max(200),
   boardToken: z.string().min(1).max(100),
+  provider: z.enum(["GREENHOUSE", "ASHBY"]).default("GREENHOUSE"),
   logoUrl: z.string().url().optional().or(z.literal("")),
   website: z.string().url().optional().or(z.literal("")),
 })

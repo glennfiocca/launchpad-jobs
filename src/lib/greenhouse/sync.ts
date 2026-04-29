@@ -43,7 +43,7 @@ export async function syncGreenhouseBoard(
 
   // Upsert company
   const company = await db.company.upsert({
-    where: { slug: boardToken },
+    where: { provider_slug: { provider: "GREENHOUSE", slug: boardToken } },
     update: {
       name: companyName,
       ...(boardWebsite && { website: boardWebsite }),
@@ -94,7 +94,7 @@ export async function syncGreenhouseBoard(
 
     try {
       const existing = await db.job.findUnique({
-        where: { externalId_boardToken: { externalId, boardToken } },
+        where: { provider_externalId_boardToken: { provider: "GREENHOUSE", externalId, boardToken } },
       });
 
       if (existing) {

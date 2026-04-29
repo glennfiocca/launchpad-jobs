@@ -1,0 +1,118 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "145ff46b-1441-4773-bcd3-c8c90baa598a",
+      "title": "Senior Software Engineer",
+      "department": "Engineering",
+      "team": "Platform",
+      "employmentType": "FullTime",
+      "location": "San Francisco, CA",
+      "isRemote": false,
+      "isListed": true,
+      "workplaceType": "OnSite",
+      "descriptionHtml": "<p>We are looking for a senior engineer...</p>",
+      "descriptionPlain": "We are looking for a senior engineer...",
+      "publishedAt": "2025-11-14T00:46:58.989+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/testco/145ff46b",
+      "applyUrl": "https://jobs.ashbyhq.com/testco/145ff46b/application",
+      "address": {
+        "postalAddress": {
+          "addressLocality": "San Francisco",
+          "addressRegion": "CA",
+          "addressCountry": "United States"
+        }
+      },
+      "secondaryLocations": []
+    },
+    {
+      "id": "unlisted-job-id",
+      "title": "Internal Role",
+      "department": "HR",
+      "team": "People",
+      "employmentType": "FullTime",
+      "location": "Remote",
+      "isRemote": true,
+      "isListed": false,
+      "workplaceType": "Remote",
+      "descriptionHtml": "<p>Internal only</p>",
+      "descriptionPlain": "Internal only",
+      "publishedAt": "2025-10-01T00:00:00.000+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/testco/unlisted",
+      "applyUrl": "https://jobs.ashbyhq.com/testco/unlisted/application",
+      "address": {
+        "postalAddress": {
+          "addressLocality": "",
+          "addressRegion": "",
+          "addressCountry": ""
+        }
+      },
+      "secondaryLocations": []
+    },
+    {
+      "id": "aaa11111-2222-3333-4444-555566667777",
+      "title": "Product Manager",
+      "department": "Product",
+      "team": "Core",
+      "employmentType": "PartTime",
+      "location": "New York, NY",
+      "isRemote": false,
+      "isListed": true,
+      "workplaceType": "Hybrid",
+      "descriptionHtml": "<p>Looking for a PM...</p>",
+      "descriptionPlain": "Looking for a PM...",
+      "publishedAt": "2025-12-01T12:00:00.000+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/testco/aaa11111",
+      "applyUrl": "https://jobs.ashbyhq.com/testco/aaa11111/application",
+      "address": {
+        "postalAddress": {
+          "addressLocality": "New York",
+          "addressRegion": "NY",
+          "addressCountry": "United States"
+        }
+      },
+      "secondaryLocations": [],
+      "compensation": {
+        "compensationTierSummary": "$120k - $160k",
+        "scrapeableCompensationSalarySummary": "$120,000 - $160,000",
+        "compensationTiers": [
+          {
+            "title": "Tier 1",
+            "components": [
+              {
+                "compensationType": "Salary",
+                "currencyCode": "USD",
+                "minValue": 120000,
+                "maxValue": 160000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bbb22222-3333-4444-5555-666677778888",
+      "title": "Design Intern",
+      "department": "Design",
+      "team": "Brand",
+      "employmentType": "Intern",
+      "location": "Remote",
+      "isRemote": true,
+      "isListed": true,
+      "workplaceType": "Remote",
+      "descriptionHtml": "<p>Summer internship</p>",
+      "descriptionPlain": "Summer internship",
+      "publishedAt": "2025-11-20T08:00:00.000+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/testco/bbb22222",
+      "applyUrl": "https://jobs.ashbyhq.com/testco/bbb22222/application",
+      "address": {
+        "postalAddress": {
+          "addressLocality": "",
+          "addressRegion": "",
+          "addressCountry": ""
+        }
+      },
+      "secondaryLocations": []
+    }
+  ]
+}

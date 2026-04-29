@@ -36,12 +36,14 @@ export async function POST(req: NextRequest) {
   const parsed = createCompanyBoardSchema.safeParse(body)
   if (!parsed.success) return badRequest(parsed.error.message)
 
+  const provider = parsed.data.provider ?? "GREENHOUSE"
+
   const existing = await db.companyBoard.findUnique({
-    where: { boardToken: parsed.data.boardToken },
+    where: { provider_boardToken: { provider, boardToken: parsed.data.boardToken } },
   })
   if (existing) {
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "A board with this token already exists" },
+      { success: false, error: "A board with this token already exists for this provider" },
       { status: 409 }
     )
   }
@@ -50,6 +52,7 @@ export async function POST(req: NextRequest) {
     data: {
       name: parsed.data.name,
       boardToken: parsed.data.boardToken,
+      provider,
       logoUrl: parsed.data.logoUrl || null,
       website: parsed.data.website || null,
     },

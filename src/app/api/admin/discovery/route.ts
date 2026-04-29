@@ -16,6 +16,7 @@ interface DiscoveryStatus {
   running: boolean
   phase: string
   source: string
+  provider: string
   progress: { completed: number; total: number; current: string }
   startedAt: string
   startedBy: string
@@ -87,13 +88,25 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const body = await req.json().catch(() => ({})) as { source?: string; dryRun?: boolean }
+  const body = await req.json().catch(() => ({})) as {
+    source?: string
+    provider?: string
+    dryRun?: boolean
+  }
   const source = body.source ?? "all"
+  const provider = body.provider ?? "all"
   const dryRun = body.dryRun ?? false
 
   if (!["all", "companies", "github", "careers"].includes(source)) {
     return NextResponse.json<ApiResponse<null>>(
       { success: false, error: `Invalid source: ${source}. Use: all, companies, github, careers` },
+      { status: 400 },
+    )
+  }
+
+  if (!["all", "greenhouse", "ashby"].includes(provider)) {
+    return NextResponse.json<ApiResponse<null>>(
+      { success: false, error: `Invalid provider: ${provider}. Use: all, greenhouse, ashby` },
       { status: 400 },
     )
   }
@@ -104,13 +117,14 @@ export async function POST(req: NextRequest) {
     running: true,
     phase: "initializing",
     source,
+    provider,
     progress: { completed: 0, total: 0, current: "Starting..." },
     startedAt: new Date().toISOString(),
     startedBy,
   }
 
   // Fire-and-forget: run discovery in background
-  runDiscoveryBackground(source, dryRun, startedBy).catch((err) => {
+  runDiscoveryBackground(source, provider, dryRun, startedBy).catch((err) => {
     console.error("[discovery] Background worker fatal:", err)
     currentRun = null
   })
@@ -123,10 +137,13 @@ export async function POST(req: NextRequest) {
 
 async function runDiscoveryBackground(
   source: string,
+  provider: string,
   dryRun: boolean,
   startedBy: string
 ): Promise<void> {
   const startTime = Date.now()
+  const runGreenhouse = provider === "all" || provider === "greenhouse"
+  const runAshby = provider === "all" || provider === "ashby"
 
   try {
     // Dynamic imports to avoid loading heavy modules at route init
@@ -152,39 +169,58 @@ async function runDiscoveryBackground(
       const { SEED_BOARDS } = await import("@/lib/greenhouse/sync")
       for (const board of SEED_BOARDS) {
         existingTokens.add(board.token.toLowerCase())
+        existingTokens.add(`GREENHOUSE:${board.token.toLowerCase()}`)
       }
     } catch {
       // Non-fatal
     }
 
     const rateLimiter = new RateLimiter()
-    const validator = new TokenValidator(existingTokens, rateLimiter)
 
-    type ValidationResult = Awaited<ReturnType<typeof validator.validate>>
+    // Create validators per active provider
+    const ghValidator = runGreenhouse
+      ? new TokenValidator(existingTokens, rateLimiter, "GREENHOUSE")
+      : null
+    const ashbyValidator = runAshby
+      ? new TokenValidator(existingTokens, new RateLimiter(), "ASHBY")
+      : null
+
+    const primaryValidator = ghValidator ?? ashbyValidator!
+
+    type ValidationResult = Awaited<ReturnType<typeof primaryValidator.validate>>
     const allResults: ValidationResult[] = []
 
     const makeProgress = (phase: string) => (completed: number, total: number, current: string) => {
       setDiscoveryProgress(phase, completed, total, current)
     }
 
-    // Source A
-    if (source === "all" || source === "companies") {
+    // Source A: Company Lists (Greenhouse only)
+    if ((source === "all" || source === "companies") && ghValidator) {
       if (currentRun) currentRun.phase = "company_lists"
-      const result = await discoverFromCompanyLists(validator, makeProgress("company_lists"))
+      const result = await discoverFromCompanyLists(ghValidator, makeProgress("company_lists"))
       allResults.push(...result.results)
     }
 
-    // Source B
+    // Source B: GitHub Mining (both providers)
     if (source === "all" || source === "github") {
       if (currentRun) currentRun.phase = "github_mining"
-      const result = await discoverFromGitHub(validator, makeProgress("github_mining"))
+      const result = await discoverFromGitHub(
+        primaryValidator,
+        makeProgress("github_mining"),
+        ashbyValidator ?? undefined
+      )
       allResults.push(...result.results)
     }
 
-    // Source C
+    // Source C: Career Pages (both providers)
     if (source === "all" || source === "careers") {
       if (currentRun) currentRun.phase = "career_pages"
-      const result = await discoverFromCareerPages(validator, undefined, makeProgress("career_pages"))
+      const result = await discoverFromCareerPages(
+        primaryValidator,
+        undefined,
+        makeProgress("career_pages"),
+        ashbyValidator ?? undefined
+      )
       allResults.push(...result.results)
     }
 

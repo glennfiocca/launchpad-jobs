@@ -1,13 +1,17 @@
 /**
- * Source B: Discover Greenhouse board tokens from GitHub code search.
- * Searches for files containing Greenhouse API URLs and extracts board tokens.
+ * Source B: Discover board tokens from GitHub code search.
+ * Searches for files containing Greenhouse and Ashby API URLs and extracts board tokens.
  */
 
 import { execSync } from "node:child_process";
+import type { AtsProvider } from "@prisma/client";
 import type { TokenValidator, ValidationResult } from "./validate-token";
 
-const TOKEN_REGEX =
+const GREENHOUSE_TOKEN_REGEX =
   /boards[-.](?:api\.)?greenhouse\.io(?:\/v1\/boards)?\/([a-z0-9][a-z0-9-]{1,50})/gi;
+
+const ASHBY_TOKEN_REGEX =
+  /(?:jobs\.ashbyhq\.com|api\.ashbyhq\.com\/posting-api\/job-board)\/([a-z0-9][a-z0-9-]{1,50})/gi;
 
 // Common false positives to skip
 const SKIP_TOKENS = new Set([
@@ -27,23 +31,43 @@ const SKIP_TOKENS = new Set([
   "company",
   "boardtoken",
   "board_token",
+  "posting-api",
+  "job-board",
 ]);
 
-function extractTokensFromText(text: string): readonly string[] {
-  const tokens = new Set<string>();
+interface ExtractedCandidate {
+  readonly token: string;
+  readonly provider: AtsProvider;
+}
+
+function extractTokensFromText(text: string): readonly ExtractedCandidate[] {
+  const seen = new Set<string>();
+  const candidates: ExtractedCandidate[] = [];
+
+  // Greenhouse tokens
+  GREENHOUSE_TOKEN_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-
-  // Reset regex state
-  TOKEN_REGEX.lastIndex = 0;
-
-  while ((match = TOKEN_REGEX.exec(text)) !== null) {
+  while ((match = GREENHOUSE_TOKEN_REGEX.exec(text)) !== null) {
     const token = match[1].toLowerCase();
-    if (!SKIP_TOKENS.has(token) && token.length >= 2) {
-      tokens.add(token);
+    const key = `GREENHOUSE:${token}`;
+    if (!SKIP_TOKENS.has(token) && token.length >= 2 && !seen.has(key)) {
+      seen.add(key);
+      candidates.push({ token, provider: "GREENHOUSE" });
     }
   }
 
-  return [...tokens];
+  // Ashby tokens
+  ASHBY_TOKEN_REGEX.lastIndex = 0;
+  while ((match = ASHBY_TOKEN_REGEX.exec(text)) !== null) {
+    const token = match[1].toLowerCase();
+    const key = `ASHBY:${token}`;
+    if (!SKIP_TOKENS.has(token) && token.length >= 2 && !seen.has(key)) {
+      seen.add(key);
+      candidates.push({ token, provider: "ASHBY" });
+    }
+  }
+
+  return candidates;
 }
 
 function searchGitHub(query: string): string {
@@ -122,14 +146,24 @@ export interface GitHubResult {
 
 export async function discoverFromGitHub(
   validator: TokenValidator,
-  onProgress?: (completed: number, total: number, current: string) => void
+  onProgress?: (completed: number, total: number, current: string) => void,
+  ashbyValidator?: TokenValidator
 ): Promise<GitHubResult> {
-  console.log("Searching GitHub for Greenhouse board tokens...");
+  console.log("Searching GitHub for board tokens (Greenhouse + Ashby)...");
 
-  const allTokens = new Set<string>();
+  const allCandidates = new Map<string, ExtractedCandidate>();
 
-  // Search queries
-  const queries = [
+  function addCandidates(candidates: readonly ExtractedCandidate[]): void {
+    for (const c of candidates) {
+      const key = `${c.provider}:${c.token}`;
+      if (!allCandidates.has(key)) {
+        allCandidates.set(key, c);
+      }
+    }
+  }
+
+  // Greenhouse search queries
+  const greenhouseQueries = [
     '"boards-api.greenhouse.io" language:TypeScript',
     '"boards-api.greenhouse.io" language:JavaScript',
     '"boards-api.greenhouse.io" language:Python',
@@ -138,14 +172,23 @@ export async function discoverFromGitHub(
     '"boards.greenhouse.io" language:JSON',
   ];
 
-  for (const query of queries) {
+  // Ashby search queries
+  const ashbyQueries = [
+    '"jobs.ashbyhq.com" language:TypeScript',
+    '"jobs.ashbyhq.com" language:JavaScript',
+    '"api.ashbyhq.com/posting-api" language:TypeScript',
+    '"api.ashbyhq.com/posting-api" language:JavaScript',
+    '"jobs.ashbyhq.com" language:JSON',
+  ];
+
+  const allQueries = [...greenhouseQueries, ...ashbyQueries];
+
+  for (const query of allQueries) {
     console.log(`  Searching: ${query}`);
     const text = searchGitHub(query);
-    const tokens = extractTokensFromText(text);
-    console.log(`    Found ${tokens.length} tokens from text matches`);
-    for (const token of tokens) {
-      allTokens.add(token);
-    }
+    const candidates = extractTokensFromText(text);
+    console.log(`    Found ${candidates.length} tokens from text matches`);
+    addCandidates(candidates);
     // Brief pause between GitHub API calls
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
@@ -157,16 +200,16 @@ export async function discoverFromGitHub(
     '"greenhouse" "boardToken" language:JSON',
     '"greenhouse" "board_token" language:Python',
     '"boards.greenhouse.io" filename:seed',
+    '"jobs.ashbyhq.com" filename:config',
+    '"ashbyhq" "boardName" language:JSON',
   ];
 
   for (const query of deepQueries) {
     console.log(`  Deep search: ${query}`);
     const content = searchAndFetchContent(query);
-    const tokens = extractTokensFromText(content);
-    console.log(`    Found ${tokens.length} tokens from file contents`);
-    for (const token of tokens) {
-      allTokens.add(token);
-    }
+    const candidates = extractTokensFromText(content);
+    console.log(`    Found ${candidates.length} tokens from file contents`);
+    addCandidates(candidates);
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
@@ -183,7 +226,6 @@ export async function discoverFromGitHub(
         { encoding: "utf-8", timeout: 15000 }
       );
 
-      // Try to find config files that might list board tokens
       const configFiles = result
         .split("\n")
         .filter((f) =>
@@ -196,10 +238,7 @@ export async function discoverFromGitHub(
             `gh api repos/${repo}/contents/${file} --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || echo ""`,
             { encoding: "utf-8", timeout: 15000 }
           );
-          const tokens = extractTokensFromText(content);
-          for (const token of tokens) {
-            allTokens.add(token);
-          }
+          addCandidates(extractTokensFromText(content));
         } catch {
           // Skip files that can't be read
         }
@@ -209,28 +248,35 @@ export async function discoverFromGitHub(
     }
   }
 
-  const tokenList = [...allTokens];
-  console.log(`Found ${tokenList.length} unique candidate tokens from GitHub`);
+  const candidateList = [...allCandidates.values()];
+  console.log(`Found ${candidateList.length} unique candidate tokens from GitHub`);
 
-  // Validate all candidates
+  // Validate all candidates, dispatching to the appropriate validator
   const results: ValidationResult[] = [];
 
-  for (let i = 0; i < tokenList.length; i++) {
-    const token = tokenList[i];
-    onProgress?.(i + 1, tokenList.length, token);
-    const result = await validator.validate(token);
+  for (let i = 0; i < candidateList.length; i++) {
+    const candidate = candidateList[i];
+    const label = `[${candidate.provider}] ${candidate.token}`;
+    onProgress?.(i + 1, candidateList.length, label);
+
+    const activeValidator =
+      candidate.provider === "ASHBY" && ashbyValidator
+        ? ashbyValidator
+        : validator;
+
+    const result = await activeValidator.validate(candidate.token);
     results.push(result);
 
     if (result.valid && result.board) {
       console.log(
-        `  FOUND: ${token} -> ${result.board.name} (${result.board.jobCount} jobs)`
+        `  FOUND: ${label} -> ${result.board.name} (${result.board.jobCount} jobs)`
       );
     }
   }
 
   return {
     source: "github",
-    tokensFound: tokenList.length,
+    tokensFound: candidateList.length,
     results,
   };
 }

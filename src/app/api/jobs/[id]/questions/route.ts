@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { createGreenhouseClient } from "@/lib/greenhouse";
+import { getClient } from "@/lib/ats/registry";
+import { initializeAtsProviders } from "@/lib/ats/init";
 import { findJobByRouteId } from "@/lib/job-lookup";
 import { Prisma } from "@prisma/client";
 import type { ApiResponse, GreenhouseQuestion } from "@/types";
+import type { NormalizedQuestion } from "@/lib/ats/types";
 
 export async function GET(
   _request: Request,
@@ -39,24 +41,26 @@ export async function GET(
     });
   }
 
-  // Fetch from Greenhouse and cache
+  // Fetch from ATS provider and cache
   try {
-    const client = createGreenhouseClient(job.boardToken);
-    const ghJob = await client.getJob(job.externalId);
-    const questions: GreenhouseQuestion[] = ghJob.questions ?? [];
+    initializeAtsProviders();
+    const provider = job.provider ?? "GREENHOUSE";
+    const client = getClient(provider, job.boardToken);
+    const normalizedQuestions: readonly NormalizedQuestion[] = await client.getJobQuestions(job.externalId);
 
     await db.job.update({
       where: { id: internalId },
-      data: { applicationQuestions: questions as unknown as Prisma.InputJsonValue },
+      data: { applicationQuestions: normalizedQuestions as unknown as Prisma.InputJsonValue },
     });
 
+    // Return as GreenhouseQuestion[] for backward compat with existing frontend
     return NextResponse.json<ApiResponse<GreenhouseQuestion[]>>({
       success: true,
-      data: questions,
+      data: normalizedQuestions as unknown as GreenhouseQuestion[],
     });
   } catch (error) {
     // Return empty array on fetch failure — non-fatal
-    console.error("Failed to fetch Greenhouse questions:", error);
+    console.error("Failed to fetch application questions:", error);
     return NextResponse.json<ApiResponse<GreenhouseQuestion[]>>({
       success: true,
       data: [],

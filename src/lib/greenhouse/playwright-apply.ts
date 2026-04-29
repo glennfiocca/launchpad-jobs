@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import type { Page } from "playwright";
+import { createStealthContext } from "@/lib/ats/shared/playwright-utils";
 import type { UserProfile } from "@prisma/client";
 
 export interface ApplyOptions {
@@ -270,10 +271,7 @@ export async function applyToGreenhouseJob(
   }
 
   try {
-    const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    });
+    const context = await createStealthContext(browser);
     const page = await context.newPage();
 
     // Overall 60-second deadline per interaction

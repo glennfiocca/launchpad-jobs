@@ -1,4 +1,4 @@
-import { chromium, type Page, type Browser } from "playwright";
+import { chromium, type Page, type Browser, type BrowserContext } from "playwright";
 
 // ─── Chromium launch config ──────────────────────────────────────────────────
 
@@ -14,6 +14,8 @@ export const CHROMIUM_ARGS: readonly string[] = [
   "--disable-background-timer-throttling",
   "--disable-backgrounding-occluded-windows",
   "--disable-renderer-backgrounding",
+  // Stealth: prevent navigator.webdriver detection
+  "--disable-blink-features=AutomationControlled",
 ];
 
 // ─── CAPTCHA detection ───────────────────────────────────────────────────────
@@ -102,6 +104,39 @@ export async function launchBrowser(): Promise<Browser> {
     headless: true,
     args: [...CHROMIUM_ARGS],
   });
+}
+
+// ─── Stealth browser context ────────────────────────────────────────────────
+
+/** JS injected before every page load to mask automation signals. */
+const STEALTH_INIT_SCRIPT = `
+  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+  Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+  window.chrome = { runtime: {} };
+`;
+
+/**
+ * Creates a browser context with realistic fingerprints and stealth JS.
+ * Use this instead of raw `browser.newContext()` for ATS apply flows.
+ */
+export async function createStealthContext(
+  browser: Browser,
+  userAgent?: string
+): Promise<BrowserContext> {
+  const context = await browser.newContext({
+    userAgent:
+      userAgent ??
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    viewport: { width: 1440, height: 900 },
+    locale: "en-US",
+    timezoneId: "America/New_York",
+    extraHTTPHeaders: {
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+  });
+  await context.addInitScript(STEALTH_INIT_SCRIPT);
+  return context;
 }
 
 // ─── Generic form helpers ────────────────────────────────────────────────────

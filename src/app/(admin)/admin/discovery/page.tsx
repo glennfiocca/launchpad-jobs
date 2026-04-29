@@ -9,6 +9,7 @@ import { StatCard } from "@/components/admin/stat-card"
 /* ------------------------------------------------------------------ */
 
 type SourceType = "all" | "companies" | "github" | "careers"
+type ProviderType = "all" | "greenhouse" | "ashby"
 
 interface DiscoveryStatus {
   running: boolean
@@ -67,28 +68,46 @@ const SOURCE_OPTIONS: Array<{ value: SourceType; label: string; description: str
     value: "companies",
     label: "Company Lists",
     description:
-      "Generates slug guesses from S&P 500, Forbes Cloud 100, and Y Combinator company names. Fastest source (~5 min).",
+      "Generates slug guesses from S&P 500, Forbes Cloud 100, and Y Combinator company names. Greenhouse only. Fastest source (~5 min).",
   },
   {
     value: "github",
     label: "GitHub Mining",
     description:
-      "Searches GitHub code for Greenhouse API URLs and extracts board tokens from open-source projects. Highest yield (~10 min).",
+      "Searches GitHub code for Greenhouse and Ashby API URLs and extracts board tokens from open-source projects. Highest yield (~10 min).",
   },
   {
     value: "careers",
     label: "Career Pages",
     description:
-      "Visits career pages of well-known companies and looks for embedded Greenhouse job boards. Catches non-obvious tokens (~3 min).",
+      "Visits career pages of well-known companies and looks for embedded Greenhouse and Ashby job boards. Catches non-obvious tokens (~3 min).",
+  },
+]
+
+const PROVIDER_OPTIONS: Array<{ value: ProviderType; label: string; description: string }> = [
+  {
+    value: "all",
+    label: "All Providers",
+    description: "Discover boards for both Greenhouse and Ashby.",
+  },
+  {
+    value: "greenhouse",
+    label: "Greenhouse Only",
+    description: "Only discover Greenhouse boards (boards-api.greenhouse.io).",
+  },
+  {
+    value: "ashby",
+    label: "Ashby Only",
+    description: "Only discover Ashby boards (jobs.ashbyhq.com).",
   },
 ]
 
 const PHASE_LABELS: Record<string, string> = {
   initializing: "Initializing...",
   loading_existing_tokens: "Loading existing boards from database...",
-  company_lists: "Testing company name slugs against Greenhouse API...",
-  github_mining: "Searching GitHub for Greenhouse board tokens...",
-  career_pages: "Crawling company career pages for Greenhouse embeds...",
+  company_lists: "Testing company name slugs against ATS APIs...",
+  github_mining: "Searching GitHub for board tokens...",
+  career_pages: "Crawling company career pages for ATS embeds...",
   ingesting: "Saving new boards to database...",
 }
 
@@ -116,6 +135,7 @@ export default function DiscoveryPage() {
   const [status, setStatus] = useState<DiscoveryStatus | null>(null)
   const [lastResult, setLastResult] = useState<DiscoveryResult | null>(null)
   const [selectedSource, setSelectedSource] = useState<SourceType>("all")
+  const [selectedProvider, setSelectedProvider] = useState<ProviderType>("all")
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -177,7 +197,7 @@ export default function DiscoveryPage() {
       const res = await fetch("/api/admin/discovery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: selectedSource, dryRun: false }),
+        body: JSON.stringify({ source: selectedSource, provider: selectedProvider, dryRun: false }),
       })
       const json = await res.json()
 
@@ -220,7 +240,7 @@ export default function DiscoveryPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Board Discovery</h1>
         <p className="text-zinc-400 mt-1">
-          Find new Greenhouse job boards to add to the platform
+          Find new Greenhouse and Ashby job boards to add to the platform
         </p>
       </div>
 
@@ -231,26 +251,29 @@ export default function DiscoveryPage() {
           <div className="space-y-3 text-sm text-zinc-300">
             <p>
               <span className="text-white font-medium">What this does:</span>{" "}
-              This tool automatically searches for companies that use Greenhouse as their
+              This tool automatically searches for companies that use Greenhouse or Ashby as their
               applicant tracking system (ATS) and adds their public job boards to our database.
               Once discovered, their jobs will be pulled in on the next scheduled sync.
             </p>
             <p>
               <span className="text-white font-medium">How it works:</span>{" "}
-              Every company using Greenhouse has a public job board at{" "}
+              Companies using Greenhouse have boards at{" "}
               <code className="bg-zinc-800 px-1.5 py-0.5 rounded text-xs text-violet-300">
                 boards-api.greenhouse.io/v1/boards/&#123;token&#125;
+              </code>{" "}
+              and Ashby companies at{" "}
+              <code className="bg-zinc-800 px-1.5 py-0.5 rounded text-xs text-violet-300">
+                jobs.ashbyhq.com/&#123;token&#125;
               </code>
-              . The discovery pipeline tries to guess these tokens using company names from
-              S&P 500, Forbes Cloud 100, and Y Combinator lists, mines GitHub for references
-              to Greenhouse URLs, and crawls career pages for embedded Greenhouse job boards.
-              Each candidate is validated against the Greenhouse API to confirm it exists and
-              has active job listings before being added.
+              . The pipeline mines GitHub for references to these URLs, crawls career pages
+              for embedded job boards, and tests company name slugs from S&P 500, Forbes
+              Cloud 100, and Y Combinator lists. Each candidate is validated against the
+              respective API to confirm it exists and has active job listings before being added.
             </p>
             <p>
               <span className="text-white font-medium">When to run:</span>{" "}
-              Run this when you want to expand the job catalog. New companies adopt Greenhouse
-              regularly, so running monthly is a good cadence. Existing boards are
+              Run this when you want to expand the job catalog. New companies adopt these
+              platforms regularly, so running monthly is a good cadence. Existing boards are
               automatically skipped, so re-running is always safe.
             </p>
           </div>
@@ -261,6 +284,40 @@ export default function DiscoveryPage() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
         <h2 className="text-lg font-semibold text-white">Start a Discovery Run</h2>
 
+        {/* Provider Selector */}
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-zinc-400">
+            ATS Provider
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {PROVIDER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSelectedProvider(opt.value)}
+                disabled={isRunning}
+                className={[
+                  "text-left p-4 rounded-lg border transition-colors",
+                  selectedProvider === opt.value
+                    ? "border-violet-500 bg-violet-500/10"
+                    : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600",
+                  isRunning ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+                ].join(" ")}
+              >
+                <p
+                  className={[
+                    "text-sm font-medium",
+                    selectedProvider === opt.value ? "text-violet-300" : "text-zinc-200",
+                  ].join(" ")}
+                >
+                  {opt.label}
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">{opt.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Source Selector */}
         <div className="space-y-3">
           <label className="block text-sm font-medium text-zinc-400">
             Discovery source
@@ -381,7 +438,7 @@ export default function DiscoveryPage() {
             <StatCard
               label="Candidates Tested"
               value={lastResult.stats.candidatesTested.toLocaleString()}
-              sub="Total slugs checked against Greenhouse API"
+              sub="Total slugs checked against ATS APIs"
             />
             <StatCard
               label="New Boards Found"
@@ -490,7 +547,7 @@ export default function DiscoveryPage() {
                 No new boards found. All discoverable boards are already in the database.
               </p>
               <p className="text-zinc-500 text-xs mt-1">
-                Try again in a few weeks as new companies adopt Greenhouse.
+                Try again in a few weeks as new companies adopt Greenhouse and Ashby.
               </p>
             </div>
           )}

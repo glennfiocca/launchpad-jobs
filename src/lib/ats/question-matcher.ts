@@ -103,6 +103,8 @@ const CORE_FIELD_PATTERNS: readonly RegExp[] = [
 export function isCoreField(question: NormalizedQuestion): boolean {
   const l = question.label.toLowerCase();
 
+  // Ashby uses "Full Name" instead of separate first/last
+  if (l === "full name") return true;
   // "First Name" but NOT "Preferred First Name"
   if (l.includes("first name") && !l.includes("preferred")) return true;
   if (l.includes("last name")) return true;
@@ -148,12 +150,19 @@ export function autoAnswerQuestion(
 
   // --- Sponsorship ---
   if (/sponsor|visa sponsorship/i.test(question.label)) {
+    // Ashby renders this as a boolean toggle (true/false), not a select
+    if (question.fieldType === "boolean") {
+      return (profile.sponsorshipRequired ?? false) ? "true" : "false";
+    }
     if (question.fieldType !== "select" || opts.length === 0) return null;
     return resolveYesNo(opts, profile.sponsorshipRequired ?? false);
   }
 
   // --- Work authorization ---
   if (/authorized to work|authorization to work/i.test(question.label)) {
+    if (question.fieldType === "boolean") {
+      return (profile.workAuthorized ?? false) ? "true" : "false";
+    }
     if (question.fieldType !== "select" || opts.length === 0) return null;
     return resolveYesNo(opts, profile.workAuthorized ?? false);
   }

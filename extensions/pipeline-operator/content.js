@@ -969,8 +969,17 @@ async function fillAshbyForm(snap, token) {
   let filled = 0
   const missingFields = []
 
+  // Build a lookup of questionMeta fieldName → label for UUID-keyed fields.
+  // Used to find fields by their Ashby path attribute when label matching isn't enough.
+  const metaByLabel = {}
+  if (Array.isArray(snap.questionMeta)) {
+    for (const m of snap.questionMeta) {
+      metaByLabel[m.label.toLowerCase()] = m.fieldName
+    }
+  }
+
   /**
-   * Find an Ashby input by: (1) name/id attribute, (2) label text fallback.
+   * Find an Ashby input by: (1) name/id attribute, (2) UUID from questionMeta, (3) label text fallback.
    * Returns the first matching HTMLInputElement or HTMLTextAreaElement.
    */
   function findAshbyField(nameOrId, ...labelFallbacks) {
@@ -988,6 +997,22 @@ async function fillAshbyForm(snap, token) {
     if (nameOrId && nameOrId.startsWith("_systemfield_")) {
       const bySubstr = document.querySelector(`input[name*="${nameOrId}"], input[id*="${nameOrId}"]`)
       if (bySubstr instanceof HTMLInputElement) return bySubstr
+    }
+
+    // Try UUID from questionMeta: find the field path by matching label text
+    for (const label of labelFallbacks) {
+      const uuid = metaByLabel[label.toLowerCase()]
+      if (uuid) {
+        const byUuid =
+          document.querySelector(`input[name="${uuid}"]`) ??
+          document.querySelector(`input[id="${uuid}"]`) ??
+          document.querySelector(`textarea[name="${uuid}"]`) ??
+          document.querySelector(`textarea[id="${uuid}"]`)
+        if (byUuid instanceof HTMLInputElement || byUuid instanceof HTMLTextAreaElement) {
+          console.log(`[pipeline-operator] Found field by UUID for "${label}": ${uuid}`)
+          return byUuid
+        }
+      }
     }
 
     // Fallback to label-based search
@@ -1029,20 +1054,23 @@ async function fillAshbyForm(snap, token) {
     console.log("[pipeline-operator] Filled: phone")
   }
 
-  // LinkedIn — Ashby uses a UUID path, so rely on label matching
-  const linkedinField = findAshbyField(null, "linkedin", "linkedin profile", "linkedin url")
+  // LinkedIn — try UUID from questionMeta first (most reliable), then label fallback.
+  // Ashby LinkedIn uses a UUID path, not _systemfield_linkedin.
   const linkedinValue = snap.coreFieldExtras?.linkedIn
+  const linkedinField = findAshbyField(null, "linkedin", "linkedin profile", "linkedin url")
   if (linkedinField instanceof HTMLInputElement && linkedinValue) {
-    nativeSet(linkedinField, linkedinValue)
+    nativeSet(linkedinField, linkedinValue.trim())
     filled++
-    console.log("[pipeline-operator] Filled: linkedin")
+    console.log("[pipeline-operator] Filled: linkedin (core)")
+  } else if (linkedinValue) {
+    console.warn("[pipeline-operator] LinkedIn value exists but no field found via core path")
   }
 
   // GitHub — UUID path, label matching
   const githubField = findAshbyField(null, "github", "github profile", "github url")
   const githubValue = snap.coreFieldExtras?.github
   if (githubField instanceof HTMLInputElement && githubValue) {
-    nativeSet(githubField, githubValue)
+    nativeSet(githubField, githubValue.trim())
     filled++
     console.log("[pipeline-operator] Filled: github")
   }
@@ -1051,7 +1079,7 @@ async function fillAshbyForm(snap, token) {
   const websiteField = findAshbyField(null, "website", "portfolio", "personal website", "portfolio url")
   const websiteValue = snap.coreFieldExtras?.website
   if (websiteField instanceof HTMLInputElement && websiteValue) {
-    nativeSet(websiteField, websiteValue)
+    nativeSet(websiteField, websiteValue.trim())
     filled++
     console.log("[pipeline-operator] Filled: website")
   }
@@ -1074,16 +1102,43 @@ async function fillAshbyForm(snap, token) {
     }
   }
 
+  // ── FIX D: Re-assert tracking email after resume upload ─────────────────────
+  // Ashby auto-parses resume metadata and may overwrite email with the personal
+  // email found in the PDF, breaking the closed-loop tracking system.
+  if (emailField instanceof HTMLInputElement && emailValue) {
+    // Wait for Ashby's auto-parse to complete
+    await new Promise((r) => setTimeout(r, 1500))
+    const currentEmail = emailField.value
+    if (currentEmail !== emailValue) {
+      console.warn(`[pipeline-operator] Email was overwritten by resume parse: "${currentEmail}" → re-asserting "${emailValue}"`)
+      nativeSet(emailField, emailValue)
+      // Second check after React re-render
+      await new Promise((r) => setTimeout(r, 300))
+      if (emailField.value !== emailValue) {
+        console.error("[pipeline-operator] Email re-assertion failed — tracking email may be lost")
+      } else {
+        console.log("[pipeline-operator] Email re-assertion succeeded")
+      }
+    } else {
+      console.log("[pipeline-operator] Email unchanged after resume upload — tracking email preserved")
+    }
+  }
+
+  // Track which questionMeta fields were already filled by core section
+  // (e.g., LinkedIn might be filled above AND appear in questionMeta)
+  const filledFieldNames = new Set()
+
   // ── Custom question answers ─────────────────────────────────────────────────
-  // Ashby renders standard HTML inputs/selects with name=<fieldPath> and id=<fieldPath>.
-  // For boolean fields, Ashby renders custom toggle buttons, not native checkboxes.
+  // Ashby renders inputs with name=<fieldPath> and id=<fieldPath>.
+  // ValueSelect uses custom dropdown (not native <select>).
+  // Boolean uses checkbox or Yes/No toggle buttons.
   if (Array.isArray(snap.questionMeta)) {
     for (const meta of snap.questionMeta) {
       const answer = snap.questionAnswers?.[meta.fieldName]
       if (!answer) continue
 
       try {
-        // Try to find by field name/id attributes
+        // Try to find by field name/id attributes (UUID paths)
         let field = document.querySelector(
           `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"], select[name="${meta.fieldName}"], ` +
           `input[id="${meta.fieldName}"], textarea[id="${meta.fieldName}"], select[id="${meta.fieldName}"]`
@@ -1098,17 +1153,43 @@ async function fillAshbyForm(snap, token) {
           field.value = String(answer)
           field.dispatchEvent(new Event("change", { bubbles: true }))
           filled++
+          filledFieldNames.add(meta.fieldName)
           console.log(`[pipeline-operator] Filled custom (select): ${meta.label}`)
+        } else if (field instanceof HTMLInputElement && field.type === "checkbox") {
+          // Ashby boolean checkbox — check/uncheck based on answer
+          const shouldCheck = answer === "true" || answer === "yes" || answer === true
+          if (field.checked !== shouldCheck) {
+            field.click()
+          }
+          filled++
+          filledFieldNames.add(meta.fieldName)
+          console.log(`[pipeline-operator] Filled custom (checkbox): ${meta.label} = ${shouldCheck}`)
         } else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
           nativeSet(field, String(answer))
           filled++
+          filledFieldNames.add(meta.fieldName)
           console.log(`[pipeline-operator] Filled custom (input): ${meta.label}`)
         } else {
-          // For boolean/toggle questions, try clicking the matching button
+          // No native element found — try Ashby-specific controls
+
+          // FIX B: Boolean toggle buttons (Yes/No)
           const clickedToggle = tryClickAshbyToggle(meta.label, answer)
           if (clickedToggle) {
             filled++
+            filledFieldNames.add(meta.fieldName)
             console.log(`[pipeline-operator] Filled custom (toggle): ${meta.label}`)
+          }
+          // FIX C: Ashby custom dropdown for ValueSelect (pronouns, etc.)
+          else if (meta.fieldType === "multi_value_single_select" || meta.selectValues) {
+            const clickedOption = tryClickAshbyDropdownOption(meta.fieldName, meta.label, answer, meta.selectValues)
+            if (clickedOption) {
+              filled++
+              filledFieldNames.add(meta.fieldName)
+              console.log(`[pipeline-operator] Filled custom (dropdown): ${meta.label}`)
+            } else {
+              console.warn(`[pipeline-operator] Could not find field for: ${meta.label} (path: ${meta.fieldName}, type: dropdown)`)
+              missingFields.push(meta.label)
+            }
           } else {
             console.warn(`[pipeline-operator] Could not find field for: ${meta.label} (path: ${meta.fieldName})`)
             missingFields.push(meta.label)
@@ -1121,26 +1202,58 @@ async function fillAshbyForm(snap, token) {
     }
   }
 
-  // ── Pending questions — try toggle/boolean fills ────────────────────────────
-  // Some questions (like "Do you understand X policy?") are boolean toggles that
-  // may have been auto-answered but aren't in questionMeta. Try them from pendingQuestions.
+  // ── Pending questions — try toggle/boolean/dropdown fills ───────────────────
+  // Questions that were unanswered at snapshot time but may have user answers
+  // (e.g., boolean toggles auto-answered by question-matcher).
   if (Array.isArray(snap.pendingQuestions)) {
     for (const pq of snap.pendingQuestions) {
       if (!pq.userAnswer) continue
-      // Skip if already filled via questionMeta
-      if (snap.questionAnswers?.[pq.fieldName]) continue
+      if (filledFieldNames.has(pq.fieldName)) continue
 
+      // Try checkbox first
+      const checkbox = document.querySelector(
+        `input[type="checkbox"][name="${pq.fieldName}"], input[type="checkbox"][id="${pq.fieldName}"]`
+      )
+      if (checkbox instanceof HTMLInputElement) {
+        const shouldCheck = pq.userAnswer === "true" || pq.userAnswer === "yes"
+        if (checkbox.checked !== shouldCheck) checkbox.click()
+        filled++
+        filledFieldNames.add(pq.fieldName)
+        console.log(`[pipeline-operator] Filled pending (checkbox): ${pq.label}`)
+        continue
+      }
+
+      // Try Yes/No toggle buttons
       const clickedToggle = tryClickAshbyToggle(pq.label, pq.userAnswer)
       if (clickedToggle) {
         filled++
+        filledFieldNames.add(pq.fieldName)
         console.log(`[pipeline-operator] Filled pending (toggle): ${pq.label}`)
+        continue
+      }
+
+      // Try dropdown for select-type pending questions
+      if (pq.selectValues) {
+        const clickedOption = tryClickAshbyDropdownOption(pq.fieldName, pq.label, pq.userAnswer, pq.selectValues)
+        if (clickedOption) {
+          filled++
+          filledFieldNames.add(pq.fieldName)
+          console.log(`[pipeline-operator] Filled pending (dropdown): ${pq.label}`)
+        }
       }
     }
   }
 
+  // ── Final email verification ────────────────────────────────────────────────
+  // One last check: ensure tracking email survived all form interactions
+  if (emailField instanceof HTMLInputElement && emailValue && emailField.value !== emailValue) {
+    console.warn(`[pipeline-operator] Final email check: field has "${emailField.value}", expected "${emailValue}" — re-setting`)
+    nativeSet(emailField, emailValue)
+  }
+
   // ── Post-fill audit banner ───────────────────────────────────────────────────
   const unansweredPending = Array.isArray(snap.pendingQuestions)
-    ? snap.pendingQuestions.filter((q) => !q.userAnswer && q.required)
+    ? snap.pendingQuestions.filter((q) => !q.userAnswer && q.required && !filledFieldNames.has(q.fieldName))
     : []
 
   const allMissing = [
@@ -1169,36 +1282,151 @@ async function fillAshbyForm(snap, token) {
 
 /**
  * Try to click an Ashby boolean toggle button matching the given label and answer.
- * Ashby renders boolean questions as two buttons ("Yes"/"No") inside a labeled fieldset.
+ * Ashby renders boolean questions as two buttons ("Yes"/"No") or a single checkbox
+ * inside a form field container. Walks up multiple DOM levels to find the question
+ * boundary, then searches for clickable controls within.
+ *
  * Returns true if a toggle was clicked.
  */
 function tryClickAshbyToggle(labelText, answer) {
+  const answerLower = String(answer).toLowerCase()
+  // Determine which button text to look for
+  const wantYes = answerLower === "true" || answerLower === "yes"
+  const wantNo = answerLower === "false" || answerLower === "no"
+
+  // Truncate label for substring matching (long policy texts)
+  const matchText = labelText.toLowerCase().slice(0, 80)
+
   // Find the label/heading element for this question
-  for (const label of document.querySelectorAll("label, h3, h4, legend, p, span")) {
-    if (!label.textContent?.toLowerCase().includes(labelText.toLowerCase().slice(0, 60))) continue
+  for (const labelEl of document.querySelectorAll("label, legend")) {
+    const elText = labelEl.textContent?.toLowerCase() ?? ""
+    if (!elText.includes(matchText)) continue
 
-    // Look for Yes/No buttons within the parent container
-    const container = label.closest("[class]")?.parentElement ?? label.parentElement
-    if (!container) continue
-
-    const buttons = container.querySelectorAll("button")
-    const answerLower = String(answer).toLowerCase()
-
-    for (const btn of buttons) {
-      const btnText = (btn.textContent ?? "").trim().toLowerCase()
-      // Match "yes"/"no" or "true"/"false" to the answer value
-      if (
-        (answerLower === "true" && btnText === "yes") ||
-        (answerLower === "false" && btnText === "no") ||
-        (answerLower === "yes" && btnText === "yes") ||
-        (answerLower === "no" && btnText === "no") ||
-        btnText === answerLower
-      ) {
-        btn.click()
+    // Walk up to the question container — Ashby nests label → div → div → buttons.
+    // Walk up to 5 levels to find a container with buttons or checkboxes inside.
+    let container = labelEl.parentElement
+    for (let depth = 0; depth < 5 && container; depth++) {
+      // Check for checkbox input first
+      const checkbox = container.querySelector('input[type="checkbox"]')
+      if (checkbox instanceof HTMLInputElement) {
+        const shouldCheck = wantYes
+        if (checkbox.checked !== shouldCheck) {
+          checkbox.click()
+        }
+        console.log(`[pipeline-operator] tryClickAshbyToggle: clicked checkbox for "${labelText.slice(0, 50)}…"`)
         return true
+      }
+
+      // Check for Yes/No buttons
+      const buttons = container.querySelectorAll("button")
+      if (buttons.length >= 2) {
+        for (const btn of buttons) {
+          const btnText = (btn.textContent ?? "").trim().toLowerCase()
+          if (
+            (wantYes && btnText === "yes") ||
+            (wantNo && btnText === "no") ||
+            btnText === answerLower
+          ) {
+            btn.click()
+            console.log(`[pipeline-operator] tryClickAshbyToggle: clicked "${btnText}" for "${labelText.slice(0, 50)}…"`)
+            return true
+          }
+        }
+      }
+
+      container = container.parentElement
+    }
+  }
+  return false
+}
+
+/**
+ * Try to select an option in an Ashby custom dropdown (ValueSelect).
+ * Ashby renders dropdowns as either:
+ *   - Radio button groups (≤8 options)
+ *   - Custom searchable dropdowns (>8 options)
+ *
+ * @param {string} fieldName - The UUID field path
+ * @param {string} labelText - The question label text
+ * @param {string} answer - The answer value to select
+ * @param {Array} selectValues - Available options [{value, label}]
+ * @returns {boolean} true if an option was selected
+ */
+function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectValues) {
+  const answerStr = String(answer)
+
+  // Find the target option label from selectValues
+  const targetOption = selectValues?.find((sv) => sv.value === answerStr)
+  const targetLabel = targetOption?.label ?? answerStr
+
+  console.log(`[pipeline-operator] tryClickAshbyDropdownOption: looking for "${targetLabel}" in "${labelText.slice(0, 50)}…"`)
+
+  // Strategy 1: Find a radio/button group by field name attribute
+  const radioInputs = document.querySelectorAll(
+    `input[type="radio"][name="${fieldName}"], input[type="radio"][id*="${fieldName}"]`
+  )
+  if (radioInputs.length > 0) {
+    for (const radio of radioInputs) {
+      if (radio instanceof HTMLInputElement) {
+        // Match by value or by associated label text
+        if (radio.value === answerStr) {
+          radio.click()
+          return true
+        }
+        const radioLabel = radio.closest("label")?.textContent?.trim()
+        if (radioLabel?.toLowerCase() === targetLabel.toLowerCase()) {
+          radio.click()
+          return true
+        }
       }
     }
   }
+
+  // Strategy 2: Find the question container by label text and look for clickable options
+  const matchText = labelText.toLowerCase().slice(0, 60)
+  for (const labelEl of document.querySelectorAll("label, legend")) {
+    const elText = labelEl.textContent?.toLowerCase() ?? ""
+    if (!elText.includes(matchText)) continue
+
+    // Walk up to find the question container
+    let container = labelEl.parentElement
+    for (let depth = 0; depth < 5 && container; depth++) {
+      // Look for radio buttons in this container
+      const radios = container.querySelectorAll('input[type="radio"]')
+      if (radios.length > 0) {
+        for (const radio of radios) {
+          if (!(radio instanceof HTMLInputElement)) continue
+          const radioParent = radio.closest("label") ?? radio.parentElement
+          const radioText = radioParent?.textContent?.trim()?.toLowerCase() ?? ""
+          if (radio.value === answerStr || radioText === targetLabel.toLowerCase()) {
+            radio.click()
+            return true
+          }
+        }
+      }
+
+      // Look for option buttons/divs with matching text
+      const optionEls = container.querySelectorAll("button, [role='option'], [role='radio']")
+      for (const optEl of optionEls) {
+        const optText = (optEl.textContent ?? "").trim()
+        if (optText.toLowerCase() === targetLabel.toLowerCase()) {
+          optEl.click()
+          return true
+        }
+      }
+
+      container = container.parentElement
+    }
+  }
+
+  // Strategy 3: If Ashby uses a native <select> (fallback — less common)
+  const selectEl = document.querySelector(`select[name="${fieldName}"], select[id="${fieldName}"]`)
+  if (selectEl instanceof HTMLSelectElement) {
+    selectEl.value = answerStr
+    selectEl.dispatchEvent(new Event("change", { bubbles: true }))
+    return true
+  }
+
   return false
 }
 

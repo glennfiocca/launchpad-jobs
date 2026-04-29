@@ -82,6 +82,14 @@ describe("isCoreField", () => {
   it("returns false for LinkedIn URL", () => {
     expect(isCoreField(makeQuestion("LinkedIn URL"))).toBe(false);
   });
+
+  it("returns true for Full Name (Ashby)", () => {
+    expect(isCoreField(makeQuestion("Full Name"))).toBe(true);
+  });
+
+  it("returns false for Company Name (not a person name)", () => {
+    expect(isCoreField(makeQuestion("Company Name"))).toBe(false);
+  });
 });
 
 // --- autoAnswerQuestion ---
@@ -135,6 +143,44 @@ describe("autoAnswerQuestion — sponsorship", () => {
     const q = makeQuestion("Do you require visa sponsorship?", "text");
     const profile = makeProfile({ sponsorshipRequired: true });
     expect(autoAnswerQuestion(q, profile)).toBeNull();
+  });
+
+  it("answers 'true' for boolean sponsorship when required (Ashby)", () => {
+    const q = makeQuestion(
+      "Will you now or in the future require Notion to sponsor an immigration case?",
+      "boolean"
+    );
+    const profile = makeProfile({ sponsorshipRequired: true });
+    expect(autoAnswerQuestion(q, profile)).toBe("true");
+  });
+
+  it("answers 'false' for boolean sponsorship when not required (Ashby)", () => {
+    const q = makeQuestion(
+      "Will you require sponsorship?",
+      "boolean"
+    );
+    const profile = makeProfile({ sponsorshipRequired: false });
+    expect(autoAnswerQuestion(q, profile)).toBe("false");
+  });
+});
+
+describe("autoAnswerQuestion — work authorization (boolean)", () => {
+  it("answers 'true' for boolean work auth when authorized (Ashby)", () => {
+    const q = makeQuestion(
+      "Are you authorized to work in the United States?",
+      "boolean"
+    );
+    const profile = makeProfile({ workAuthorized: true });
+    expect(autoAnswerQuestion(q, profile)).toBe("true");
+  });
+
+  it("answers 'false' for boolean work auth when not authorized (Ashby)", () => {
+    const q = makeQuestion(
+      "Are you authorized to work in the United States?",
+      "boolean"
+    );
+    const profile = makeProfile({ workAuthorized: false });
+    expect(autoAnswerQuestion(q, profile)).toBe("false");
   });
 });
 
@@ -270,6 +316,57 @@ describe("getUnansweredQuestions", () => {
     const profile = makeProfile();
     const result = getUnansweredQuestions(questions, profile);
     expect(result).toHaveLength(2);
+  });
+});
+
+// --- Ashby-specific scenarios ---
+
+describe("Ashby question matching — UUID-keyed fields", () => {
+  it("auto-answers LinkedIn with UUID id", () => {
+    const q = makeQuestion("LinkedIn Profile", "text", [], {
+      id: "dbb7e595-3d7b-4a1f-b0b6-76497b74b4cb",
+    });
+    const profile = makeProfile({ linkedInUrl: "https://linkedin.com/in/jane" });
+    expect(autoAnswerQuestion(q, profile)).toBe("https://linkedin.com/in/jane");
+  });
+
+  it("LinkedIn with UUID id shows in unanswered when profile has no URL", () => {
+    const q = makeQuestion("LinkedIn Profile", "text", [], {
+      id: "dbb7e595-3d7b-4a1f-b0b6-76497b74b4cb",
+    });
+    const profile = makeProfile({ linkedInUrl: null });
+    const result = getUnansweredQuestions([q], profile);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("dbb7e595-3d7b-4a1f-b0b6-76497b74b4cb");
+  });
+
+  it("LinkedIn with UUID id excluded from unanswered when profile has URL", () => {
+    const q = makeQuestion("LinkedIn Profile", "text", [], {
+      id: "dbb7e595-3d7b-4a1f-b0b6-76497b74b4cb",
+    });
+    const profile = makeProfile({ linkedInUrl: "https://linkedin.com/in/jane" });
+    const result = getUnansweredQuestions([q], profile);
+    expect(result).toHaveLength(0);
+  });
+
+  it("Full Name is excluded as core field (Ashby)", () => {
+    const q = makeQuestion("Full Name", "text", [], {
+      id: "_systemfield_name",
+    });
+    const result = getUnansweredQuestions([q], makeProfile());
+    expect(result).toHaveLength(0);
+  });
+
+  it("boolean sponsorship excluded from unanswered when profile set", () => {
+    const q = makeQuestion(
+      "Will you require Notion to sponsor an immigration case?",
+      "boolean",
+      [],
+      { id: "790b5934-74f5-46f5-897a-675b7f37f2f3" }
+    );
+    const profile = makeProfile({ sponsorshipRequired: false });
+    const result = getUnansweredQuestions([q], profile);
+    expect(result).toHaveLength(0);
   });
 });
 

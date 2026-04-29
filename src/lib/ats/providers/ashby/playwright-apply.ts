@@ -73,6 +73,9 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
       context.setDefaultTimeout(60_000);
 
       // ── Navigate to application page ──────────────────────────────────
+      // Some Ashby boards embed the form on the job page; others use a
+      // separate /application tab. Try the given URL first, then fall
+      // back to /application if the form isn't found on the initial page.
       console.log(`[ashby-apply] Navigating to: ${applyUrl}`);
       await page.goto(applyUrl, {
         waitUntil: "domcontentloaded",
@@ -96,14 +99,44 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
       }
 
       // ── Wait for form to render ───────────────────────────────────────
-      const formLoaded = await waitForFormLoad(
+      let formLoaded = await waitForFormLoad(
         page,
         FORM_LOAD_SELECTORS,
         FORM_LOAD_TIMEOUT_MS
       );
 
+      // If no form found and URL doesn't already point to /application,
+      // try the dedicated application tab (some Ashby boards split it out)
+      if (!formLoaded && !applyUrl.endsWith("/application")) {
+        const appTabUrl = `${applyUrl.replace(/\/$/, "")}/application`;
+        console.log(`[ashby-apply] Form not found — trying: ${appTabUrl}`);
+        await page.goto(appTabUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 30_000,
+        });
+        await page.waitForTimeout(2_000);
+
+        if (await hasCaptchaChallenge(page)) {
+          console.warn("[ashby-apply] Bot challenge on /application tab");
+          return {
+            success: false,
+            errorCode: "CAPTCHA_REQUIRED",
+            error:
+              "Automation was blocked by a bot challenge on this job application. " +
+              "Please apply manually using the link below.",
+            manualApplyUrl,
+          };
+        }
+
+        formLoaded = await waitForFormLoad(
+          page,
+          FORM_LOAD_SELECTORS,
+          FORM_LOAD_TIMEOUT_MS
+        );
+      }
+
       if (!formLoaded) {
-        console.warn("[ashby-apply] Form not found after waiting");
+        console.warn("[ashby-apply] Form not found on either page");
         return {
           success: false,
           errorCode: "FORM_NOT_FOUND",

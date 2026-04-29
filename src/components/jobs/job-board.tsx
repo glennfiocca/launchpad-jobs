@@ -369,6 +369,9 @@ export function JobBoard() {
             onClose={closeDetail}
             isSaved={savedJobIds.has(selected.id)}
             onSaveToggle={handleSaveToggle}
+            onApplied={(jobId) => {
+              setAppliedJobIds((prev) => new Set([...prev, jobId]));
+            }}
           />
         </div>
       )}

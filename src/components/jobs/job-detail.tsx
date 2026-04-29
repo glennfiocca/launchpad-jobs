@@ -25,6 +25,7 @@ interface JobDetailProps {
   onClose: () => void;
   isSaved?: boolean;
   onSaveToggle?: (jobId: string, saved: boolean) => void;
+  onApplied?: (jobId: string) => void;
 }
 
 function decodeEntities(html: string): string {
@@ -33,7 +34,7 @@ function decodeEntities(html: string): string {
   return textarea.value;
 }
 
-export function JobDetail({ job, hasPriorApplication, onClose, isSaved = false, onSaveToggle }: JobDetailProps) {
+export function JobDetail({ job, hasPriorApplication, onClose, isSaved = false, onSaveToggle, onApplied }: JobDetailProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -84,6 +85,13 @@ export function JobDetail({ job, hasPriorApplication, onClose, isSaved = false, 
   const [showModal, setShowModal] = useState(false);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset local applied/error state when switching jobs
+  useEffect(() => {
+    setApplied(false);
+    setError(null);
+  }, [job.id]);
+
   const isApplyDisabled = applied || hasPriorApplication;
 
   return (
@@ -213,6 +221,7 @@ export function JobDetail({ job, hasPriorApplication, onClose, isSaved = false, 
             onApplied={(applicationId, warning) => {
               setShowModal(false);
               setApplied(true);
+              onApplied?.(job.id);
               if (warning) setError(warning);
             }}
           />

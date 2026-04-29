@@ -144,13 +144,44 @@ function isYesNo(question: NormalizedQuestion): boolean {
   return labels.includes("yes") && labels.includes("no");
 }
 
+function BooleanToggle({ question, value, onChange }: FieldProps) {
+  const baseClass =
+    "flex-1 py-2 px-4 rounded-lg border text-sm transition-colors";
+  const activeClass = "bg-white text-black border-white font-medium";
+  const inactiveClass =
+    "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-300";
+
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        className={`${baseClass} ${value === "true" ? activeClass : inactiveClass}`}
+        onClick={() => onChange(question.id, "true")}
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        className={`${baseClass} ${value === "false" ? activeClass : inactiveClass}`}
+        onClick={() => onChange(question.id, "false")}
+      >
+        No
+      </button>
+    </div>
+  );
+}
+
 function FieldRenderer({ question, value, onChange }: FieldProps) {
   if (question.fieldType === "file") return null;
 
-  if (question.fieldType === "text" || question.fieldType === "email" || question.fieldType === "url" || question.fieldType === "phone") {
+  if (question.fieldType === "boolean") {
+    return <BooleanToggle question={question} value={value} onChange={onChange} />;
+  }
+
+  if (question.fieldType === "text" || question.fieldType === "email" || question.fieldType === "url" || question.fieldType === "phone" || question.fieldType === "number" || question.fieldType === "date") {
     return (
       <input
-        type="text"
+        type={question.fieldType === "number" ? "number" : question.fieldType === "date" ? "date" : "text"}
         value={value ?? ""}
         onChange={(e) => onChange(question.id, e.target.value)}
         className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
@@ -181,7 +212,15 @@ function FieldRenderer({ question, value, onChange }: FieldProps) {
     return <MultiSelectField question={question} value={value} onChange={onChange} />;
   }
 
-  return null;
+  // Fallback: render a text input for any unhandled field type
+  return (
+    <input
+      type="text"
+      value={value ?? ""}
+      onChange={(e) => onChange(question.id, e.target.value)}
+      className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)]"
+    />
+  );
 }
 
 function QuestionInput({

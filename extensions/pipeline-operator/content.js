@@ -1506,6 +1506,20 @@ async function fillAshbyForm(snap, token) {
   // Ashby renders inputs with name=<fieldPath> and id=<fieldPath>.
   // ValueSelect uses custom dropdown (not native <select>).
   // Boolean uses checkbox or Yes/No toggle buttons.
+
+  // DEBUG: Log what's in the snapshot so we can see exactly what's being attempted
+  console.log("[pipeline-operator] === QUESTION FILL DEBUG ===")
+  console.log("[pipeline-operator] questionMeta:", JSON.stringify(snap.questionMeta?.map((m) => ({ label: m.label?.slice(0, 60), path: m.fieldName, type: m.fieldType, hasOptions: !!m.selectValues })), null, 2))
+  console.log("[pipeline-operator] questionAnswers:", JSON.stringify(snap.questionAnswers))
+  console.log("[pipeline-operator] pendingQuestions:", JSON.stringify(snap.pendingQuestions?.map((p) => ({ label: p.label?.slice(0, 60), path: p.fieldName, hasAnswer: !!p.userAnswer, answer: p.userAnswer })), null, 2))
+  // DEBUG: Log all Yes/No buttons on the page
+  const yesNoButtons = Array.from(document.querySelectorAll("button")).filter((b) => {
+    const t = (b.textContent ?? "").trim().toLowerCase()
+    return t === "yes" || t === "no"
+  })
+  console.log(`[pipeline-operator] Yes/No buttons on page: ${yesNoButtons.length}`, yesNoButtons.map((b) => b.textContent?.trim()))
+  console.log("[pipeline-operator] === END DEBUG ===")
+
   if (Array.isArray(snap.questionMeta)) {
     for (const meta of snap.questionMeta) {
       const answer = snap.questionAnswers?.[meta.fieldName]

@@ -61,3 +61,63 @@ export interface AshbyApiResponse {
   readonly jobs: ReadonlyArray<AshbyApiJob>;
   readonly apiVersion: string;
 }
+
+// ---------------------------------------------------------------------------
+// GraphQL application-form types (non-user-graphql endpoint)
+// ---------------------------------------------------------------------------
+
+/** Ashby field types returned by the GraphQL API */
+export type AshbyFieldType =
+  | "String"
+  | "Email"
+  | "Phone"
+  | "LongText"
+  | "File"
+  | "Boolean"
+  | "ValueSelect"
+  | "MultiValueSelect"
+  | "Location"
+  | "Number"
+  | "Date"
+  | "SocialLink";
+
+export interface AshbySelectableValue {
+  readonly label: string;
+  readonly value: string;
+}
+
+export interface AshbyFormField {
+  readonly id: string;
+  readonly path: string;
+  readonly title: string;
+  readonly type: AshbyFieldType;
+  readonly isNullable: boolean;
+  readonly selectableValues?: ReadonlyArray<AshbySelectableValue>;
+}
+
+export interface AshbyFieldEntry {
+  readonly id: string;
+  readonly field: AshbyFormField;
+  readonly isRequired: boolean;
+  readonly isHidden: boolean | null;
+  readonly descriptionHtml: string | null;
+}
+
+export interface AshbyFormSection {
+  readonly fieldEntries: ReadonlyArray<AshbyFieldEntry>;
+}
+
+export interface AshbyApplicationForm {
+  readonly id: string;
+  readonly sourceFormDefinitionId: string;
+  readonly sections: ReadonlyArray<AshbyFormSection>;
+}
+
+export interface AshbyGraphQLResponse {
+  readonly data: {
+    readonly jobPosting: {
+      readonly applicationForm: AshbyApplicationForm | null;
+    } | null;
+  } | null;
+  readonly errors?: ReadonlyArray<{ readonly message: string }>;
+}

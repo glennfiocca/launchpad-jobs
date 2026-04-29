@@ -3,12 +3,60 @@ import type {
   AtsClient,
   NormalizedJob,
   NormalizedQuestion,
+  NormalizedFieldType,
   BoardMeta,
 } from "../../types";
-import type { AshbyApiResponse } from "./types";
+import type {
+  AshbyApiResponse,
+  AshbyFieldEntry,
+  AshbyFieldType,
+  AshbyGraphQLResponse,
+} from "./types";
 import { mapAshbyJobToNormalized } from "./mapper";
 
 const ASHBY_BASE_URL = "https://api.ashbyhq.com/posting-api/job-board";
+const ASHBY_GRAPHQL_URL = "https://jobs.ashbyhq.com/api/non-user-graphql";
+
+const ASHBY_FIELD_TYPE_MAP: Record<AshbyFieldType, NormalizedFieldType> = {
+  String: "text",
+  SocialLink: "text",
+  Email: "email",
+  Phone: "phone",
+  LongText: "textarea",
+  File: "file",
+  Boolean: "boolean",
+  ValueSelect: "select",
+  MultiValueSelect: "multiselect",
+  Location: "text",
+  Number: "number",
+  Date: "date",
+};
+
+const JOB_POSTING_QUERY = `
+  query ApiJobPostingWithForms(
+    $organizationHostedJobsPageName: String!,
+    $jobPostingId: String!
+  ) {
+    jobPosting(
+      organizationHostedJobsPageName: $organizationHostedJobsPageName,
+      jobPostingId: $jobPostingId
+    ) {
+      applicationForm {
+        id
+        sourceFormDefinitionId
+        sections {
+          fieldEntries {
+            id
+            field
+            isRequired
+            isHidden
+            descriptionHtml
+          }
+        }
+      }
+    }
+  }
+`;
 
 /**
  * Ashby implementation of AtsClient.
@@ -56,11 +104,97 @@ export class AshbyAtsClient implements AtsClient {
   }
 
   async getJobQuestions(
-    _jobExternalId: string
+    jobExternalId: string
   ): Promise<readonly NormalizedQuestion[]> {
-    // Ashby public API does not expose a questions endpoint.
-    // Questions are embedded in the apply page's window.__appData
-    // and will be fetched via Playwright scraping in a future phase.
-    return [];
+    try {
+      const res = await fetch(ASHBY_GRAPHQL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operationName: "ApiJobPostingWithForms",
+          variables: {
+            organizationHostedJobsPageName: this.boardName,
+            jobPostingId: jobExternalId,
+          },
+          query: JOB_POSTING_QUERY,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "Unknown error");
+        console.error(
+          `Ashby GraphQL error ${res.status} for job ${jobExternalId}: ${text}`
+        );
+        return [];
+      }
+
+      const body = (await res.json()) as AshbyGraphQLResponse;
+
+      if (body.errors?.length) {
+        console.error(
+          `Ashby GraphQL errors for job ${jobExternalId}:`,
+          body.errors.map((e) => e.message).join("; ")
+        );
+        return [];
+      }
+
+      const form = body.data?.jobPosting?.applicationForm;
+      if (!form) {
+        return [];
+      }
+
+      return form.sections.flatMap((section) =>
+        section.fieldEntries
+          .filter((entry) => entry.isHidden !== true)
+          .map(mapFieldEntryToQuestion)
+      );
+    } catch (error) {
+      console.error(
+        `Failed to fetch Ashby job questions for ${jobExternalId}:`,
+        error
+      );
+      return [];
+    }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function stripHtmlTags(html: string): string {
+  return html.replace(/<[^>]*>/g, "").trim();
+}
+
+function mapFieldEntryToQuestion(
+  entry: AshbyFieldEntry
+): NormalizedQuestion {
+  const { field } = entry;
+  const fieldType =
+    ASHBY_FIELD_TYPE_MAP[field.type] ?? ("text" as NormalizedFieldType);
+
+  const question: NormalizedQuestion = {
+    id: field.path,
+    label: field.title,
+    required: entry.isRequired,
+    description: entry.descriptionHtml
+      ? stripHtmlTags(entry.descriptionHtml)
+      : null,
+    fieldType,
+  };
+
+  if (
+    (field.type === "ValueSelect" || field.type === "MultiValueSelect") &&
+    field.selectableValues
+  ) {
+    return {
+      ...question,
+      options: field.selectableValues.map((sv) => ({
+        value: sv.value,
+        label: sv.label,
+      })),
+    };
+  }
+
+  return question;
 }

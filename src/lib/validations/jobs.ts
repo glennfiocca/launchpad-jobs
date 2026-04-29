@@ -45,15 +45,17 @@ export const jobsQuerySchema = z.object({
 export type JobsQueryParams = z.infer<typeof jobsQuerySchema>;
 
 export function datePostedToCutoff(option: DatePostedOption | string): Date | null {
+  const now = Date.now();
+  const ONE_DAY = 24 * 60 * 60 * 1000;
   switch (option) {
     case "today":
-      return new Date(new Date().setHours(0, 0, 0, 0));
+      return new Date(now - ONE_DAY);
     case "3days":
-      return new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      return new Date(now - 3 * ONE_DAY);
     case "week":
-      return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return new Date(now - 7 * ONE_DAY);
     case "month":
-      return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      return new Date(now - 30 * ONE_DAY);
     default:
       return null;
   }

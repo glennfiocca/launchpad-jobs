@@ -45,6 +45,9 @@ interface ApplicationSnapshot {
   coreFieldExtras?: {
     preferredFirstName?: string;
     country?: string;
+    linkedIn?: string;
+    github?: string;
+    website?: string;
     eeoc?: {
       gender?: string;
       race?: string;
@@ -235,6 +238,9 @@ function buildSnapshot(
   const coreFieldExtras: ApplicationSnapshot["coreFieldExtras"] = {};
   if (profile.preferredFirstName) coreFieldExtras.preferredFirstName = profile.preferredFirstName;
   if (countryRaw) coreFieldExtras.country = normalizeCountry(countryRaw);
+  if (profile.linkedinUrl) coreFieldExtras.linkedIn = profile.linkedinUrl;
+  if (profile.githubUrl) coreFieldExtras.github = profile.githubUrl;
+  if (profile.portfolioUrl) coreFieldExtras.website = profile.portfolioUrl;
   // Always emit eeoc so extension can attempt decline fallback even when all values are null
   coreFieldExtras.eeoc = {
     gender: profile.voluntaryGender ?? undefined,

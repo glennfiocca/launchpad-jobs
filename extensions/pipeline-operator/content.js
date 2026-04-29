@@ -15,15 +15,19 @@
  */
 
 (function init() {
+  console.log("[pipeline-operator] Content script loaded on:", window.location.href)
+
   // Priority 1: Token in URL hash (most reliable — set by admin page, no cross-origin dependency)
   const hashParams = new URLSearchParams(window.location.hash.slice(1))
   const hashToken = hashParams.get("pipelineFill")
   if (hashToken) {
+    console.log("[pipeline-operator] Token found in URL hash, length:", hashToken.length)
     // Clean the token from the URL bar immediately
     window.history.replaceState(null, "", window.location.pathname + window.location.search)
     fillFormFromToken(hashToken)
     return
   }
+  console.log("[pipeline-operator] No token in hash, checking session storage...")
 
   // Priority 2: Token persisted from a navigation cascade (CTA click or embed redirect)
   chrome.storage.session.get(["pipelineFillToken", "pipelineFillExpiry"], (result) => {
@@ -905,12 +909,25 @@ function detectAtsProvider() {
  */
 async function fillAshbyForm(snap, token) {
   showBanner("Pre-filling Ashby form…", "info")
+  console.log("[pipeline-operator] fillAshbyForm started, snapshot keys:", Object.keys(snap))
 
-  // Wait for Ashby form fields to appear (SPA hydration)
-  let formEl = await waitForElement(
-    'input[name*="_systemfield_name"], input[name*="_systemfield_email"], input[type="email"]',
-    8000
-  )
+  // Ashby is a React SPA — inputs use name=<fieldPath> and id=<fieldPath>
+  // System fields: _systemfield_name, _systemfield_email, _systemfield_location, _systemfield_resume
+  // Non-system fields (phone, linkedin, etc.): UUID-based paths like "8039f8aa-..."
+  // We use multiple strategies: name/id attribute selectors, then label-based fallback
+
+  const ASHBY_FORM_SELECTORS = [
+    'input[name="_systemfield_name"]',
+    'input[id="_systemfield_name"]',
+    'input[name="_systemfield_email"]',
+    'input[id="_systemfield_email"]',
+    'input[type="email"]',
+    'input[type="tel"]',
+  ].join(", ")
+
+  // Wait for Ashby form fields to appear (SPA hydration — allow generous time)
+  let formEl = await waitForElement(ASHBY_FORM_SELECTORS, 12000)
+  console.log("[pipeline-operator] Initial form detection:", formEl ? formEl.tagName : "null")
 
   // If form not found, look for an Apply CTA
   if (!formEl) {
@@ -918,88 +935,133 @@ async function fillAshbyForm(snap, token) {
     for (const el of allClickables) {
       const text = (el.textContent ?? "").trim().toLowerCase()
       if (text === "apply" || text === "apply now" || text === "apply for this job") {
+        console.log("[pipeline-operator] Clicking Apply CTA:", text)
         await chrome.storage.session.set({
           pipelineFillToken: token,
           pipelineFillExpiry: Date.now() + 120_000,
         })
         el.click()
         await new Promise((r) => setTimeout(r, 2000))
-        // Re-check for form fields after CTA click
-        formEl = await waitForElement(
-          'input[name*="_systemfield_name"], input[name*="_systemfield_email"], input[type="email"]',
-          5000
-        )
+        formEl = await waitForElement(ASHBY_FORM_SELECTORS, 8000)
         break
       }
     }
   }
 
   if (!formEl) {
+    // Last resort: look for ANY visible input on the page
+    const anyInput = document.querySelector("input:not([type='hidden']):not([type='submit'])")
+    if (anyInput) {
+      console.log("[pipeline-operator] Found generic input as fallback:", anyInput.name, anyInput.id)
+      formEl = anyInput
+    }
+  }
+
+  if (!formEl) {
     showBanner("Could not detect Ashby form fields — fill manually or try refreshing.", "error")
+    console.error("[pipeline-operator] No form fields found on page after all attempts")
     return
   }
 
-  await new Promise((r) => setTimeout(r, 400))
+  // Extra settle time for React to finish rendering all fields
+  await new Promise((r) => setTimeout(r, 600))
 
   let filled = 0
   const missingFields = []
 
+  /**
+   * Find an Ashby input by: (1) name/id attribute, (2) label text fallback.
+   * Returns the first matching HTMLInputElement or HTMLTextAreaElement.
+   */
+  function findAshbyField(nameOrId, ...labelFallbacks) {
+    // Try exact name or id match first
+    if (nameOrId) {
+      const byAttr =
+        document.querySelector(`input[name="${nameOrId}"]`) ??
+        document.querySelector(`input[id="${nameOrId}"]`) ??
+        document.querySelector(`textarea[name="${nameOrId}"]`) ??
+        document.querySelector(`textarea[id="${nameOrId}"]`)
+      if (byAttr instanceof HTMLInputElement || byAttr instanceof HTMLTextAreaElement) return byAttr
+    }
+
+    // Try substring match on name (for _systemfield_ prefixed fields)
+    if (nameOrId && nameOrId.startsWith("_systemfield_")) {
+      const bySubstr = document.querySelector(`input[name*="${nameOrId}"], input[id*="${nameOrId}"]`)
+      if (bySubstr instanceof HTMLInputElement) return bySubstr
+    }
+
+    // Fallback to label-based search
+    for (const label of labelFallbacks) {
+      const el = findFieldByLabel(label)
+      if (el) return el
+    }
+    return null
+  }
+
   // ── Core fields ─────────────────────────────────────────────────────────────
 
-  // Name (Ashby uses a single combined name field)
-  const nameField = document.querySelector('input[name*="_systemfield_name"]')
+  // Name (Ashby uses a single combined "Full Name" field)
+  const nameField = findAshbyField("_systemfield_name", "full name", "name")
   if (nameField instanceof HTMLInputElement && (snap.firstName || snap.lastName)) {
     const fullName = [snap.firstName, snap.lastName].filter(Boolean).join(" ")
     nativeSet(nameField, fullName)
     filled++
+    console.log("[pipeline-operator] Filled: name")
   }
 
   // Email — use tracking email so confirmations route back to the app
-  const emailField =
-    document.querySelector('input[name*="_systemfield_email"]') ??
+  const emailField = findAshbyField("_systemfield_email", "email") ??
     document.querySelector('input[type="email"]')
   const emailValue = snap.trackingEmail ?? snap.email
   if (emailField instanceof HTMLInputElement && emailValue) {
     nativeSet(emailField, emailValue)
     filled++
+    console.log("[pipeline-operator] Filled: email")
   }
 
-  // Phone
-  const phoneField = document.querySelector('input[name*="_systemfield_phone"]')
+  // Phone — Ashby uses a UUID path (not _systemfield_phone), so rely on label + type=tel
+  const phoneField =
+    document.querySelector('input[type="tel"]') ??
+    findAshbyField(null, "phone", "phone number", "mobile")
   if (phoneField instanceof HTMLInputElement && snap.phone) {
     nativeSet(phoneField, snap.phone)
     filled++
+    console.log("[pipeline-operator] Filled: phone")
   }
 
-  // LinkedIn
-  const linkedinField = document.querySelector('input[name*="_systemfield_linkedin"]')
-  if (linkedinField instanceof HTMLInputElement && snap.coreFieldExtras?.linkedIn) {
-    nativeSet(linkedinField, snap.coreFieldExtras.linkedIn)
+  // LinkedIn — Ashby uses a UUID path, so rely on label matching
+  const linkedinField = findAshbyField(null, "linkedin", "linkedin profile", "linkedin url")
+  const linkedinValue = snap.coreFieldExtras?.linkedIn
+  if (linkedinField instanceof HTMLInputElement && linkedinValue) {
+    nativeSet(linkedinField, linkedinValue)
     filled++
+    console.log("[pipeline-operator] Filled: linkedin")
   }
 
-  // GitHub
-  const githubField = document.querySelector('input[name*="_systemfield_github"]')
-  if (githubField instanceof HTMLInputElement && snap.coreFieldExtras?.github) {
-    nativeSet(githubField, snap.coreFieldExtras.github)
+  // GitHub — UUID path, label matching
+  const githubField = findAshbyField(null, "github", "github profile", "github url")
+  const githubValue = snap.coreFieldExtras?.github
+  if (githubField instanceof HTMLInputElement && githubValue) {
+    nativeSet(githubField, githubValue)
     filled++
+    console.log("[pipeline-operator] Filled: github")
   }
 
-  // Website / Portfolio
-  const websiteField = document.querySelector('input[name*="_systemfield_website"]')
-  if (websiteField instanceof HTMLInputElement && snap.coreFieldExtras?.website) {
-    nativeSet(websiteField, snap.coreFieldExtras.website)
+  // Website / Portfolio — UUID path, label matching
+  const websiteField = findAshbyField(null, "website", "portfolio", "personal website", "portfolio url")
+  const websiteValue = snap.coreFieldExtras?.website
+  if (websiteField instanceof HTMLInputElement && websiteValue) {
+    nativeSet(websiteField, websiteValue)
     filled++
+    console.log("[pipeline-operator] Filled: website")
   }
 
-  // Location (Ashby may use a standard text input)
-  const locationField =
-    document.querySelector('input[name*="_systemfield_location"]') ??
-    findFieldByLabel("location") ??
-    findFieldByLabel("city")
+  // Location
+  const locationField = findAshbyField("_systemfield_location", "location", "city", "where are you located")
   if (locationField instanceof HTMLInputElement && snap.location) {
     nativeSet(locationField, snap.location)
     filled++
+    console.log("[pipeline-operator] Filled: location")
   }
 
   // ── Resume upload ────────────────────────────────────────────────────────────
@@ -1008,18 +1070,20 @@ async function fillAshbyForm(snap, token) {
     if (resumeInput instanceof HTMLInputElement) {
       await attachResume(resumeInput, snap.presignedResumeUrl, snap.resumeFileName ?? "resume.pdf")
       filled++
+      console.log("[pipeline-operator] Filled: resume")
     }
   }
 
   // ── Custom question answers ─────────────────────────────────────────────────
-  // Ashby uses standard HTML selects (not react-select), so we can set value directly.
+  // Ashby renders standard HTML inputs/selects with name=<fieldPath> and id=<fieldPath>.
+  // For boolean fields, Ashby renders custom toggle buttons, not native checkboxes.
   if (Array.isArray(snap.questionMeta)) {
     for (const meta of snap.questionMeta) {
       const answer = snap.questionAnswers?.[meta.fieldName]
       if (!answer) continue
 
       try {
-        // Try to find by field name/id
+        // Try to find by field name/id attributes
         let field = document.querySelector(
           `input[name="${meta.fieldName}"], textarea[name="${meta.fieldName}"], select[name="${meta.fieldName}"], ` +
           `input[id="${meta.fieldName}"], textarea[id="${meta.fieldName}"], select[id="${meta.fieldName}"]`
@@ -1031,19 +1095,45 @@ async function fillAshbyForm(snap, token) {
         }
 
         if (field instanceof HTMLSelectElement) {
-          // Standard HTML select — set value directly
           field.value = String(answer)
           field.dispatchEvent(new Event("change", { bubbles: true }))
           filled++
+          console.log(`[pipeline-operator] Filled custom (select): ${meta.label}`)
         } else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
           nativeSet(field, String(answer))
           filled++
+          console.log(`[pipeline-operator] Filled custom (input): ${meta.label}`)
         } else {
-          missingFields.push(meta.label)
+          // For boolean/toggle questions, try clicking the matching button
+          const clickedToggle = tryClickAshbyToggle(meta.label, answer)
+          if (clickedToggle) {
+            filled++
+            console.log(`[pipeline-operator] Filled custom (toggle): ${meta.label}`)
+          } else {
+            console.warn(`[pipeline-operator] Could not find field for: ${meta.label} (path: ${meta.fieldName})`)
+            missingFields.push(meta.label)
+          }
         }
       } catch (err) {
         console.error(`[pipeline-operator] Error filling Ashby field "${meta.fieldName}":`, err)
         missingFields.push(meta.label)
+      }
+    }
+  }
+
+  // ── Pending questions — try toggle/boolean fills ────────────────────────────
+  // Some questions (like "Do you understand X policy?") are boolean toggles that
+  // may have been auto-answered but aren't in questionMeta. Try them from pendingQuestions.
+  if (Array.isArray(snap.pendingQuestions)) {
+    for (const pq of snap.pendingQuestions) {
+      if (!pq.userAnswer) continue
+      // Skip if already filled via questionMeta
+      if (snap.questionAnswers?.[pq.fieldName]) continue
+
+      const clickedToggle = tryClickAshbyToggle(pq.label, pq.userAnswer)
+      if (clickedToggle) {
+        filled++
+        console.log(`[pipeline-operator] Filled pending (toggle): ${pq.label}`)
       }
     }
   }
@@ -1059,6 +1149,8 @@ async function fillAshbyForm(snap, token) {
   ]
   const uniqueMissing = [...new Set(allMissing)]
 
+  console.log(`[pipeline-operator] Fill complete: ${filled} filled, ${uniqueMissing.length} missing`)
+
   if (filled > 0) {
     const pendingMsg = uniqueMissing.length > 0
       ? ` — ${uniqueMissing.length} required field(s) need manual entry: ${uniqueMissing.join(", ")}`
@@ -1069,32 +1161,72 @@ async function fillAshbyForm(snap, token) {
     )
   } else {
     showBanner(
-      "Could not detect form fields — Ashby layout may have changed. Fill manually.",
+      "Could not pre-fill any fields — Ashby layout may have changed. Check browser console for diagnostics.",
       "error"
     )
   }
 }
 
 /**
+ * Try to click an Ashby boolean toggle button matching the given label and answer.
+ * Ashby renders boolean questions as two buttons ("Yes"/"No") inside a labeled fieldset.
+ * Returns true if a toggle was clicked.
+ */
+function tryClickAshbyToggle(labelText, answer) {
+  // Find the label/heading element for this question
+  for (const label of document.querySelectorAll("label, h3, h4, legend, p, span")) {
+    if (!label.textContent?.toLowerCase().includes(labelText.toLowerCase().slice(0, 60))) continue
+
+    // Look for Yes/No buttons within the parent container
+    const container = label.closest("[class]")?.parentElement ?? label.parentElement
+    if (!container) continue
+
+    const buttons = container.querySelectorAll("button")
+    const answerLower = String(answer).toLowerCase()
+
+    for (const btn of buttons) {
+      const btnText = (btn.textContent ?? "").trim().toLowerCase()
+      // Match "yes"/"no" or "true"/"false" to the answer value
+      if (
+        (answerLower === "true" && btnText === "yes") ||
+        (answerLower === "false" && btnText === "no") ||
+        (answerLower === "yes" && btnText === "yes") ||
+        (answerLower === "no" && btnText === "no") ||
+        btnText === answerLower
+      ) {
+        btn.click()
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/**
  * Main fill routine — dispatches to ATS-specific handler.
  */
 async function fillFormFromToken(token) {
+  console.log("[pipeline-operator] fillFormFromToken called, token length:", token?.length)
   const payload = decodePayload(token)
   if (!payload?.snapshot) {
+    console.error("[pipeline-operator] Invalid payload:", payload ? Object.keys(payload) : "null")
     showBanner("Invalid fill package — missing snapshot.", "error")
     return
   }
 
   const now = Math.floor(Date.now() / 1000)
   if (payload.exp && payload.exp < now) {
+    console.error("[pipeline-operator] Token expired:", { exp: payload.exp, now })
     showBanner("Fill package expired — regenerate from admin panel.", "error")
     return
   }
 
   const snap = payload.snapshot
+  console.log("[pipeline-operator] Snapshot loaded, keys:", Object.keys(snap))
 
   // Dispatch to ATS-specific handler if on Ashby
   const provider = detectAtsProvider()
+  console.log("[pipeline-operator] Detected ATS provider:", provider)
   if (provider === 'ashby') {
     await fillAshbyForm(snap, token)
     return

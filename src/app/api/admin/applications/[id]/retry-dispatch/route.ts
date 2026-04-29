@@ -66,7 +66,9 @@ export async function POST(
   const applyResult = await strategy.apply({
     boardToken: app.job.boardToken,
     jobExternalId: app.job.externalId,
-    applyUrl: app.job.absoluteUrl ?? `https://boards.greenhouse.io/${app.job.boardToken}/jobs/${app.job.externalId}`,
+    applyUrl: app.job.absoluteUrl ?? (provider === "ASHBY"
+      ? `https://jobs.ashbyhq.com/${app.job.boardToken}/${app.job.externalId}/application`
+      : `https://boards.greenhouse.io/${app.job.boardToken}/jobs/${app.job.externalId}`),
     profile: {
       firstName: profile.firstName,
       lastName: profile.lastName,

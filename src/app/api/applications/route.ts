@@ -294,7 +294,9 @@ async function runPlaywrightSubmission(opts: {
     const applyResult = await strategy.apply({
       boardToken: opts.boardToken,
       jobExternalId: opts.externalJobId,
-      applyUrl: opts.applyUrl ?? `https://boards.greenhouse.io/${opts.boardToken}/jobs/${opts.externalJobId}`,
+      applyUrl: opts.applyUrl ?? (opts.provider === "ASHBY"
+        ? `https://jobs.ashbyhq.com/${opts.boardToken}/${opts.externalJobId}/application`
+        : `https://boards.greenhouse.io/${opts.boardToken}/jobs/${opts.externalJobId}`),
       profile: {
         firstName: opts.profile.firstName,
         lastName: opts.profile.lastName,

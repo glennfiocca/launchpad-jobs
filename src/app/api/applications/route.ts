@@ -13,6 +13,7 @@ import { generateTrackingEmail } from "@/lib/utils";
 import { sendApplyConfirmation } from "@/lib/apply-hooks";
 import { createNotification } from "@/lib/notifications";
 import { getPresignedGetUrl } from "@/lib/spaces";
+import { generateAndAttachOperatorSummary } from "@/lib/pdf/generate-and-attach-summary";
 import { checkAndConsumeCredit, FREE_TIER_CREDITS } from "@/lib/credits";
 import { handleFirstApplicationConversion, isFirstApplication } from "@/lib/referral";
 import { z } from "zod";
@@ -397,6 +398,35 @@ async function runPlaywrightSubmission(opts: {
             metadata: { errorCode, manualApplyUrl: applyResult.manualApplyUrl ?? null },
           },
         });
+
+        // Generate the Q&A summary PDF for the operator. Failures here must
+        // never block queue routing — log and continue. Idempotent on
+        // (applicationId, OPERATOR_SUMMARY).
+        try {
+          await generateAndAttachOperatorSummary({
+            applicationId: opts.applicationId,
+            jobTitle: opts.jobTitle,
+            companyName: opts.companyName,
+            applyUrl: opts.applyUrl ?? applyResult.manualApplyUrl ?? null,
+            snapshot: snapshot as unknown as Record<string, unknown>,
+            actorUserId: null,
+          });
+        } catch (pdfErr) {
+          console.error("[apply] operator summary PDF generation failed:", pdfErr);
+          await db.applicationAuditLog
+            .create({
+              data: {
+                applicationId: opts.applicationId,
+                action: "PDF_GENERATION_FAILED",
+                metadata: {
+                  reason: pdfErr instanceof Error ? pdfErr.message : String(pdfErr),
+                },
+              },
+            })
+            .catch((auditErr: unknown) => {
+              console.error("[apply] failed to write PDF_GENERATION_FAILED audit:", auditErr);
+            });
+        }
 
         const requiredPending = snapshot.pendingQuestions.filter((q) => q.required && !q.userAnswer);
         if (requiredPending.length > 0) {

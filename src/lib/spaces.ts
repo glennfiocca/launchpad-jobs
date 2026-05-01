@@ -63,4 +63,30 @@ export async function uploadPublicBuffer(
   }
 }
 
+/**
+ * Upload a buffer as a private (non-public) object to Spaces.
+ * Object is only accessible via presigned URL (see getPresignedGetUrl).
+ * Throws if Spaces is not configured or upload fails — caller decides recovery.
+ */
+export async function uploadPrivateBuffer(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<{ key: string; sizeBytes: number }> {
+  const client = getSpacesClient();
+  if (!client) throw new Error("DO Spaces is not configured");
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      ACL: "private",
+    })
+  );
+
+  return { key, sizeBytes: buffer.byteLength };
+}
+
 export { BUCKET as SPACES_BUCKET };

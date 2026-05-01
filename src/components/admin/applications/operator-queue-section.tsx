@@ -1,12 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import type { AdminApplicationDetail } from "@/types/admin"
+import type { AdminApplicationDetail, ApplicationDocumentSummary } from "@/types/admin"
 import type { PendingQuestion } from "@/types"
 
 interface Props {
   application: AdminApplicationDetail
   currentUserId: string
+}
+
+const OPERATOR_SUMMARY_KIND = "OPERATOR_SUMMARY"
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(2)} MB`
 }
 
 export function OperatorQueueSection({ application, currentUserId }: Props) {
@@ -25,6 +33,59 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
   const [showFail, setShowFail] = useState(false)
   const [failReason, setFailReason] = useState("")
   const [failing, setFailing] = useState(false)
+
+  // Document state
+  const summaryDocument: ApplicationDocumentSummary | undefined =
+    application.documents?.find((d) => d.kind === OPERATOR_SUMMARY_KIND)
+  const [openingDoc, setOpeningDoc] = useState<string | null>(null)
+  const [regenerating, setRegenerating] = useState(false)
+
+  async function handleOpenDocument(documentId: string) {
+    setOpeningDoc(documentId)
+    setMsg(null)
+    try {
+      const res = await fetch(
+        `/api/admin/applications/${application.id}/documents/${documentId}`,
+        { method: "GET" }
+      )
+      const json = await res.json()
+      if (!json.success) {
+        setMsg(json.error ?? "Failed to fetch document URL")
+        return
+      }
+      const { url } = json.data as { url: string }
+      const tab = window.open(url, "_blank", "noopener,noreferrer")
+      if (!tab) {
+        setMsg("Popup blocked — allow popups for this site and try again.")
+      }
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Request failed")
+    } finally {
+      setOpeningDoc(null)
+    }
+  }
+
+  async function handleRegenerateSummary() {
+    setRegenerating(true)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/admin/applications/${application.id}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: OPERATOR_SUMMARY_KIND }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        setMsg(json.error ?? "Failed to regenerate PDF")
+        return
+      }
+      window.location.reload()
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Request failed")
+    } finally {
+      setRegenerating(false)
+    }
+  }
 
   const isClaimed = !!application.claimedByUserId
   const isClaimedByMe = application.claimedByUserId === currentUserId
@@ -202,6 +263,45 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
           )}
         </div>
       )}
+
+      {/* Q&A Summary PDF */}
+      <div className="bg-zinc-800 rounded-lg p-3 space-y-2 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-semibold text-zinc-200">Q&A Summary PDF</p>
+          {summaryDocument ? (
+            <span className="text-[10px] text-zinc-500 font-mono">
+              {summaryDocument.fileName} · {formatBytes(summaryDocument.sizeBytes)}
+            </span>
+          ) : (
+            <span className="text-[10px] text-amber-500">not yet generated</span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {summaryDocument && (
+            <button
+              onClick={() => handleOpenDocument(summaryDocument.id)}
+              disabled={openingDoc === summaryDocument.id}
+              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-700 text-white hover:bg-zinc-600 disabled:opacity-50 transition-colors"
+            >
+              {openingDoc === summaryDocument.id ? "Opening..." : "Open / Download PDF"}
+            </button>
+          )}
+          <button
+            onClick={handleRegenerateSummary}
+            disabled={regenerating}
+            className="px-3 py-1.5 text-xs rounded-lg bg-zinc-700/60 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50 transition-colors"
+          >
+            {regenerating ? "Generating..." : summaryDocument ? "Regenerate" : "Generate now"}
+          </button>
+        </div>
+        {summaryDocument && (
+          <p className="text-[10px] text-zinc-500">
+            Last updated{" "}
+            {new Date(summaryDocument.updatedAt).toLocaleString()} · use this to cross-reference
+            answers and fill any extension autofill gaps.
+          </p>
+        )}
+      </div>
 
       {/* Pending Questions */}
       {snapshot && Array.isArray((snapshot as Record<string, unknown>).pendingQuestions) &&

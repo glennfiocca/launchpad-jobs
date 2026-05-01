@@ -6,7 +6,9 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
-  serverExternalPackages: ["@prisma/client", "nodemailer"],
+  // pdfkit ships .afm font data and uses Node `fs` at runtime — keep it
+  // outside Next.js bundling so its data files resolve correctly.
+  serverExternalPackages: ["@prisma/client", "nodemailer", "pdfkit"],
 };
 
 export default nextConfig;

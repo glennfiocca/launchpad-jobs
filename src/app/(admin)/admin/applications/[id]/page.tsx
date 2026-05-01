@@ -27,6 +27,19 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         orderBy: { createdAt: "desc" },
         include: { actor: { select: { id: true, email: true, name: true } } },
       },
+      documents: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          kind: true,
+          fileName: true,
+          mimeType: true,
+          sizeBytes: true,
+          title: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
     },
   })
 
@@ -101,6 +114,16 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
       action: l.action,
       metadata: l.metadata as Record<string, unknown> | null,
       createdAt: l.createdAt,
+    })),
+    documents: app.documents.map((d) => ({
+      id: d.id,
+      kind: d.kind,
+      fileName: d.fileName,
+      mimeType: d.mimeType,
+      sizeBytes: d.sizeBytes,
+      title: d.title,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
     })),
   }
 

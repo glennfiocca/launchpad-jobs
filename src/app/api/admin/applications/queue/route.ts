@@ -4,6 +4,7 @@ import { requireAdminSession, badRequest } from "../../_helpers"
 import { z } from "zod"
 import type { ApiResponse } from "@/types"
 import type { OperatorQueueApplication, DispatchStatus } from "@/types/admin"
+import { OPERATOR_SUMMARY_KIND } from "@/lib/pdf/application-summary-data"
 
 const queueQuerySchema = z.object({
   filter: z.enum(["unclaimed", "mine", "all"]).default("unclaimed"),
@@ -63,6 +64,11 @@ export async function GET(req: NextRequest) {
           },
         },
         _count: { select: { emails: true, statusHistory: true } },
+        documents: {
+          where: { kind: OPERATOR_SUMMARY_KIND },
+          select: { id: true },
+          take: 1,
+        },
       },
       orderBy: { [sortBy]: sortDir },
       skip,
@@ -71,10 +77,11 @@ export async function GET(req: NextRequest) {
     db.application.count({ where }),
   ])
 
-  const data: OperatorQueueApplication[] = rows.map((row) => ({
+  const data: OperatorQueueApplication[] = rows.map(({ documents, ...row }) => ({
     ...row,
     dispatchStatus: "AWAITING_OPERATOR" as DispatchStatus,
     applicationSnapshot: null,
+    hasSummaryPdf: documents.length > 0,
   }))
 
   return NextResponse.json<ApiResponse<OperatorQueueApplication[]>>({

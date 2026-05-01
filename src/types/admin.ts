@@ -36,11 +36,23 @@ export interface ApplicationAuditLogEntry {
   createdAt: Date
 }
 
+export interface ApplicationDocumentSummary {
+  id: string
+  kind: string
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+  title: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface OperatorQueueApplication extends AdminApplication {
   claimedByUserId: string | null
   claimedAt: Date | null
   claimedBy: { id: string; email: string | null; name: string | null } | null
   job: AdminApplication["job"] & { absoluteUrl: string | null }
+  hasSummaryPdf: boolean
 }
 
 export interface AdminApplicationDetail extends AdminApplication {
@@ -78,6 +90,7 @@ export interface AdminApplicationDetail extends AdminApplication {
     metadata: Record<string, unknown> | null
     createdAt: Date
   }>
+  documents: ApplicationDocumentSummary[]
 }
 
 export interface AdminApplicationStats {

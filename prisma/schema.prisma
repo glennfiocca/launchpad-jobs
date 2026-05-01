@@ -355,6 +355,7 @@ model Application {
   statusHistory ApplicationStatusHistory[]
   notifications Notification[]
   auditLogs     ApplicationAuditLog[]
+  documents     ApplicationDocument[]
 
   @@unique([userId, jobId])
   @@index([userId])
@@ -363,6 +364,34 @@ model Application {
   @@index([appliedAt])
   @@index([submissionStatus])
   @@index([claimedByUserId])
+}
+
+// First-class artifacts attached to an application — currently used for
+// operator-queue Q&A summary PDFs. Kept narrow to keep storage minimal:
+// the actual bytes live in DO Spaces (private), this row points at them.
+model ApplicationDocument {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // Document classification — one document per (applicationId, kind) for idempotency.
+  // Known kinds: OPERATOR_SUMMARY (Q&A PDF for operator queue).
+  kind String
+
+  fileName  String
+  mimeType  String
+  spacesKey String  @unique
+  sizeBytes Int
+
+  // Optional human-friendly title (e.g. "Q&A Summary — Acme / Senior Engineer")
+  title String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicationId, kind])
+  @@index([applicationId])
+  @@index([kind])
 }
 
 model ApplicationEmail {

@@ -28,6 +28,11 @@ export default async function AdminQueuePage() {
           company: { select: { name: true } },
         },
       },
+      documents: {
+        where: { kind: "OPERATOR_SUMMARY" },
+        select: { id: true },
+        take: 1,
+      },
     },
     orderBy: { appliedAt: "asc" },
   })
@@ -78,6 +83,7 @@ export default async function AdminQueuePage() {
                 <th className="text-left px-4 py-3 text-xs text-zinc-500 font-medium">Error</th>
                 <th className="text-left px-4 py-3 text-xs text-zinc-500 font-medium">Claimed By</th>
                 <th className="text-left px-4 py-3 text-xs text-zinc-500 font-medium">Status</th>
+                <th className="text-left px-4 py-3 text-xs text-zinc-500 font-medium">PDF</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -110,6 +116,17 @@ export default async function AdminQueuePage() {
                     </td>
                     <td className="px-4 py-3">
                       <DispatchStatusBadge status="AWAITING_OPERATOR" />
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {app.documents.length > 0 ? (
+                        <span className="text-emerald-400" title="Q&A summary PDF available">
+                          ✓
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600" title="PDF not yet generated">
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Link

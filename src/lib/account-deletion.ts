@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 
@@ -9,15 +10,21 @@ import { getStripe } from "@/lib/stripe";
  * user's authentication state is invalidated.
  *
  * Stripe cancellation is best-effort and must NOT roll back local deletion.
+ *
+ * Re-signup with the same email IS allowed — once the account is deleted,
+ * the email is freed (anonymized to deleted-${userId}@deleted.local), so a
+ * fresh signup creates a new User row. The deletedAt-flagged row remains
+ * permanently inaccessible via auth.
  */
 export async function deleteUserAccount(userId: string): Promise<void> {
   const anonymizedEmail = `deleted-${userId}@deleted.local`;
 
-  // Capture Stripe subscription ID before the transaction. Read failures here
-  // are non-fatal — Stripe cancellation is best-effort.
-  const subscription = await db.subscription
-    .findUnique({ where: { userId } })
-    .catch(() => null);
+  // Capture identifiers before mutation. Read failures are non-fatal.
+  const [subscription, currentUser] = await Promise.all([
+    db.subscription.findUnique({ where: { userId } }).catch(() => null),
+    db.user.findUnique({ where: { id: userId }, select: { email: true } }).catch(() => null),
+  ]);
+  const oldEmail = currentUser?.email ?? null;
 
   await db.$transaction(async (tx) => {
     // 1. Anonymize the User row + flag deletedAt
@@ -35,7 +42,9 @@ export async function deleteUserAccount(userId: string): Promise<void> {
       },
     });
 
-    // 2. Wipe UserProfile PII if profile exists
+    // 2. Wipe UserProfile PII if profile exists. customAnswers needs the
+    //    explicit JsonNull sentinel — a bare `null` or `undefined` is not
+    //    a SQL-NULL write in Prisma's typed JSON field semantics.
     await tx.userProfile.updateMany({
       where: { userId },
       data: {
@@ -59,7 +68,7 @@ export async function deleteUserAccount(userId: string): Promise<void> {
         resumeData: null,
         resumeUrl: null,
         resumeFileName: null,
-        customAnswers: undefined,
+        customAnswers: Prisma.JsonNull,
         voluntaryGender: null,
         voluntaryRace: null,
         voluntaryVeteranStatus: null,
@@ -68,7 +77,15 @@ export async function deleteUserAccount(userId: string): Promise<void> {
       },
     });
 
-    // 3. Force sign-out everywhere — drop all sessions
+    // 3. Drop OAuth account links — these hold refresh/access tokens (PII).
+    await tx.account.deleteMany({ where: { userId } });
+
+    // 4. Drop pending magic-link verification tokens for the old email.
+    if (oldEmail) {
+      await tx.verificationToken.deleteMany({ where: { identifier: oldEmail } });
+    }
+
+    // 5. Force sign-out everywhere — drop all sessions
     await tx.session.deleteMany({ where: { userId } });
   });
 

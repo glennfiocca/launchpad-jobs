@@ -6,17 +6,28 @@ type TxClient = {
   user: { update: ReturnType<typeof vi.fn> };
   userProfile: { updateMany: ReturnType<typeof vi.fn> };
   session: { deleteMany: ReturnType<typeof vi.fn> };
+  account: { deleteMany: ReturnType<typeof vi.fn> };
+  verificationToken: { deleteMany: ReturnType<typeof vi.fn> };
 };
 
 const txClient: TxClient = {
   user: { update: vi.fn() },
   userProfile: { updateMany: vi.fn() },
   session: { deleteMany: vi.fn() },
+  account: { deleteMany: vi.fn() },
+  verificationToken: { deleteMany: vi.fn() },
 };
+
+vi.mock("@prisma/client", () => ({
+  Prisma: { JsonNull: Symbol("Prisma.JsonNull") },
+}));
 
 vi.mock("@/lib/db", () => ({
   db: {
     subscription: {
+      findUnique: vi.fn(),
+    },
+    user: {
       findUnique: vi.fn(),
     },
     $transaction: vi.fn(async (cb: (tx: TxClient) => Promise<void>) => {
@@ -39,6 +50,7 @@ import { deleteUserAccount } from "../account-deletion";
 
 const mockDb = db as unknown as {
   subscription: { findUnique: ReturnType<typeof vi.fn> };
+  user: { findUnique: ReturnType<typeof vi.fn> };
   $transaction: ReturnType<typeof vi.fn>;
 };
 
@@ -47,10 +59,15 @@ beforeEach(() => {
   txClient.user.update.mockReset();
   txClient.userProfile.updateMany.mockReset();
   txClient.session.deleteMany.mockReset();
+  txClient.account.deleteMany.mockReset();
+  txClient.verificationToken.deleteMany.mockReset();
   txClient.user.update.mockResolvedValue({});
   txClient.userProfile.updateMany.mockResolvedValue({ count: 1 });
   txClient.session.deleteMany.mockResolvedValue({ count: 2 });
+  txClient.account.deleteMany.mockResolvedValue({ count: 1 });
+  txClient.verificationToken.deleteMany.mockResolvedValue({ count: 0 });
   mockDb.subscription.findUnique.mockResolvedValue(null);
+  mockDb.user.findUnique.mockResolvedValue({ email: "old@example.com" });
   mockDb.$transaction.mockImplementation(
     async (cb: (tx: TxClient) => Promise<void>) => {
       await cb(txClient);
@@ -157,5 +174,33 @@ describe("deleteUserAccount", () => {
     await deleteUserAccount(userId);
 
     expect(stripeUpdate).not.toHaveBeenCalled();
+  });
+
+  it("clears customAnswers via Prisma.JsonNull (not undefined)", async () => {
+    const { Prisma } = await import("@prisma/client");
+    await deleteUserAccount(userId);
+    const profileData = txClient.userProfile.updateMany.mock.calls[0][0].data;
+    expect(profileData.customAnswers).toBe(Prisma.JsonNull);
+  });
+
+  it("deletes OAuth Account rows for the user (PII scrub)", async () => {
+    await deleteUserAccount(userId);
+    expect(txClient.account.deleteMany).toHaveBeenCalledWith({
+      where: { userId },
+    });
+  });
+
+  it("deletes pending VerificationToken rows for the old email", async () => {
+    mockDb.user.findUnique.mockResolvedValue({ email: "old@example.com" });
+    await deleteUserAccount(userId);
+    expect(txClient.verificationToken.deleteMany).toHaveBeenCalledWith({
+      where: { identifier: "old@example.com" },
+    });
+  });
+
+  it("skips VerificationToken cleanup when old email is unreadable", async () => {
+    mockDb.user.findUnique.mockResolvedValue(null);
+    await deleteUserAccount(userId);
+    expect(txClient.verificationToken.deleteMany).not.toHaveBeenCalled();
   });
 });

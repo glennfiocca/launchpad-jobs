@@ -55,6 +55,7 @@ export async function maybeSendDigest(userId: string): Promise<void> {
 
     await sendNotificationDigest({
       to: user.email,
+      userId,
       userName: user.name ?? "there",
       unreadCount: pending.length,
       preview: pending.slice(0, 3).map((n) => ({

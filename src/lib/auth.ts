@@ -39,6 +39,19 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ user, account }) {
+      // Block soft-deleted users from re-authenticating, regardless of provider.
+      if (user?.id) {
+        const dbUser = await db.user
+          .findUnique({
+            where: { id: user.id },
+            select: { deletedAt: true },
+          })
+          .catch(() => null)
+        if (dbUser?.deletedAt) {
+          return false
+        }
+      }
+
       if (account?.provider === "email" && user.id && user.email) {
         // Generate referral code for new users (idempotent)
         await ensureReferralCode(user.id).catch(() => null)

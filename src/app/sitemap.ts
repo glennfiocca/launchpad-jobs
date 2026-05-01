@@ -1,6 +1,12 @@
 import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
 
+// Render at request time, not build time. The DB query below depends on
+// migrations that may not yet be applied during the build phase on DO
+// (PRE_DEPLOY migrate runs after the docker build completes).
+export const dynamic = "force-dynamic";
+export const revalidate = 3600; // edge cache for 1h once requested
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://trypipeline.ai";
 
 // Cap dynamic job entries per sitemap. Search engines accept up to 50K URLs
@@ -33,13 +39,22 @@ function buildStaticEntries(now: Date): MetadataRoute.Sitemap {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  const staticEntries = buildStaticEntries(now);
 
-  const jobs = await db.job.findMany({
-    where: { isActive: true },
-    orderBy: { postedAt: "desc" },
-    take: JOB_SITEMAP_CAP,
-    select: { publicJobId: true, updatedAt: true },
-  });
+  // DB read is best-effort — a sitemap without dynamic entries is still
+  // a valid sitemap. We never want a transient DB issue to 500 the route.
+  let jobs: Array<{ publicJobId: string; updatedAt: Date }> = [];
+  try {
+    jobs = await db.job.findMany({
+      where: { isActive: true },
+      orderBy: { postedAt: "desc" },
+      take: JOB_SITEMAP_CAP,
+      select: { publicJobId: true, updatedAt: true },
+    });
+  } catch (err) {
+    console.error("[sitemap] failed to load jobs; serving static entries only:", err);
+    return staticEntries;
+  }
 
   if (jobs.length >= JOB_SITEMAP_CAP) {
     // Soft warning — when this fires, switch to `generateSitemaps` to chunk.
@@ -55,5 +70,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...buildStaticEntries(now), ...jobEntries];
+  return [...staticEntries, ...jobEntries];
 }

@@ -18,7 +18,6 @@ import {
   FileText,
   Bell,
   UserCheck,
-  Search,
 } from "lucide-react"
 
 interface AdminSidebarProps {
@@ -39,7 +38,6 @@ const navItems = [
   { href: "/admin/feedback", label: "Feedback", icon: MessageSquare },
   { href: "/admin/reports", label: "Reports", icon: Flag },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
-  { href: "/admin/discovery", label: "Board Discovery", icon: Search },
   { href: "/admin/sync", label: "Sync Logs", icon: RefreshCw },
 ]
 

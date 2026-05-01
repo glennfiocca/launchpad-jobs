@@ -35,6 +35,8 @@ export interface InstantNotificationEmailParams {
   body?: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  /** One-click unsubscribe URL (RFC 8058). When omitted, no unsubscribe block is rendered. */
+  unsubscribeUrl?: string;
 }
 
 export interface NotificationDigestEmailParams {
@@ -42,6 +44,8 @@ export interface NotificationDigestEmailParams {
   unreadCount: number;
   preview: ReadonlyArray<{ title: string; body?: string }>;
   dashboardUrl: string;
+  /** One-click unsubscribe URL (RFC 8058). When omitted, no unsubscribe block is rendered. */
+  unsubscribeUrl?: string;
 }
 
 export interface StatusUpdateEmailParams {
@@ -51,6 +55,8 @@ export interface StatusUpdateEmailParams {
   newStatus: string;
   statusLabel: string;
   dashboardUrl: string;
+  /** One-click unsubscribe URL (RFC 8058). When omitted, no unsubscribe block is rendered. */
+  unsubscribeUrl?: string;
 }
 
 // ---- Utilities (self-contained) -------------------------------------------
@@ -114,11 +120,29 @@ function ctaButton(href: string, label: string, bgColor: string = "#2563eb"): st
 
 interface FooterOptions {
   settingsUrl?: string;
+  /** When provided, renders an inline one-click unsubscribe block above the standard footer. */
+  unsubscribeUrl?: string;
 }
 
 /** Wraps body content in a responsive, email-safe outer shell with logo + footer. */
 function baseLayout(content: string, footerOptions?: FooterOptions): string {
   const settingsUrl = footerOptions?.settingsUrl ?? `${APP_URL}/settings/notifications`;
+  const unsubscribeUrl = footerOptions?.unsubscribeUrl;
+
+  // Inline unsubscribe block — only rendered when caller provides a URL
+  // (transactional notifications tied to a userId; not magic-link/auth emails).
+  const unsubscribeBlock = unsubscribeUrl
+    ? `
+          <tr>
+            <td style="padding: 0 40px;">
+              <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0">
+              <p style="color:#6b7280;font-size:12px;font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                Don't want these? <a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe with one click</a>
+                or <a href="${escapeHtml(settingsUrl)}" style="color:#6b7280;text-decoration:underline;">manage your preferences</a>.
+              </p>
+            </td>
+          </tr>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
@@ -164,6 +188,7 @@ function baseLayout(content: string, footerOptions?: FooterOptions): string {
               ${content}
             </td>
           </tr>
+          ${unsubscribeBlock}
 
           <!-- Footer -->
           <tr>
@@ -262,7 +287,7 @@ export function applicationConfirmationEmail(
 export function instantNotificationEmail(
   params: InstantNotificationEmailParams,
 ): EmailResult {
-  const { userName, title, body, ctaUrl, ctaLabel = "View Dashboard" } = params;
+  const { userName, title, body, ctaUrl, ctaLabel = "View Dashboard", unsubscribeUrl } = params;
   const dest = ctaUrl ?? `${APP_URL}/dashboard`;
 
   // Strip CRLF from subject to prevent SMTP header injection
@@ -287,14 +312,17 @@ export function instantNotificationEmail(
 
   return {
     subject: safeSubject,
-    html: baseLayout(content, { settingsUrl: `${APP_URL}/settings/notifications` }),
+    html: baseLayout(content, {
+      settingsUrl: `${APP_URL}/settings/notifications`,
+      unsubscribeUrl,
+    }),
   };
 }
 
 export function notificationDigestEmail(
   params: NotificationDigestEmailParams,
 ): EmailResult {
-  const { userName, unreadCount, preview, dashboardUrl } = params;
+  const { userName, unreadCount, preview, dashboardUrl, unsubscribeUrl } = params;
 
   const rows = preview
     .map((n, idx) => {
@@ -339,14 +367,17 @@ export function notificationDigestEmail(
 
   return {
     subject: `You have ${unreadCount} new notification${plural} on Pipeline`,
-    html: baseLayout(content, { settingsUrl: `${APP_URL}/settings/notifications` }),
+    html: baseLayout(content, {
+      settingsUrl: `${APP_URL}/settings/notifications`,
+      unsubscribeUrl,
+    }),
   };
 }
 
 export function statusUpdateEmail(
   params: StatusUpdateEmailParams,
 ): EmailResult {
-  const { userName, jobTitle, companyName, newStatus, statusLabel, dashboardUrl } = params;
+  const { userName, jobTitle, companyName, newStatus, statusLabel, dashboardUrl, unsubscribeUrl } = params;
 
   const accent = statusAccent(newStatus);
 
@@ -387,6 +418,9 @@ export function statusUpdateEmail(
 
   return {
     subject: `Application update: ${jobTitle} at ${companyName}`,
-    html: baseLayout(content),
+    html: baseLayout(content, {
+      settingsUrl: `${APP_URL}/settings/notifications`,
+      unsubscribeUrl,
+    }),
   };
 }

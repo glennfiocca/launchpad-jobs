@@ -105,6 +105,8 @@ export async function createNotification(
       if (user?.email) {
         await sendInstantNotificationEmail({
           to: user.email,
+          userId: input.userId,
+          unsubscribeType: input.type,
           userName: user.name ?? "there",
           title: notification.title,
           body: notification.body ?? undefined,

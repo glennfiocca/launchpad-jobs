@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { db } from "@/lib/db";
 import { sendNotificationDigest } from "@/lib/email";
 import { getOrCreatePreferences } from "./preferences";
@@ -55,6 +56,7 @@ export async function maybeSendDigest(userId: string): Promise<void> {
 
     await sendNotificationDigest({
       to: user.email,
+      userId,
       userName: user.name ?? "there",
       unreadCount: pending.length,
       preview: pending.slice(0, 3).map((n) => ({
@@ -73,5 +75,6 @@ export async function maybeSendDigest(userId: string): Promise<void> {
   } catch (err) {
     // Never throw from digest — notification failure must not break callers
     console.error("[notifications] digest failed for user", userId, err);
+    Sentry.captureException(err, { tags: { area: "notifications.digest" } });
   }
 }

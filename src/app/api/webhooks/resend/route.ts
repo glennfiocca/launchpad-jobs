@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { Resend } from "resend";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -152,10 +153,15 @@ export async function POST(request: Request) {
       }),
     ]);
 
+    // In-app status change notification type — also drives the unsubscribe target
+    const notifType = statusToNotificationType(classification.status);
+
     if (application.user.email && application.user.name) {
       const statusConfig = STATUS_CONFIG[classification.status as ApplicationStatus];
       await sendStatusUpdate({
         to: application.user.email,
+        userId: application.userId,
+        unsubscribeType: notifType,
         userName: application.user.name,
         jobTitle: application.job.title,
         companyName: application.job.company.name,
@@ -164,11 +170,11 @@ export async function POST(request: Request) {
         dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       }).catch((err: unknown) => {
         console.error("Failed to send status update email:", err);
+        Sentry.captureException(err);
       });
     }
 
     // In-app status change notification (email suppressed — sendStatusUpdate handles it above)
-    const notifType = statusToNotificationType(classification.status);
     createNotification({
       userId: application.userId,
       type: notifType,

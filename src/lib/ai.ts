@@ -1,4 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIError, APIUserAbortError, APIConnectionError } from "@anthropic-ai/sdk";
+import type { Message } from "@anthropic-ai/sdk/resources/messages";
 import type { ApplicationStatus } from "@prisma/client";
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -13,6 +14,53 @@ export interface EmailClassificationResult {
   status: ApplicationStatus;
   confidence: number; // 0–1
   reasoning: string;
+}
+
+// Resilience knobs for the classifier — externalized so tests can reason about them.
+const CLASSIFY_TIMEOUT_MS = 15_000;
+const CLASSIFY_DEFAULT_RETRY_BACKOFF_MS = 2_000;
+const CLASSIFY_MAX_RETRY_BACKOFF_MS = 10_000;
+const CLASSIFY_MODEL = "claude-haiku-4-5-20251001";
+const CLASSIFY_MAX_TOKENS = 256;
+
+// Retryable: transient failures only.
+// - 429 rate limit (honor retry-after header if present)
+// - 5xx server errors
+// - network errors and timeouts (AbortError surfaces as APIUserAbortError when
+//   the signal aborts; connection errors surface as APIConnectionError)
+// Non-retryable: 4xx (bad request, auth, etc.) — those are deterministic.
+function isRetryableError(err: unknown): boolean {
+  if (err instanceof APIUserAbortError) return true;
+  if (err instanceof APIConnectionError) return true;
+  if (err instanceof APIError) {
+    const status = err.status;
+    if (typeof status !== "number") return true; // SDK couldn't get a status — likely network
+    if (status === 429) return true;
+    if (status >= 500 && status < 600) return true;
+    return false;
+  }
+  // Bare AbortError (e.g. raw signal timeout that didn't get wrapped) — treat as retryable
+  if (err instanceof Error && err.name === "AbortError") return true;
+  return false;
+}
+
+// Pull retry-after delay (seconds) from a 429 response if present. Falls back
+// to the default backoff. Caps at CLASSIFY_MAX_RETRY_BACKOFF_MS to bound total wall time.
+function getBackoffMs(err: unknown): number {
+  if (err instanceof APIError && err.status === 429 && err.headers) {
+    const retryAfter = err.headers.get?.("retry-after");
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.min(seconds * 1000, CLASSIFY_MAX_RETRY_BACKOFF_MS);
+      }
+    }
+  }
+  return CLASSIFY_DEFAULT_RETRY_BACKOFF_MS;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Classify an email to determine the application status it implies
@@ -49,13 +97,18 @@ Respond with ONLY valid JSON in this exact format:
   "reasoning": "Brief explanation of why this status was chosen"
 }`;
 
-  try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
-      messages: [{ role: "user", content: prompt }],
-    });
+  // Total budget: original attempt + 1 retry. Each attempt has a 15s timeout
+  // via AbortSignal, plus an optional backoff between attempts (capped). Worst
+  // case is ~15s + 10s + 15s = 40s, but typical 429 backoff is 2s → ~17s max.
+  const message = await callAnthropicWithRetry(prompt);
+  if (!message) {
+    // Fallback sentinel — preserves the existing return type. Confidence 0
+    // ensures shouldUpdateStatus() returns false, so the caller leaves the
+    // application's status unchanged.
+    return { status: currentStatus, confidence: 0, reasoning: "Classification failed" };
+  }
 
+  try {
     const text = message.content[0].type === "text" ? message.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in response");
@@ -80,9 +133,51 @@ Respond with ONLY valid JSON in this exact format:
       reasoning: parsed.reasoning,
     };
   } catch (err) {
-    console.error("AI classification failed:", err);
+    console.error("[ai] classification failed:", err);
     return { status: currentStatus, confidence: 0, reasoning: "Classification failed" };
   }
+}
+
+// Wraps anthropic.messages.create with a per-attempt 15s timeout and 1 retry
+// on transient failures (429, 5xx, network/abort). Returns the SDK Message on
+// success, or null if both attempts failed. Errors are logged but never thrown
+// — the caller decides on a fallback.
+async function callAnthropicWithRetry(prompt: string): Promise<Message | null> {
+  const maxAttempts = 2; // original + 1 retry
+
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // Explicit stream: false to disambiguate the overload — gives us Message, not Stream.
+      const message: Message = await anthropic.messages.create(
+        {
+          model: CLASSIFY_MODEL,
+          max_tokens: CLASSIFY_MAX_TOKENS,
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+        },
+        { signal: AbortSignal.timeout(CLASSIFY_TIMEOUT_MS) },
+      );
+      return message;
+    } catch (err) {
+      lastErr = err;
+      const retryable = isRetryableError(err);
+      if (!retryable || attempt === maxAttempts) {
+        console.error("[ai] classification failed:", err);
+        return null;
+      }
+      const backoffMs = getBackoffMs(err);
+      console.warn(
+        `[ai] classification attempt ${attempt} failed (retryable), retrying in ${backoffMs}ms:`,
+        err,
+      );
+      await sleep(backoffMs);
+    }
+  }
+
+  // Unreachable — loop either returns or throws — but TS needs a terminal.
+  console.error("[ai] classification failed:", lastErr);
+  return null;
 }
 
 // STATUS_PRIORITY: higher = more advanced in the process; terminal/inactive statuses are 0

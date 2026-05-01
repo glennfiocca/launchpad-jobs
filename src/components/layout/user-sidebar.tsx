@@ -14,25 +14,15 @@ import {
   LogIn,
   Gift,
 } from "lucide-react"
+import { Icon } from "@iconify/react"
 import { CreditsBadge } from "@/components/billing/credits-badge"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { FeedbackButton } from "@/components/feedback-button"
 
 function BaseballBatIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 20 L18 6" />
-      <path d="M18 6 C18 6 20 4 21 4 C22 5 20 7 18 6Z" />
-    </svg>
-  )
+  // Sourced from Font Awesome 6 Free via Iconify. Browse 200K+ icons at
+  // https://icon-sets.iconify.design — usage is `<Icon icon="pack:name" />`.
+  return <Icon icon="fa6-solid:baseball-bat-ball" className={className} />
 }
 
 const publicNavItems = [

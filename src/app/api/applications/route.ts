@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import * as Sentry from "@sentry/nextjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -413,6 +414,7 @@ async function runPlaywrightSubmission(opts: {
           });
         } catch (pdfErr) {
           console.error("[apply] operator summary PDF generation failed:", pdfErr);
+          Sentry.captureException(pdfErr);
           await db.applicationAuditLog
             .create({
               data: {
@@ -470,6 +472,7 @@ async function runPlaywrightSubmission(opts: {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Playwright crashed";
     console.error("[apply] Background submission error:", err);
+    Sentry.captureException(err);
     await db.application
       .update({
         where: { id: opts.applicationId },

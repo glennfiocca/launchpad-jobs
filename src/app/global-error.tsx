@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 // Root-layout error boundary — replaces the root layout when the layout itself errors.
 // Must include <html>/<body> and avoid any dependencies that the broken root layout
 // would have provided (Tailwind, fonts, providers). Inline styles only.
+//
+// Sentry recommends capturing here specifically — root-layout failures are
+// invisible to segment-level error.tsx because the layout itself never mounted.
 export default function GlobalError({
   error,
   reset,
@@ -14,6 +18,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error(error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

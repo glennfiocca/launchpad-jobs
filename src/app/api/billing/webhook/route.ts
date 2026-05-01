@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { getStripe } from "@/lib/stripe";
 import {
   handleSubscriptionUpsert,
@@ -111,6 +112,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       `${LOG_PREFIX} ${event.type} ${event.id} handler error:`,
       err
     );
+    Sentry.captureException(err, {
+      tags: { stripeEventType: event.type, stripeEventId: event.id },
+    });
     return NextResponse.json(
       { error: "Handler error" },
       { status: 500 }

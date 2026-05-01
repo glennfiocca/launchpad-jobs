@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 
 // Segment-level error boundary — wraps route segments and their children.
 // Must be a Client Component per Next.js App Router convention.
@@ -15,6 +16,8 @@ export default function Error({
   useEffect(() => {
     // Surface the full error in browser devtools for debugging.
     console.error(error);
+    // Capture in Sentry — no-op when DSN is not configured.
+    Sentry.captureException(error);
   }, [error]);
 
   return (

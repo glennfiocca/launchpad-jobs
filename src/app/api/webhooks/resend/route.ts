@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { Resend } from "resend";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -169,6 +170,7 @@ export async function POST(request: Request) {
         dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       }).catch((err: unknown) => {
         console.error("Failed to send status update email:", err);
+        Sentry.captureException(err);
       });
     }
 

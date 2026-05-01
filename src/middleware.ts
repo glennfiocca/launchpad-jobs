@@ -60,7 +60,7 @@ export async function middleware(req: NextRequest) {
       const { limit, windowMs } = RATE_LIMITS[tier]
       const ip = getClientIp(req)
       const key = `${tier}:${ip}`
-      const result = checkRateLimit(key, limit, windowMs)
+      const result = await checkRateLimit(key, limit, windowMs)
 
       if (!result.allowed) {
         return NextResponse.json(

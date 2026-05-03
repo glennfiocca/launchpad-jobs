@@ -9,7 +9,7 @@ import * as Sentry from "@sentry/nextjs"
  * to Sentry. Useful any time you want to verify the server-side capture
  * pipeline is wired up correctly.
  *
- *   curl 'https://<host>/api/__sentry-test?token=<CRON_SECRET>'
+ *   curl 'https://<host>/api/sentry-smoke-test?token=<CRON_SECRET>'
  *
  * Expected: HTTP 500 returned to caller; one new event in Sentry with
  * tag `test=server-smoke` within ~30s.

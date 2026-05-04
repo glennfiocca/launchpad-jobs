@@ -38,6 +38,38 @@ function buildStaticEntries(now: Date): MetadataRoute.Sitemap {
 }
 
 /**
+ * Company hub URLs (e.g. `/companies/{slug}`). These pile into chunk 0
+ * alongside the static entries.
+ *
+ * Sizing: even at the high-end of our pipeline (low thousands of companies),
+ * companies fit comfortably below the 5K static-headroom on chunk 0 (CHUNK_SIZE
+ * for jobs is 45K, leaving ~5K for static + companies under the 50K Sitemaps
+ * spec cap). If/when we cross ~5K active companies, split this into a
+ * dedicated companies chunk.
+ *
+ * Best-effort: a DB error here returns an empty array so the sitemap still
+ * renders the static entries + jobs.
+ */
+async function buildCompanyEntries(): Promise<MetadataRoute.Sitemap> {
+  try {
+    const companies = await db.company.findMany({
+      where: { jobs: { some: { isActive: true } } },
+      orderBy: { slug: "asc" },
+      select: { slug: true, updatedAt: true },
+    });
+    return companies.map((company) => ({
+      url: `${APP_URL}/companies/${company.slug}`,
+      lastModified: company.updatedAt,
+      changeFrequency: "weekly",
+      priority: 0.6,
+    }));
+  } catch (err) {
+    console.error("[sitemap] failed to load companies:", err);
+    return [];
+  }
+}
+
+/**
  * Tell Next.js how many sitemap chunks to emit. Next will then call the
  * default `sitemap()` export once per id and stitch a sitemap index at
  * `/sitemap.xml` pointing at `/sitemap/{id}.xml` for each chunk.
@@ -82,6 +114,8 @@ export default async function sitemap(props: {
   const now = new Date();
   const isFirstChunk = chunkId === 0;
   const staticEntries = isFirstChunk ? buildStaticEntries(now) : [];
+  // Companies live on chunk 0 alongside the static page entries.
+  const companyEntries = isFirstChunk ? await buildCompanyEntries() : [];
 
   // DB read is best-effort — a sitemap without dynamic entries is still
   // a valid sitemap. We never want a transient DB issue to 500 the route.
@@ -97,11 +131,11 @@ export default async function sitemap(props: {
   } catch (err) {
     console.error(
       `[sitemap] failed to load jobs for chunk ${chunkId}; serving ${
-        isFirstChunk ? "static entries only" : "empty chunk"
+        isFirstChunk ? "static + company entries only" : "empty chunk"
       }:`,
       err,
     );
-    return staticEntries;
+    return [...staticEntries, ...companyEntries];
   }
 
   const jobEntries: MetadataRoute.Sitemap = jobs.map((job) => ({
@@ -111,5 +145,6 @@ export default async function sitemap(props: {
     priority: 0.7,
   }));
 
-  return [...staticEntries, ...jobEntries];
+  // Order: static page entries first, then companies, then jobs.
+  return [...staticEntries, ...companyEntries, ...jobEntries];
 }

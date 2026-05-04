@@ -6,6 +6,7 @@ import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { SaveButton } from "./_shared/save-button";
+import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
 
 interface PreferencesFormState {
@@ -75,6 +76,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <IdentityRequiredNotice initialData={initialData} />
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Salary Expectations</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -160,7 +162,11 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
         </label>
       </div>
 
-      <SaveButton saving={saving} />
+      <SaveButton
+        saving={saving}
+        disabled={!isIdentityComplete(initialData)}
+        disabledReason="Complete the Personal tab first"
+      />
     </form>
   );
 }

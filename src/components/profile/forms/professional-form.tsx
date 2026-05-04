@@ -6,6 +6,7 @@ import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { SaveButton } from "./_shared/save-button";
+import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
 
 interface ProfessionalFormState {
@@ -72,6 +73,7 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <IdentityRequiredNotice initialData={initialData} />
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Professional Summary</h2>
         <div>
@@ -159,7 +161,11 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
         </div>
       </div>
 
-      <SaveButton saving={saving} />
+      <SaveButton
+        saving={saving}
+        disabled={!isIdentityComplete(initialData)}
+        disabledReason="Complete the Personal tab first"
+      />
     </form>
   );
 }

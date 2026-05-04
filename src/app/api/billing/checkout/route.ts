@@ -24,8 +24,8 @@ export async function POST() {
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
-    success_url: `${appUrl}/billing?success=true`,
-    cancel_url: `${appUrl}/billing`,
+    success_url: `${appUrl}/settings/billing?success=true`,
+    cancel_url: `${appUrl}/settings/billing`,
     metadata: { userId: session.user.id },
     subscription_data: { metadata: { userId: session.user.id } },
   });

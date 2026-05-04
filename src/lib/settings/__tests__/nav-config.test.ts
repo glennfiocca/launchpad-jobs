@@ -23,14 +23,15 @@ describe("SETTINGS_NAV", () => {
     expect(security?.comingSoon).toBe(true);
   });
 
-  it("flags Billing as disabled + comingSoon (Phase 2)", () => {
+  it("Billing is enabled and points at /settings/billing (Phase 2)", () => {
     const billing = SETTINGS_NAV.find((i) => i.label === "Billing");
-    expect(billing?.disabled).toBe(true);
-    expect(billing?.comingSoon).toBe(true);
+    expect(billing?.disabled).toBeFalsy();
+    expect(billing?.comingSoon).toBeFalsy();
+    expect(billing?.href).toBe("/settings/billing");
   });
 
-  it("Notifications, Referrals, Privacy are enabled in Phase 1", () => {
-    for (const label of ["Notifications", "Referrals", "Privacy & data"]) {
+  it("Notifications, Billing, Referrals, Privacy are enabled in Phase 2", () => {
+    for (const label of ["Notifications", "Billing", "Referrals", "Privacy & data"]) {
       const item = SETTINGS_NAV.find((i) => i.label === label);
       expect(item?.disabled).toBeFalsy();
     }
@@ -47,5 +48,9 @@ describe("SETTINGS_NAV", () => {
   it("hrefs are unique", () => {
     const hrefs = SETTINGS_NAV.map((i) => i.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+
+  it("exactly one row is disabled in Phase 2 (Security)", () => {
+    expect(SETTINGS_NAV.filter((i) => i.disabled).length).toBe(1);
   });
 });

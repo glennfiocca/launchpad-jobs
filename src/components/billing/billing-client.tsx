@@ -98,12 +98,7 @@ export function BillingClient({
   );
 
   return (
-    <div className="py-10 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-1 text-center">Billing</h1>
-      <p className="text-sm text-zinc-500 mb-8 text-center">
-        Manage your plan and application credits.
-      </p>
-
+    <div className="space-y-4">
       {/* Success banner */}
       {justUpgraded && (
         <div className="flex items-center gap-3 rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-3 mb-6">

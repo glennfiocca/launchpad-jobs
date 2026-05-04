@@ -100,7 +100,7 @@ export function UserSidebar() {
       <div className="px-4 pb-2 space-y-1 shrink-0">
         {session && (
           <>
-            <Link href="/billing" className={VIOLET_PILL_CLASS}>
+            <Link href="/settings/billing" className={VIOLET_PILL_CLASS}>
               <BaseballBatIcon className="w-4 h-4" />
               Go Pro
             </Link>

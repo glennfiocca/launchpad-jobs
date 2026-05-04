@@ -82,10 +82,10 @@ export function Navbar() {
                 </motion.div>
                 <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>
                   <Link
-                    href="/billing"
+                    href="/settings/billing"
                     className={cn(
                       "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                      pathname === "/billing"
+                      pathname === "/settings/billing"
                         ? "text-white relative after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-gradient-to-r after:from-indigo-500 after:to-blue-500 after:rounded-full"
                         : "text-zinc-400 hover:text-white hover:bg-white/5"
                     )}

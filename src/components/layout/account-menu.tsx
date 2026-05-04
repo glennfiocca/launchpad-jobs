@@ -29,7 +29,7 @@ interface MenuItem {
 const MENU_ITEMS: ReadonlyArray<MenuItem> = [
   { href: "/settings", label: "Account", icon: User },
   { href: "/settings/notifications", label: "Notifications", icon: Bell },
-  { href: "/billing", label: "Billing", icon: CreditCard },
+  { href: "/settings/billing", label: "Billing", icon: CreditCard },
   { href: "/settings/referrals", label: "Referrals", icon: Gift },
 ];
 

@@ -43,7 +43,7 @@ function CheckoutFormInner({
       const result = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: window.location.origin + "/billing?success=true",
+          return_url: window.location.origin + "/settings/billing?success=true",
         },
         redirect: "if_required",
       })

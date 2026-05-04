@@ -36,8 +36,6 @@ export const SETTINGS_NAV: ReadonlyArray<SettingsNavItem> = [
     label: "Billing",
     href: "/settings/billing",
     icon: CreditCard,
-    disabled: true,
-    comingSoon: true,
   },
   {
     label: "Referrals",

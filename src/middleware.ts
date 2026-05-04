@@ -131,8 +131,10 @@ export const config = {
     "/auth/signin",
     "/dashboard/:path*",
     "/profile/:path*",
+    "/billing",
     "/billing/:path*",
     "/admin/:path*",
+    "/settings",
     "/settings/:path*",
     // API routes for rate limiting
     "/api/:path*",

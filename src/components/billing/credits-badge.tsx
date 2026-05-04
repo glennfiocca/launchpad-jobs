@@ -50,7 +50,7 @@ export function CreditsBadge() {
     return (
       <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>
         <Link
-          href="/billing"
+          href="/settings/billing"
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors"
         >
           <Zap className="w-3.5 h-3.5 fill-indigo-400" />
@@ -77,7 +77,7 @@ export function CreditsBadge() {
   return (
     <div className="relative" onMouseEnter={showTooltip} onMouseLeave={hideTooltip}>
       <Link
-        href="/billing"
+        href="/settings/billing"
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
           isLow
@@ -112,7 +112,7 @@ export function CreditsBadge() {
             </p>
           )}
           <Link
-            href="/billing"
+            href="/settings/billing"
             onClick={() => setTooltipVisible(false)}
             className="mt-1.5 block text-indigo-400 hover:text-indigo-300 transition-colors"
           >

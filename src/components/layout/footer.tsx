@@ -92,6 +92,14 @@ export function Footer() {
                 </li>
                 <li>
                   <Link
+                    href="/terms"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/privacy"
                     className="text-sm text-zinc-400 hover:text-white transition-colors"
                   >
@@ -173,6 +181,9 @@ export function CompactSiteFooter() {
             {/* Always rendered (auth-agnostic) — referenced from the public Terms of Service. */}
             <Link href="/contact" className={compactLinkClass}>
               Contact
+            </Link>
+            <Link href="/terms" className={compactLinkClass}>
+              Terms
             </Link>
             <Link href="/privacy" className={compactLinkClass}>
               Privacy

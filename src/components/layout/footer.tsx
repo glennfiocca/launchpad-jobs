@@ -90,6 +90,22 @@ export function Footer() {
                     Contact
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href="/privacy"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/privacy/do-not-sell"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Do Not Sell or Share
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
@@ -157,6 +173,9 @@ export function CompactSiteFooter() {
             {/* Always rendered (auth-agnostic) — referenced from the public Terms of Service. */}
             <Link href="/contact" className={compactLinkClass}>
               Contact
+            </Link>
+            <Link href="/privacy" className={compactLinkClass}>
+              Privacy
             </Link>
           </nav>
         </div>

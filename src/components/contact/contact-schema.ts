@@ -16,7 +16,10 @@ export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
 
 export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   general: "General question",
-  privacy: "Privacy concern",
+  // Covers both general privacy concerns AND specific data-rights requests
+  // (access / correction / deletion) per GDPR/CCPA. Backend value stays
+  // "privacy" so existing rows and email routing are unaffected.
+  privacy: "Privacy or data rights request",
   account: "Account issue",
   bug: "Bug report",
   other: "Other",

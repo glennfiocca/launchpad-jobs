@@ -5,7 +5,11 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobsQuerySchema, datePostedToCutoff } from "@/lib/validations/jobs";
 import { buildFacets } from "@/lib/job-facets";
-import { buildRelevanceOrder, buildBlendedRelevanceOrder } from "@/lib/job-relevance";
+import {
+  buildRelevanceOrder,
+  buildBlendedRelevanceOrder,
+  hasProfileSignals,
+} from "@/lib/job-relevance";
 import type { RelevanceProfile } from "@/lib/job-relevance";
 import type { ApiResponse, JobWithCompany } from "@/types";
 
@@ -50,9 +54,20 @@ export async function GET(request: Request) {
   const isFirstPage = page === 1;
   const dateCutoff = datePostedToCutoff(datePosted);
 
-  // Fetch user profile for relevance scoring
+  // Fetch user profile for relevance scoring.
+  //
+  // Gated on (sort === "relevance" || hasFtsQuery) && page === 1:
+  //   - Page 2+ of non-FTS relevance falls back to "newest" anyway (see Path B
+  //     short-circuit below), so profile signals are unused.
+  //   - Page 2+ of FTS+relevance falls back to plain ts_rank DESC (text-only),
+  //     matching the unauthenticated branch already in that path.
+  //   - "newest" sort never needs the profile.
+  // This skips a UserProfile lookup on every infinite-scroll page-2+ hit.
   let relevanceProfile: RelevanceProfile | null = null;
-  if (sort === "relevance") {
+  const hasFtsQuery = !!query;
+  const profileFetchNeeded =
+    isFirstPage && (sort === "relevance" || hasFtsQuery);
+  if (profileFetchNeeded) {
     const session = await getServerSession(authOptions);
     if (session?.user?.id) {
       const profile = await db.userProfile.findUnique({
@@ -193,8 +208,22 @@ export async function GET(request: Request) {
     });
   }
 
-  // Non-FTS relevance path: profile-based scoring via raw SQL
-  if (sort === "relevance" && relevanceProfile) {
+  // Non-FTS relevance path: profile-based scoring via raw SQL.
+  //
+  // Two gating wins folded into one condition:
+  //   1. Skip relevance entirely on page 2+ of infinite scroll. Pagination
+  //      boundaries get a mild ranking discontinuity, but the latency win is
+  //      large and aligns with how scroll users perceive ordering.
+  //   2. Skip relevance when the profile lacks structural signals. The
+  //      previous fallback inside `buildRelevanceOrder` already returned
+  //      `createdAt DESC` in that case — falling through here is identical
+  //      and avoids the extra raw-SQL roundtrip.
+  if (
+    sort === "relevance" &&
+    isFirstPage &&
+    relevanceProfile &&
+    hasProfileSignals(relevanceProfile)
+  ) {
     const relevanceOrder = buildRelevanceOrder(relevanceProfile);
 
     const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];

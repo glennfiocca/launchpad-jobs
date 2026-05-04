@@ -51,17 +51,7 @@ function buildProfileScoreParts(profile: RelevanceProfile): Prisma.Sql[] {
     );
   }
 
-  // -- 3. Professional identity match (ts_rank * 40) --
-  const identityParts = [profile.currentTitle, profile.fieldOfStudy]
-    .filter((s): s is string => !!s && s.trim().length > 0);
-  if (identityParts.length > 0) {
-    const profileText = identityParts.join(" ");
-    parts.push(
-      Prisma.sql`ts_rank(j."searchVector", plainto_tsquery('english', ${profileText})) * 40`
-    );
-  }
-
-  // -- 4. Salary overlap (up to 20 pts: 10 per bound) --
+  // -- 3. Salary overlap (up to 20 pts: 10 per bound) --
   if (profile.desiredSalaryMin !== null) {
     parts.push(
       Prisma.sql`CASE WHEN j."salaryMax" >= ${profile.desiredSalaryMin} THEN 10 ELSE 0 END`
@@ -73,23 +63,29 @@ function buildProfileScoreParts(profile: RelevanceProfile): Prisma.Sql[] {
     );
   }
 
-  // -- 5. Recency boost (up to 15 pts) --
+  // -- 4. Recency boost (up to 15 pts) --
   parts.push(RECENCY_BOOST);
 
   return parts;
 }
 
-/** True when the profile has at least one non-null / non-default signal. */
-function hasProfileSignals(profile: RelevanceProfile): boolean {
-  return (
-    !!profile.locationCity ||
-    !!profile.locationState ||
+/**
+ * True when the profile has at least one signal that drives ranking.
+ *
+ * Note: only structural signals count here — `currentTitle`/`fieldOfStudy`
+ * were removed because their per-row `ts_rank` evaluation was the dominant
+ * cost on `sort=relevance`. They remain on `RelevanceProfile` because the
+ * Prisma query selects them; they are simply ignored by scoring.
+ */
+export function hasProfileSignals(profile: RelevanceProfile | null): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.locationCity ||
+    profile.locationState ||
     profile.openToRemote ||
     profile.openToOnsite ||
-    !!profile.currentTitle ||
-    !!profile.fieldOfStudy ||
-    profile.desiredSalaryMin !== null ||
-    profile.desiredSalaryMax !== null
+    profile.desiredSalaryMin != null ||
+    profile.desiredSalaryMax != null
   );
 }
 

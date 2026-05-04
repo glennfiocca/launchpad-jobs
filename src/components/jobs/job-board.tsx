@@ -46,6 +46,10 @@ export function JobBoard() {
   const isFetchingRef = useRef(false);
   const hasMoreRef = useRef(false);
   const hasAnimatedRef = useRef(false);
+  // AbortController for the in-flight /api/jobs fetch. When filters change
+  // mid-flight we abort the prior request so its `finally` cleanup does not
+  // stomp the new fetch's `loading`/`loadingMore` flags.
+  const abortRef = useRef<AbortController | null>(null);
 
   const hasMore = jobs.length < total;
   hasMoreRef.current = hasMore;
@@ -66,6 +70,12 @@ export function JobBoard() {
 
   const fetchJobs = useCallback(
     async (f: typeof filters, p: number, replace: boolean) => {
+      // Cancel any in-flight fetch — its result is now stale. The aborted
+      // request's catch handler short-circuits before touching shared state.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       if (replace) setLoading(true);
       else setLoadingMore(true);
 
@@ -85,7 +95,7 @@ export function JobBoard() {
       if (f.sort) params.set("sort", f.sort);
 
       try {
-        const res = await fetch(`/api/jobs?${params}`);
+        const res = await fetch(`/api/jobs?${params}`, { signal: controller.signal });
         const data: ApiResponse<JobWithCompany[]> = await res.json();
         if (data.success && data.data) {
           const newTotal = data.meta?.total ?? 0;
@@ -111,13 +121,22 @@ export function JobBoard() {
           setTotal(newTotal);
           if (data.meta?.facets) setFacets(data.meta.facets);
         }
-      } catch {
-        // non-fatal
+      } catch (err) {
+        // Aborted by a newer fetch — that fetch now owns the loading flags.
+        // We must NOT touch isFetchingRef/loading/loadingMore here, otherwise
+        // we would clobber the in-flight request's state.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        // non-fatal: leave previous list intact
       } finally {
-        isFetchingRef.current = false;
-        if (replace) setLoading(false);
-        else setLoadingMore(false);
-        recheckSentinel();
+        // Only the controller that is still current is allowed to clear flags.
+        // An aborted older controller has already short-circuited above; this
+        // guard is defense-in-depth for the success path arriving after abort.
+        if (abortRef.current === controller) {
+          isFetchingRef.current = false;
+          if (replace) setLoading(false);
+          else setLoadingMore(false);
+          recheckSentinel();
+        }
       }
     },
     [recheckSentinel]
@@ -154,6 +173,9 @@ export function JobBoard() {
 
   useEffect(() => {
     isFetchingRef.current = false;
+    // Clear any lingering bottom-spinner state from a prior in-flight
+    // append — the new full-list fetch's centered spinner takes over.
+    setLoadingMore(false);
     setPage(1);
     fetchJobs(filtersRef.current, 1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,7 +377,7 @@ export function JobBoard() {
           )}
 
           <div ref={sentinelRef} className="py-4 flex justify-center">
-            {loadingMore && (
+            {!loading && loadingMore && (
               <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
             )}
             {!loading && !loadingMore && !hasMore && jobs.length > 0 && (

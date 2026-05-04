@@ -5,6 +5,20 @@ import { db } from "../db";
 import { generateUniquePublicJobId } from "../public-job-id";
 import { createNotification } from "../notifications";
 import { enrichCompanyLogo } from "../logo-enrichment";
+import { notifyIndexNow } from "../seo/indexnow";
+import { VALIDITY_WINDOW_DAYS } from "@/config/seo";
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://trypipeline.ai").replace(/\/$/, "");
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Compute a fresh validThrough timestamp. Called on every successful upsert so
+// each re-sync extends the JobPosting validity window. When upstream stops
+// returning a job, isActive flips false and validThrough is left to lapse —
+// that lapse is the signal to Google + downstream consumers.
+function nextValidThrough(): Date {
+  return new Date(Date.now() + VALIDITY_WINDOW_DAYS * MS_PER_DAY);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,6 +124,8 @@ export async function syncBoard(
 
   // 4. Upsert each job
   const activeExternalIds = new Set<string>();
+  // Collect publicJobIds for IndexNow notification at end of run.
+  const newPublicJobIds: string[] = [];
 
   for (const normalizedJob of jobs) {
     activeExternalIds.add(normalizedJob.externalId);
@@ -149,6 +165,7 @@ export async function syncBoard(
           where: { id: existing.id },
           data: {
             ...updateData,
+            validThrough: nextValidThrough(),
             ...(!existing.publicJobId
               ? { publicJobId: await generateUniquePublicJobId() }
               : {}),
@@ -156,14 +173,17 @@ export async function syncBoard(
         });
         result.jobsUpdated++;
       } else {
+        const publicJobId = await generateUniquePublicJobId();
         await db.job.create({
           data: {
             ...jobData,
             externalId: normalizedJob.externalId,
             companyId: company.id,
-            publicJobId: await generateUniquePublicJobId(),
+            publicJobId,
+            validThrough: nextValidThrough(),
           },
         });
+        newPublicJobIds.push(publicJobId);
         result.jobsAdded++;
       }
     } catch (err) {
@@ -174,6 +194,18 @@ export async function syncBoard(
   }
 
   // 5. Deactivate jobs no longer in listing
+  // Snapshot the rows we're about to deactivate so we can both notify
+  // IndexNow about the expirations and downstream-update affected applications.
+  const expiringJobs = await db.job.findMany({
+    where: {
+      boardToken,
+      provider,
+      isActive: true,
+      externalId: { notIn: Array.from(activeExternalIds) },
+    },
+    select: { id: true, publicJobId: true },
+  });
+
   const deactivated = await db.job.updateMany({
     where: {
       boardToken,
@@ -185,19 +217,13 @@ export async function syncBoard(
   });
   result.jobsDeactivated = deactivated.count;
 
+  const expiredPublicJobIds = expiringJobs
+    .map((j) => j.publicJobId)
+    .filter((id): id is string => Boolean(id));
+
   // 6. Mark active applications on removed listings as LISTING_REMOVED
   if (deactivated.count > 0) {
-    const removedJobs = await db.job.findMany({
-      where: {
-        boardToken,
-        provider,
-        isActive: false,
-        externalId: { notIn: Array.from(activeExternalIds) },
-      },
-      select: { id: true },
-    });
-
-    const removedJobIds = removedJobs.map((j) => j.id);
+    const removedJobIds = expiringJobs.map((j) => j.id);
 
     const affectedApplications = await db.application.findMany({
       where: {
@@ -251,6 +277,18 @@ export async function syncBoard(
         );
       }
     }
+  }
+
+  // 7. Notify IndexNow of new + expired URLs (fire-and-forget).
+  // Bing/Yandex/Naver/Seznam pick this up within minutes; Google ignores
+  // IndexNow and uses the sitemap. notifyIndexNow swallows all errors and
+  // no-ops when INDEXNOW_KEY is unset, so this never fails the sync.
+  const changedUrls = [
+    ...newPublicJobIds.map((id) => `${APP_URL}/jobs/${id}`),
+    ...expiredPublicJobIds.map((id) => `${APP_URL}/jobs/${id}`),
+  ];
+  if (changedUrls.length > 0) {
+    notifyIndexNow(changedUrls).catch(() => undefined);
   }
 
   return result;

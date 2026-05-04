@@ -1,0 +1,145 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Concurrency: cancel in-progress runs on the same branch when a new push lands.
+# Saves CI minutes; the only run that matters is the latest commit.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: launchpad_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Centralized env block — every step that runs the app code (migrate, seed,
+    # build, start, test) inherits this. Values are intentionally throwaway:
+    # never put a real secret here. Production secrets live in DO App Platform.
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/launchpad_e2e?sslmode=disable&connection_limit=10
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/launchpad_e2e?sslmode=disable&connection_limit=10
+      NEXTAUTH_SECRET: test-secret-do-not-use
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_NAME: Pipeline
+      # Resend — never actually sends in CI; values just satisfy module-load reads.
+      RESEND_API_KEY: re_test_dummy
+      RESEND_FROM_EMAIL: noreply@example.com
+      RESEND_INBOUND_DOMAIN: track.example.com
+      RESEND_INBOUND_SECRET: test-inbound-secret
+      # Anthropic — lazy client, never called in E2E flows.
+      ANTHROPIC_API_KEY: sk-ant-test-dummy
+      # DO Spaces — resume uploads stubbed in tests.
+      DO_SPACES_KEY: test-key
+      DO_SPACES_SECRET: test-secret
+      DO_SPACES_BUCKET: test-bucket
+      DO_SPACES_REGION: nyc3
+      # Stripe — lazy client, billing flows stubbed in tests.
+      STRIPE_SECRET_KEY: sk_test_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_test_dummy
+      STRIPE_PRICE_ID: price_test_dummy
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+      # Misc app secrets — signing keys for tokens. Throwaway in CI.
+      EMAIL_UNSUBSCRIBE_SECRET: ci-unsubscribe-secret
+      APPLICATION_FILL_PACKAGE_SECRET: ci-fill-package-secret
+      CRON_SECRET: ci-cron-secret
+      GOOGLE_PLACES_API_KEY: ""
+      OPERATOR_QUEUE_CODES: ""
+      # Sentry — explicit empty disables init. No source-map upload in CI.
+      SENTRY_DSN: ""
+      NEXT_PUBLIC_SENTRY_DSN: ""
+      # Test-only auth bypass shared between seed script and signin endpoint.
+      TEST_AUTH_SECRET: ci-test-secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Cache the Playwright browser binaries — without this, each run pulls
+      # ~150MB. With it, install is a no-op when package-lock.json hasn't moved.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # System deps (libnss3, libgbm1, etc.) aren't cached and must be installed
+      # on every run when the binary cache hits — otherwise Chromium fails to
+      # launch with cryptic shared-library errors.
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Apply database schema
+        run: npx prisma migrate deploy
+
+      - name: Seed E2E fixture
+        run: npm run db:seed:e2e
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Start server
+        run: |
+          npm run start &
+          npx wait-on http://localhost:3000 --timeout 120000
+        env:
+          PORT: "3000"
+
+      - name: Run Playwright tests
+        run: npm run e2e
+        env:
+          BASE_URL: http://localhost:3000
+
+      # On failure, surface the HTML report + traces as a downloadable artifact
+      # so the diff between local and CI is debuggable without re-running.
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload test results (traces, screenshots, videos)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 14

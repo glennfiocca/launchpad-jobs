@@ -5,6 +5,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ProgressBar } from "@/components/layout/progress-bar";
 import { Toaster } from "sonner";
+import { isGpcRequest } from "@/lib/gpc/detect";
 
 // Plausible stub-and-init snippet. Queues `plausible(...)` calls until the
 // main script loads, then forwards them. `plausible.init()` triggers the
@@ -19,17 +20,20 @@ export const metadata: Metadata = {
   description: "Apply to top tech jobs in one click. Track your applications, communicate with recruiters, and land your dream job.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const isProd = process.env.NODE_ENV === "production";
+  // Suppress non-essential analytics when the user's browser sends the
+  // Global Privacy Control signal (CCPA/CPRA universal opt-out).
+  const gpc = await isGpcRequest();
 
   return (
     <html lang="en" className="dark">
       <head>
-        {isProd && (
+        {isProd && !gpc && (
           <>
             <Script
               src="https://plausible.io/js/pa-zA1aaVPKsRXRJSlqj8x09.js"

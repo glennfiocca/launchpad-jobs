@@ -94,6 +94,12 @@ model User {
   // version and treats mismatched tokens as expired.
   tokenVersion Int @default(0)
 
+  // CCPA/CPRA universal opt-out. Set to true when an authenticated user's
+  // request carries `Sec-GPC: 1` (Global Privacy Control). One-way in v1 —
+  // never automatically reverted; the user must explicitly opt back in via
+  // a future UI. Honored as the legal "Do Not Sell or Share" signal.
+  gpcOptOut Boolean @default(false)
+
   role      Role     @default(USER)
 
   // Billing

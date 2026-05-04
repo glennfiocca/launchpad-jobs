@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { UserSidebar } from "@/components/layout/user-sidebar";
 import { CompactSiteFooter } from "@/components/layout/footer";
+import { GpcPinger } from "@/components/gpc/gpc-pinger";
 
 export default async function DashboardLayout({
   children,
@@ -19,6 +20,8 @@ export default async function DashboardLayout({
         <div className="h-full overflow-hidden min-h-0">{children}</div>
         <CompactSiteFooter />
       </main>
+      {/* Records GPC opt-out once per browser session for authed users. */}
+      <GpcPinger />
     </div>
   );
 }

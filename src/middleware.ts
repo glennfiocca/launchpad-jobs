@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
+import { GPC_PROPAGATED, readGpcFromRequest } from "@/lib/gpc/detect"
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -50,8 +51,17 @@ function getRateLimitTier(path: string): keyof typeof RATE_LIMITS | null {
 }
 
 export async function middleware(req: NextRequest) {
-  const response = NextResponse.next()
   const path = req.nextUrl.pathname
+
+  // ─── GPC propagation ───────────────────────────────────────────────────────
+  // Propagate the GPC signal to downstream server components. Server components
+  // read this via @/lib/gpc/detect#isGpcRequest. The header is renamed to a
+  // non-spec name (x-pipeline-gpc) to avoid any future Sec-* CORS confusion.
+  const gpc = readGpcFromRequest(req)
+  const requestHeaders = new Headers(req.headers)
+  if (gpc) requestHeaders.set(GPC_PROPAGATED, "1")
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
 
   // ─── Rate limiting (API routes only) ────────────────────────────────────────
   if (path.startsWith("/api/")) {

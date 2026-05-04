@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import {
   applicationConfirmationEmail,
+  contactFormAdminEmail,
   emailChangeNoticeEmail,
   emailChangeVerifyEmail,
   instantNotificationEmail,
@@ -20,6 +21,62 @@ function getResend() {
 
 export const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "noreply@trypipeline.ai";
 export const INBOUND_DOMAIN = process.env.RESEND_INBOUND_DOMAIN ?? "track.trypipeline.ai";
+
+// Default destination for /contact submissions. Overridable via env so we can
+// route privacy-tagged messages to a separate inbox later without a deploy.
+const CONTACT_FORM_FALLBACK = "support@trypipeline.ai";
+
+export interface SendContactFormToAdminPayload {
+  name: string;
+  email: string;
+  category: string;
+  pageUrl?: string;
+  message: string;
+  ipAddress?: string;
+  userId?: string;
+  createdAt: Date;
+}
+
+export interface SendContactFormToAdminResult {
+  ok: boolean;
+  error?: string;
+}
+
+// Dispatch a /contact submission to the support inbox.
+// Returns a result object instead of throwing — the caller decides whether
+// to mark the row's deliveredAt. Reply-To is set to the submitter so admins
+// can reply directly from their inbox without copying the address out.
+export async function sendContactFormToAdmin(
+  payload: SendContactFormToAdminPayload,
+): Promise<SendContactFormToAdminResult> {
+  const adminEmail =
+    process.env.CONTACT_FORM_TO?.trim() || CONTACT_FORM_FALLBACK;
+
+  const { subject, html, text } = contactFormAdminEmail(payload);
+
+  try {
+    const result = await getResend().emails.send({
+      from: FROM_ADDRESS,
+      to: [adminEmail],
+      replyTo: payload.email,
+      subject,
+      html,
+      text,
+    });
+
+    // Resend SDK returns { data, error } — `error` is non-null on failure.
+    const sdkError = (result as { error?: { message?: string } | null }).error;
+    if (sdkError) {
+      return { ok: false, error: sdkError.message ?? "send failed" };
+    }
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "send threw",
+    };
+  }
+}
 
 // Send application confirmation email
 // Note: transactional — no unsubscribe headers per spec.

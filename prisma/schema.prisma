@@ -128,8 +128,34 @@ model User {
   jobReports             JobReport[]
   emailChangeRequests    EmailChangeRequest[]
   loginEvents            LoginEvent[]
+  contactMessages        ContactMessage[]
 
   @@index([deletedAt])
+}
+
+// Public contact-form submissions from /contact. Persisted before the email
+// dispatch so messages are never lost if Resend is unavailable — admins can
+// sweep WHERE deliveredAt IS NULL to retry. Auth-optional: anyone can submit.
+// FK uses SetNull (not Cascade) so privacy-related submissions outlive an
+// account deletion for legal/audit purposes.
+model ContactMessage {
+  id          String   @id @default(cuid())
+  name        String
+  email       String
+  // App-validated enum: general | privacy | account | bug | other
+  category    String
+  pageUrl     String?
+  message     String   @db.Text
+  ipAddress   String?
+  userAgent   String?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  deliveredAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([category])
+  @@index([userId])
 }
 
 // Append-only sign-in audit trail. One row per successful authentication.

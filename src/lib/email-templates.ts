@@ -69,6 +69,22 @@ export interface StatusUpdateEmailParams {
   unsubscribeUrl?: string;
 }
 
+export interface ContactFormAdminEmailParams {
+  name: string;
+  email: string;
+  category: string;
+  pageUrl?: string;
+  message: string;
+  ipAddress?: string;
+  userId?: string;
+  createdAt: Date;
+}
+
+export interface ContactFormAdminEmailResult extends EmailResult {
+  /** Plaintext fallback for clients that prefer text/plain over HTML. */
+  text: string;
+}
+
 // ---- Utilities (self-contained) -------------------------------------------
 
 function escapeHtml(str: string): string {
@@ -431,6 +447,107 @@ export function notificationDigestEmail(
       settingsUrl: `${APP_URL}/settings/notifications`,
       unsubscribeUrl,
     }),
+  };
+}
+
+// Admin-facing notification for a /contact form submission.
+// HTML body is built entirely from `escapeHtml`-wrapped values — never inline
+// raw user input into a template literal. Plaintext fallback is for clients
+// that prefer text/plain (most modern clients prefer HTML when both exist).
+export function contactFormAdminEmail(
+  params: ContactFormAdminEmailParams,
+): ContactFormAdminEmailResult {
+  const {
+    name,
+    email,
+    category,
+    pageUrl,
+    message,
+    ipAddress,
+    userId,
+    createdAt,
+  } = params;
+
+  const safeSubject = `[Pipeline contact / ${category}] ${name}`.replace(
+    /[\r\n]+/g,
+    " ",
+  );
+  const isoTimestamp = createdAt.toISOString();
+
+  // Render the message as escaped HTML with line breaks preserved.
+  const messageHtml = escapeHtml(message).replace(/\n/g, "<br />");
+
+  const pageUrlBlock = pageUrl
+    ? `
+        <tr>
+          <td style="padding: 6px 0; font-size: 13px; color: #64748b; width: 100px; vertical-align: top;">Page URL</td>
+          <td style="padding: 6px 0; font-size: 13px; color: #0f172a; vertical-align: top;">
+            <a href="${escapeHtml(pageUrl)}" style="color: #2563eb; text-decoration: underline; word-break: break-all;">${escapeHtml(pageUrl)}</a>
+          </td>
+        </tr>`
+    : "";
+
+  const triageRows = [
+    userId ? `User ID: ${escapeHtml(userId)}` : "User ID: (anonymous)",
+    ipAddress ? `IP: ${escapeHtml(ipAddress)}` : "IP: (unknown)",
+    `Received: ${escapeHtml(isoTimestamp)}`,
+  ].join(" &middot; ");
+
+  const content = `
+    <h1 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+      New /contact submission
+    </h1>
+    <p style="margin: 0 0 24px 0; color: #475569; font-size: 14px;">
+      Reply directly to this email to respond — Reply-To is set to the sender's address.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px;">
+      <tr>
+        <td style="padding: 6px 0; font-size: 13px; color: #64748b; width: 100px; vertical-align: top;">From</td>
+        <td style="padding: 6px 0; font-size: 13px; color: #0f172a; vertical-align: top;">
+          <strong>${escapeHtml(name)}</strong>
+          &lt;<a href="mailto:${escapeHtml(email)}" style="color: #2563eb; text-decoration: underline;">${escapeHtml(email)}</a>&gt;
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 0; font-size: 13px; color: #64748b; width: 100px; vertical-align: top;">Category</td>
+        <td style="padding: 6px 0; font-size: 13px; color: #0f172a; vertical-align: top;">${escapeHtml(category)}</td>
+      </tr>
+      ${pageUrlBlock}
+    </table>
+
+    <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 20px;">
+      <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Message</p>
+      <p style="margin: 0; font-size: 14px; color: #0f172a; line-height: 1.55; white-space: pre-wrap;">${messageHtml}</p>
+    </div>
+
+    <p style="margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+      ${triageRows}
+    </p>`;
+
+  // Plaintext fallback — keep all values escaped/clean of CR/LF for header safety.
+  const text = [
+    `New /contact submission`,
+    ``,
+    `From: ${name} <${email}>`,
+    `Category: ${category}`,
+    pageUrl ? `Page URL: ${pageUrl}` : null,
+    ``,
+    `Message:`,
+    message,
+    ``,
+    `--`,
+    `User ID: ${userId ?? "(anonymous)"}`,
+    `IP: ${ipAddress ?? "(unknown)"}`,
+    `Received: ${isoTimestamp}`,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+
+  return {
+    subject: safeSubject,
+    html: baseLayout(content),
+    text,
   };
 }
 

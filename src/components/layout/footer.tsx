@@ -30,49 +30,68 @@ export function Footer() {
             </p>
           </div>
 
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
-              Product
-            </h3>
-            <ul className="space-y-3">
-              <li>
-                <Link
-                  href="/jobs"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Browse jobs
-                </Link>
-              </li>
-              {session ? (
-                <>
-                  <li>
-                    <Link
-                      href="/dashboard"
-                      className="text-sm text-zinc-400 hover:text-white transition-colors"
-                    >
-                      Dashboard
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/profile"
-                      className="text-sm text-zinc-400 hover:text-white transition-colors"
-                    >
-                      Profile
-                    </Link>
-                  </li>
-                </>
-              ) : (
+          <div className="flex flex-col gap-10 sm:flex-row sm:gap-16">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
+                Product
+              </h3>
+              <ul className="space-y-3">
                 <li>
                   <Link
-                    href="/auth/signin"
+                    href="/jobs"
                     className="text-sm text-zinc-400 hover:text-white transition-colors"
                   >
-                    Sign in
+                    Browse jobs
                   </Link>
                 </li>
-              )}
-            </ul>
+                {session ? (
+                  <>
+                    <li>
+                      <Link
+                        href="/dashboard"
+                        className="text-sm text-zinc-400 hover:text-white transition-colors"
+                      >
+                        Dashboard
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        href="/profile"
+                        className="text-sm text-zinc-400 hover:text-white transition-colors"
+                      >
+                        Profile
+                      </Link>
+                    </li>
+                  </>
+                ) : (
+                  <li>
+                    <Link
+                      href="/auth/signin"
+                      className="text-sm text-zinc-400 hover:text-white transition-colors"
+                    >
+                      Sign in
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            {/* Support — rendered for both authenticated and anonymous users. */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
+                Support
+              </h3>
+              <ul className="space-y-3">
+                <li>
+                  <Link
+                    href="/contact"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Contact
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -135,6 +154,10 @@ export function CompactSiteFooter() {
                 Sign in
               </Link>
             )}
+            {/* Always rendered (auth-agnostic) — referenced from the public Terms of Service. */}
+            <Link href="/contact" className={compactLinkClass}>
+              Contact
+            </Link>
           </nav>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 text-xs text-zinc-600">

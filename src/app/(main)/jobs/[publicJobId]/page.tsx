@@ -4,6 +4,7 @@ import { getJobByPublicId } from "@/lib/jobs/get-job";
 import { JobDetail } from "@/components/jobs/JobDetail";
 import { buildJobMetadata } from "@/lib/seo/job-metadata";
 import { buildJobPostingJsonLd } from "@/lib/seo/job-jsonld";
+import { escapeJsonLd } from "@/lib/seo/json-ld-escape";
 
 // ISR: serve from cache for an hour, regenerate in the background after.
 export const dynamic = "force-static";
@@ -41,9 +42,10 @@ export default async function JobPage({ params }: JobPageProps) {
     notFound();
   }
 
-  // schema.org JobPosting block. Using dangerouslySetInnerHTML is the
-  // documented Next.js pattern for emitting raw JSON-LD without HTML escaping.
-  const jsonLd = JSON.stringify(buildJobPostingJsonLd(job));
+  // schema.org JobPosting block. escapeJsonLd guards against `</script>`
+  // injection from job titles or HTML descriptions (real-world XSS vector
+  // — Greenhouse/Ashby code-sample postings often contain literal </script>).
+  const jsonLd = escapeJsonLd(buildJobPostingJsonLd(job));
 
   return (
     <>

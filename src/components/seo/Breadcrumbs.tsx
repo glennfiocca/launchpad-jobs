@@ -4,6 +4,7 @@ import {
   buildBreadcrumbListJsonLd,
   type BreadcrumbItem,
 } from "@/lib/seo/breadcrumb-jsonld";
+import { escapeJsonLd } from "@/lib/seo/json-ld-escape";
 
 interface BreadcrumbsProps {
   items: ReadonlyArray<BreadcrumbItem>;
@@ -63,8 +64,9 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
       </nav>
       <script
         type="application/ld+json"
-        // Server-rendered, no user input — JSON.stringify output is safe.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        // item.label can contain user-controlled content (e.g. a job title)
+        // — escape `</script>` and friends to prevent script-tag breakout.
+        dangerouslySetInnerHTML={{ __html: escapeJsonLd(jsonLd) }}
       />
     </>
   );

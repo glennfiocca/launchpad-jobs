@@ -19,6 +19,10 @@
     "db:seed-universities": "tsx prisma/seed-universities.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:install": "playwright install chromium --with-deps",
+    "e2e:report": "playwright show-report",
     "discover-boards": "tsx scripts/discovery/run-discovery.ts"
   },
   "dependencies": {
@@ -74,6 +78,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/d3-sankey": "^0.12.5",
     "@types/node": "^20",

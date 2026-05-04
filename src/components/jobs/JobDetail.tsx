@@ -1,9 +1,13 @@
 import Image from "next/image";
+import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { MapPin, Briefcase, Wifi, DollarSign, Building2 } from "lucide-react";
 import DOMPurify from "isomorphic-dompurify";
 import { JobApplyButton } from "@/components/jobs/JobApplyButton";
+import { RelatedJobs } from "@/components/jobs/RelatedJobs";
+import { Breadcrumbs } from "@/components/seo/Breadcrumbs";
 import type { JobWithCompany } from "@/lib/jobs/get-job";
+import type { BreadcrumbItem } from "@/lib/seo/breadcrumb-jsonld";
 
 interface JobDetailProps {
   job: JobWithCompany;
@@ -44,8 +48,26 @@ export function JobDetail({ job }: JobDetailProps) {
   const posted = postedLabel(job.postedAt ?? job.createdAt ?? null);
   const hasSalary = job.salaryMin !== null && job.salaryMax !== null;
 
+  // Build breadcrumb trail: Home → Jobs → [Department?] → Title.
+  // Trailing crumb is the current page (no href).
+  const breadcrumbs: BreadcrumbItem[] = [
+    { label: "Home", href: "/" },
+    { label: "Jobs", href: "/jobs" },
+    ...(job.department
+      ? [
+          {
+            label: job.department,
+            href: `/jobs?department=${encodeURIComponent(job.department)}`,
+          },
+        ]
+      : []),
+    { label: job.title },
+  ];
+
   return (
     <article className="max-w-3xl mx-auto py-8 px-4 text-zinc-100">
+      <Breadcrumbs items={breadcrumbs} />
+
       {/* Closed banner — rendered above-the-fold for closed listings */}
       {!job.isActive && (
         <div
@@ -83,7 +105,17 @@ export function JobDetail({ job }: JobDetailProps) {
             </div>
           )}
           <div className="min-w-0">
-            <p className="text-sm text-zinc-400 mb-1">{company.name}</p>
+            <p className="text-sm text-zinc-400 mb-1">
+              {/* Internal link → company hub. Sends link equity from the
+                  detail page to /companies/{slug} and gives Google a clear
+                  topical cluster. */}
+              <Link
+                href={`/companies/${company.slug}`}
+                className="hover:text-zinc-200 transition-colors"
+              >
+                {company.name}
+              </Link>
+            </p>
             <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
               {job.title} at {company.name}
             </h1>
@@ -155,6 +187,12 @@ export function JobDetail({ job }: JobDetailProps) {
           />
         </section>
       )}
+
+      <RelatedJobs
+        currentJobId={job.id}
+        companyId={job.companyId}
+        department={job.department}
+      />
     </article>
   );
 }

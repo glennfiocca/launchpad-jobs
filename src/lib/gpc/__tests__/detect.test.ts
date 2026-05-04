@@ -12,10 +12,14 @@ import { isGpcRequest, readGpcFromRequest, GPC_HEADER, GPC_PROPAGATED } from "..
 
 const mockHeaders = headers as unknown as ReturnType<typeof vi.fn>;
 
-function fakeHeaderBag(value: string | null) {
+function fakeHeaderBag(values: { propagated?: string | null; spec?: string | null }) {
   return {
-    get: (k: string) =>
-      k.toLowerCase() === GPC_PROPAGATED.toLowerCase() ? value : null,
+    get: (k: string) => {
+      const key = k.toLowerCase();
+      if (key === GPC_PROPAGATED.toLowerCase()) return values.propagated ?? null;
+      if (key === GPC_HEADER.toLowerCase()) return values.spec ?? null;
+      return null;
+    },
   };
 }
 
@@ -52,17 +56,32 @@ describe("readGpcFromRequest", () => {
 
 describe("isGpcRequest (server-component side)", () => {
   it("returns true when the propagated header is '1'", async () => {
-    mockHeaders.mockResolvedValueOnce(fakeHeaderBag("1"));
+    mockHeaders.mockResolvedValueOnce(fakeHeaderBag({ propagated: "1" }));
     await expect(isGpcRequest()).resolves.toBe(true);
   });
 
-  it("returns false when the propagated header is missing", async () => {
-    mockHeaders.mockResolvedValueOnce(fakeHeaderBag(null));
+  it("returns true when only the spec Sec-GPC header is '1' (route not covered by middleware matcher)", async () => {
+    mockHeaders.mockResolvedValueOnce(fakeHeaderBag({ spec: "1" }));
+    await expect(isGpcRequest()).resolves.toBe(true);
+  });
+
+  it("returns true when both headers are '1'", async () => {
+    mockHeaders.mockResolvedValueOnce(fakeHeaderBag({ propagated: "1", spec: "1" }));
+    await expect(isGpcRequest()).resolves.toBe(true);
+  });
+
+  it("returns false when both headers are missing", async () => {
+    mockHeaders.mockResolvedValueOnce(fakeHeaderBag({}));
     await expect(isGpcRequest()).resolves.toBe(false);
   });
 
-  it("returns false when the propagated header is '0'", async () => {
-    mockHeaders.mockResolvedValueOnce(fakeHeaderBag("0"));
+  it("returns false when the propagated header is '0' and spec missing", async () => {
+    mockHeaders.mockResolvedValueOnce(fakeHeaderBag({ propagated: "0" }));
+    await expect(isGpcRequest()).resolves.toBe(false);
+  });
+
+  it("returns false when Sec-GPC is 'true' (only literal '1' counts)", async () => {
+    mockHeaders.mockResolvedValueOnce(fakeHeaderBag({ spec: "true" }));
     await expect(isGpcRequest()).resolves.toBe(false);
   });
 });

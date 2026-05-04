@@ -19,9 +19,16 @@ export const GPC_PROPAGATED = "x-pipeline-gpc";
 
 // React `cache` dedupes the headers() read across a single server render.
 // Next 16: headers() returns Promise<ReadonlyHeaders> — must be awaited.
+//
+// We accept EITHER the propagated `x-pipeline-gpc` header (set by middleware
+// on routes covered by its matcher) OR the spec `Sec-GPC` header read
+// directly off the request. The dual check matters because the middleware
+// matcher is a finite allowlist (auth-protected routes + /api/*) and does
+// NOT include the marketing root `/` — without this fallback, Plausible
+// would still load on the homepage even when the browser sent Sec-GPC: 1.
 export const isGpcRequest = cache(async (): Promise<boolean> => {
   const h = await headers();
-  return h.get(GPC_PROPAGATED) === "1";
+  return h.get(GPC_PROPAGATED) === "1" || h.get(GPC_HEADER) === "1";
 });
 
 // Edge-runtime-safe (middleware): reads Sec-GPC directly off the incoming

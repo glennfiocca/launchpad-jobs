@@ -97,6 +97,11 @@ export function JobBoard() {
       try {
         const res = await fetch(`/api/jobs?${params}`, { signal: controller.signal });
         const data: ApiResponse<JobWithCompany[]> = await res.json();
+        // Stale-write guard: abort only kills the network leg, not an
+        // already-buffered response body. If a newer fetch has taken over
+        // (`abortRef` no longer points at us), discard this result rather
+        // than stomp the newer fetch's jobs/total/facets.
+        if (abortRef.current !== controller) return;
         if (data.success && data.data) {
           const newTotal = data.meta?.total ?? 0;
           if (replace) {

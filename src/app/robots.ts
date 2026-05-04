@@ -22,6 +22,10 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: [...DISALLOWED_PATHS],
     },
-    sitemap: `${APP_URL}/sitemap.xml`,
+    // We host the sitemap index at /sitemap-index.xml because Next.js's
+    // file-based `app/sitemap.ts` with `generateSitemaps()` claims the
+    // /sitemap.xml URL but only serves chunk URLs — there's no auto-built
+    // index. Search engines discover via this directive, not by convention.
+    sitemap: `${APP_URL}/sitemap-index.xml`,
   };
 }

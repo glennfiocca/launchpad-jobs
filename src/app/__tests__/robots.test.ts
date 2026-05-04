@@ -47,13 +47,13 @@ describe("robots", () => {
       const result = r();
       // Default fallback path — implementation may have already captured the prod URL.
       expect(typeof result.sitemap).toBe("string");
-      expect(result.sitemap).toMatch(/\/sitemap\.xml$/);
+      expect(result.sitemap).toMatch(/\/sitemap-index\.xml$/);
     });
   });
 
   it("falls back to trypipeline.ai when NEXT_PUBLIC_APP_URL is unset", () => {
     const result = robots();
     expect(result.sitemap).toBeDefined();
-    expect(result.sitemap).toMatch(/\/sitemap\.xml$/);
+    expect(result.sitemap).toMatch(/\/sitemap-index\.xml$/);
   });
 });

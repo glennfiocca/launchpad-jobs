@@ -5,6 +5,17 @@ import { db } from "../db";
 import { generateUniquePublicJobId } from "../public-job-id";
 import { createNotification } from "../notifications";
 import { enrichCompanyLogo } from "../logo-enrichment";
+import { VALIDITY_WINDOW_DAYS } from "@/config/seo";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Compute a fresh validThrough timestamp. Called on every successful upsert so
+// each re-sync extends the JobPosting validity window. When upstream stops
+// returning a job, isActive flips false and validThrough is left to lapse —
+// that lapse is the signal to Google + downstream consumers.
+function nextValidThrough(): Date {
+  return new Date(Date.now() + VALIDITY_WINDOW_DAYS * MS_PER_DAY);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -149,6 +160,7 @@ export async function syncBoard(
           where: { id: existing.id },
           data: {
             ...updateData,
+            validThrough: nextValidThrough(),
             ...(!existing.publicJobId
               ? { publicJobId: await generateUniquePublicJobId() }
               : {}),
@@ -162,6 +174,7 @@ export async function syncBoard(
             externalId: normalizedJob.externalId,
             companyId: company.id,
             publicJobId: await generateUniquePublicJobId(),
+            validThrough: nextValidThrough(),
           },
         });
         result.jobsAdded++;

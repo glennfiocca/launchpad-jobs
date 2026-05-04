@@ -286,8 +286,12 @@ model Job {
   /// Full-text search vector. Maintained by DB trigger — do not write from application code.
   searchVector Unsupported("tsvector")?
 
-  isActive Boolean   @default(true)
-  postedAt DateTime?
+  isActive     Boolean   @default(true)
+  postedAt     DateTime?
+  /// JobPosting validity window for Google structured data. Refreshed on every
+  /// successful upstream sync; lapses naturally when the source ATS stops
+  /// listing a job. See src/config/seo.ts (VALIDITY_WINDOW_DAYS).
+  validThrough DateTime?
 
   applications  Application[]
   notifications Notification[]
@@ -303,6 +307,7 @@ model Job {
   @@index([remote])
   @@index([department])
   @@index([postedAt])
+  @@index([validThrough])
 }
 
 enum ApplicationStatus {

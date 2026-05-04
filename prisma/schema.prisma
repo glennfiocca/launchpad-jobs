@@ -89,6 +89,11 @@ model User {
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
+  // Bumped on auth-invalidating events (email change, future: password change,
+  // forced sign-out). NextAuth jwt callback compares this to the JWT-embedded
+  // version and treats mismatched tokens as expired.
+  tokenVersion Int @default(0)
+
   role      Role     @default(USER)
 
   // Billing
@@ -121,8 +126,27 @@ model User {
   auditLogs              ApplicationAuditLog[]   @relation("AuditLogActor")
   savedJobs              SavedJob[]
   jobReports             JobReport[]
+  emailChangeRequests    EmailChangeRequest[]
 
   @@index([deletedAt])
+}
+
+// Pending email-change requests. Each request has a hashed token sent to the
+// proposed new address; consumption atomically updates User.email and bumps
+// User.tokenVersion to invalidate all outstanding JWTs.
+model EmailChangeRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newEmail    String
+  tokenHash   String   @unique // sha256(token)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime @default(now())
+  ipAddress   String?
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Subscription {

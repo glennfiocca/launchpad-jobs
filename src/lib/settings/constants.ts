@@ -26,3 +26,16 @@ export const AVATAR_MIME_TO_EXT: Readonly<Record<AvatarMimeType, string>> = {
 // and the PATCH /api/account/profile route.
 export const DISPLAY_NAME_MIN = 1;
 export const DISPLAY_NAME_MAX = 80;
+
+// Email change reverification flow — Phase 3.
+// Token: 32 random bytes encoded as base64url (43 chars). Stored hashed.
+export const EMAIL_CHANGE_TOKEN_BYTES = 32;
+// 1-hour TTL keeps the window short enough to limit exposure if the
+// recipient mailbox is later compromised.
+export const EMAIL_CHANGE_TOKEN_TTL_MS = 60 * 60 * 1000;
+// Per-user request rate limits: 1/min sliding to defeat email bombing,
+// 5/hour to prevent annoyance even if the per-minute window is gamed.
+export const EMAIL_CHANGE_RATE_PER_MINUTE = 1;
+export const EMAIL_CHANGE_WINDOW_MINUTE_MS = 60 * 1000;
+export const EMAIL_CHANGE_RATE_PER_HOUR = 5;
+export const EMAIL_CHANGE_WINDOW_HOUR_MS = 60 * 60 * 1000;

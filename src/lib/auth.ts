@@ -12,6 +12,10 @@ import {
   createPendingReferral,
 } from "@/lib/referral"
 
+// Re-validate User.tokenVersion at most once per minute. Bounds DB load while
+// keeping post-email-change sign-out latency under a minute.
+const TOKEN_VERSION_CHECK_INTERVAL_MS = 60 * 1000
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db) as NextAuthOptions["adapter"],
   providers: [
@@ -88,11 +92,12 @@ export const authOptions: NextAuthOptions = {
       return true
     },
     async jwt({ token, user }) {
+      // First-call branch (sign-in): pull canonical fields from DB once.
       if (user) {
         token.id = user.id
         const dbUser = await db.user.findUnique({
           where: { id: user.id },
-          select: { role: true, email: true },
+          select: { role: true, email: true, tokenVersion: true },
         })
         const adminEmails = process.env.ADMIN_EMAILS
           ?.split(",")
@@ -107,6 +112,29 @@ export const authOptions: NextAuthOptions = {
         } else {
           token.role = dbUser?.role ?? "USER"
         }
+        token.tokenVersion = dbUser?.tokenVersion ?? 0
+        token.lastTokenVersionCheck = Date.now()
+        return token
+      }
+
+      // Subsequent calls: revalidate tokenVersion periodically. We don't hit
+      // the DB on every request — instead, refresh once per minute to keep
+      // sign-out latency tight after an email change without flooding the DB.
+      const now = Date.now()
+      const lastCheck = token.lastTokenVersionCheck ?? 0
+      if (token.id && now - lastCheck >= TOKEN_VERSION_CHECK_INTERVAL_MS) {
+        const fresh = await db.user
+          .findUnique({
+            where: { id: token.id as string },
+            select: { tokenVersion: true },
+          })
+          .catch(() => null)
+        if (!fresh || fresh.tokenVersion !== (token.tokenVersion ?? 0)) {
+          // Mismatch (or user gone): return an empty token so NextAuth
+          // treats the session as expired and signs the user out.
+          return {}
+        }
+        token.lastTokenVersionCheck = now
       }
       return token
     },
@@ -133,8 +161,13 @@ declare module "next-auth" {
 }
 
 declare module "next-auth/jwt" {
+  // Fields below are populated on first-time sign-in. They become optional in
+  // the type system because the jwt callback can return `{}` to signal token
+  // invalidation (post-tokenVersion bump) — NextAuth then forces re-auth.
   interface JWT {
-    id: string
-    role: string
+    id?: string
+    role?: string
+    tokenVersion?: number
+    lastTokenVersionCheck?: number
   }
 }

@@ -22,6 +22,16 @@ export interface MagicLinkEmailParams {
   url: string;
 }
 
+export interface EmailChangeVerifyEmailParams {
+  newEmail: string;
+  confirmUrl: string;
+}
+
+export interface EmailChangeNoticeEmailParams {
+  newEmail: string;
+  supportEmail?: string;
+}
+
 export interface ApplicationConfirmationEmailParams {
   userName: string;
   jobTitle: string;
@@ -222,6 +232,56 @@ function baseLayout(content: string, footerOptions?: FooterOptions): string {
 }
 
 // ---- Template functions ---------------------------------------------------
+
+export function emailChangeVerifyEmail(
+  params: EmailChangeVerifyEmailParams,
+): EmailResult {
+  const { newEmail, confirmUrl } = params;
+
+  const content = `
+    <h1 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+      Confirm your new Pipeline email
+    </h1>
+    <p style="margin: 0 0 24px 0; color: #334155;">
+      Click the button below to confirm <strong>${escapeHtml(newEmail)}</strong> as the email for your Pipeline account. This link expires in 1 hour.
+    </p>
+
+    ${ctaButton(confirmUrl, "Confirm email change")}
+
+    <p style="margin: 28px 0 0 0; font-size: 13px; color: #94a3b8; text-align: center;">
+      If you didn't request this email, you can safely ignore it.
+    </p>`;
+
+  return {
+    subject: "Confirm your new Pipeline email",
+    html: baseLayout(content),
+  };
+}
+
+export function emailChangeNoticeEmail(
+  params: EmailChangeNoticeEmailParams,
+): EmailResult {
+  const { newEmail, supportEmail = "support@trypipeline.ai" } = params;
+
+  const content = `
+    <h1 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+      Pipeline email change requested
+    </h1>
+    <p style="margin: 0 0 16px 0; color: #334155;">
+      Someone — likely you — asked to change the email on your Pipeline account to <strong>${escapeHtml(newEmail)}</strong>.
+    </p>
+    <p style="margin: 0 0 16px 0; color: #334155;">
+      If this was you, no further action is needed here. The confirmation link was sent to the new address.
+    </p>
+    <p style="margin: 0; color: #334155;">
+      If this <strong>wasn't</strong> you, contact <a href="mailto:${escapeHtml(supportEmail)}" style="color:#2563eb;text-decoration:underline;">${escapeHtml(supportEmail)}</a> immediately to secure your account.
+    </p>`;
+
+  return {
+    subject: "Pipeline email change requested",
+    html: baseLayout(content),
+  };
+}
 
 export function magicLinkEmail(params: MagicLinkEmailParams): EmailResult {
   const { url } = params;

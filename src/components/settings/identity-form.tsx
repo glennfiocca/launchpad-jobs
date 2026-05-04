@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SectionCard } from "./section-card";
 import { AvatarUploader } from "./avatar-uploader";
+import { EmailChangeForm } from "./email-change-form";
 import {
   identitySchema,
   type IdentityFormValues,
@@ -132,14 +133,7 @@ export function IdentityForm({
               readOnly
               className="flex-1 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-zinc-400 cursor-not-allowed"
             />
-            <button
-              type="button"
-              disabled
-              title="Coming soon — Phase 3"
-              className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-zinc-500 cursor-not-allowed"
-            >
-              Change email
-            </button>
+            <EmailChangeForm currentEmail={email} />
           </div>
         </div>
 

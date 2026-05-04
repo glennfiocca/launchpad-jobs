@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import {
   applicationConfirmationEmail,
+  emailChangeNoticeEmail,
+  emailChangeVerifyEmail,
   instantNotificationEmail,
   notificationDigestEmail,
   statusUpdateEmail,
@@ -125,6 +127,47 @@ export async function sendNotificationDigest({
     subject,
     html,
     headers,
+  });
+}
+
+// Send the email-change verification link to the prospective new address.
+// Transactional — no unsubscribe headers (auth flow, not marketing).
+export async function sendEmailChangeVerify({
+  to,
+  confirmUrl,
+}: {
+  to: string;
+  confirmUrl: string;
+}) {
+  const { subject, html } = emailChangeVerifyEmail({
+    newEmail: to,
+    confirmUrl,
+  });
+
+  return getResend().emails.send({
+    from: FROM_ADDRESS,
+    to,
+    subject,
+    html,
+  });
+}
+
+// Send a non-actionable notice to the OLD address so the rightful owner is
+// alerted to a change in progress (defense against silent account theft).
+export async function sendEmailChangeNotice({
+  to,
+  newEmail,
+}: {
+  to: string;
+  newEmail: string;
+}) {
+  const { subject, html } = emailChangeNoticeEmail({ newEmail });
+
+  return getResend().emails.send({
+    from: FROM_ADDRESS,
+    to,
+    subject,
+    html,
   });
 }
 

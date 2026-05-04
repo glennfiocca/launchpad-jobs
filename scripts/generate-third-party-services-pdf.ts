@@ -171,7 +171,7 @@ function writeBody(doc: Doc) {
 
 async function run() {
   await mkdir(dirname(outPath), { recursive: true });
-  const doc = new PDFDocument({ size: "LETTER", margins: 56, info: { Title: "Third-party services — Launchpad" } });
+  const doc = new PDFDocument({ size: "LETTER", margin: 56, info: { Title: "Third-party services — Launchpad" } });
   const stream = createWriteStream(outPath);
   doc.pipe(stream);
   writeBody(doc);

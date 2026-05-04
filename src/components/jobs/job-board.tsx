@@ -76,6 +76,15 @@ export function JobBoard() {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Mark fetch in-flight so the IntersectionObserver's `loadNextPage`
+      // guard does not race-fire a page-2 append while a replace fetch is
+      // still loading. Without this, the loading-state render shrinks the
+      // list to a spinner, the sentinel pops into view, observer schedules
+      // setPage(2), and the resulting append fetch aborts the replace fetch
+      // — leaving `loading` stuck at true (the append's finally only clears
+      // `loadingMore`).
+      isFetchingRef.current = true;
+
       if (replace) setLoading(true);
       else setLoadingMore(true);
 

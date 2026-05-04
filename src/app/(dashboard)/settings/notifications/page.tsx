@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Mail, Loader2, Check } from "lucide-react";
+import { Mail, Loader2, Check } from "lucide-react";
+import { SectionCard } from "@/components/settings/section-card";
 
 interface Prefs {
   emailFrequency: "INSTANT" | "DAILY" | "NEVER";
@@ -92,21 +93,18 @@ export default function NotificationPreferencesPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto py-12 px-4 space-y-10">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <Bell className="w-5 h-5" /> Notification Preferences
-        </h1>
-        <p className="text-zinc-400 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-white">Notifications</h1>
+        <p className="text-sm text-zinc-400 mt-1">
           All notifications appear in the bell icon. Configure which ones also send email.
         </p>
       </div>
 
-      {/* Frequency */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-          <Mail className="w-4 h-4" /> Email Frequency
-        </h2>
+      <SectionCard
+        title="Email frequency"
+        description="How often we send you email digests."
+      >
         <div className="space-y-2">
           {FREQUENCY_OPTIONS.map((opt) => (
             <label
@@ -114,8 +112,8 @@ export default function NotificationPreferencesPage() {
               className={[
                 "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
                 prefs.emailFrequency === opt.value
-                  ? "border-blue-500/40 bg-blue-500/5"
-                  : "border-zinc-800 hover:border-zinc-700",
+                  ? "border-indigo-500/40 bg-indigo-500/5"
+                  : "border-white/10 hover:border-white/20",
               ].join(" ")}
             >
               <input
@@ -124,7 +122,7 @@ export default function NotificationPreferencesPage() {
                 value={opt.value}
                 checked={prefs.emailFrequency === opt.value}
                 onChange={() => update("emailFrequency", opt.value)}
-                className="mt-0.5 accent-blue-500"
+                className="mt-0.5 accent-indigo-500"
               />
               <div>
                 <p className="text-sm font-medium text-white">{opt.label}</p>
@@ -133,18 +131,22 @@ export default function NotificationPreferencesPage() {
             </label>
           ))}
         </div>
-      </section>
+      </SectionCard>
 
-      {/* Per-type toggles */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-zinc-300">Email me about</h2>
+      <SectionCard
+        title="Email me about"
+        description="Which event types should also trigger an email."
+      >
         <div className="space-y-1">
           {EMAIL_TOGGLES.map(({ field, label, alwaysOn }) => (
             <label
               key={field}
               className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
             >
-              <span className="text-sm text-zinc-300">{label}</span>
+              <span className="text-sm text-zinc-300 flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-zinc-500" />
+                {label}
+              </span>
               <div className="flex items-center gap-2">
                 {alwaysOn && (
                   <span className="text-xs text-zinc-500 italic">always</span>
@@ -154,29 +156,28 @@ export default function NotificationPreferencesPage() {
                   checked={prefs[field] as boolean}
                   disabled={alwaysOn}
                   onChange={(e) => update(field, e.target.checked as Prefs[typeof field])}
-                  className="accent-blue-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
+                  className="accent-indigo-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
                 />
               </div>
             </label>
           ))}
         </div>
-      </section>
 
-      {/* Save indicator */}
-      <div className="h-6 flex items-center gap-2 text-sm">
-        {saving && (
-          <>
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500" />
-            <span className="text-zinc-500">Saving…</span>
-          </>
-        )}
-        {saved && !saving && (
-          <>
-            <Check className="w-3.5 h-3.5 text-green-400" />
-            <span className="text-green-400">Saved</span>
-          </>
-        )}
-      </div>
+        <div className="h-6 mt-3 flex items-center gap-2 text-sm">
+          {saving && (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500" />
+              <span className="text-zinc-500">Saving…</span>
+            </>
+          )}
+          {saved && !saving && (
+            <>
+              <Check className="w-3.5 h-3.5 text-green-400" />
+              <span className="text-green-400">Saved</span>
+            </>
+          )}
+        </div>
+      </SectionCard>
     </div>
   );
 }

@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, User, LogOut, LogIn, Zap, Shield } from "lucide-react";
+import { LayoutDashboard, User, LogIn, Zap, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditsBadge } from "@/components/billing/credits-badge";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { AccountMenu } from "@/components/layout/account-menu";
 
 export function Navbar() {
   const { data: session } = useSession();
@@ -111,15 +112,7 @@ export function Navbar() {
                 )}
                 <CreditsBadge />
                 <NotificationBell />
-                <motion.button
-                  whileHover={{ y: -1 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </motion.button>
+                <AccountMenu variant="navbar" />
               </>
             ) : (
               <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15, ease: "easeOut" }}>

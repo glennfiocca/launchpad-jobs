@@ -3,14 +3,13 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import {
   Briefcase,
   Bookmark,
   LayoutDashboard,
   User,
   Shield,
-  LogOut,
   LogIn,
   Gift,
 } from "lucide-react"
@@ -18,6 +17,7 @@ import { Icon } from "@iconify/react"
 import { CreditsBadge } from "@/components/billing/credits-badge"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { FeedbackButton } from "@/components/feedback-button"
+import { AccountMenu } from "@/components/layout/account-menu"
 
 function BaseballBatIcon({ className }: { className?: string }) {
   // Sourced from Font Awesome 6 Free via Iconify. Browse 200K+ icons at
@@ -121,16 +121,7 @@ export function UserSidebar() {
               <CreditsBadge />
               <NotificationBell />
             </div>
-            <div className="px-3 py-1">
-              <p className="text-xs text-zinc-500 truncate">{session.user.email}</p>
-            </div>
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/5 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign out
-            </button>
+            <AccountMenu variant="sidebar" />
           </>
         ) : (
           <Link

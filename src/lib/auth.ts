@@ -146,6 +146,28 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
+  events: {
+    // Append a LoginEvent row on every successful sign-in. Best-effort: a
+    // failed insert here MUST NOT block authentication — wrap in try/catch
+    // and just log. NextAuth doesn't surface the underlying request to this
+    // hook, so ipAddress / userAgent stay null. A future middleware-based
+    // capture path can populate them without altering the schema.
+    async signIn({ user, account }) {
+      if (!user?.id) return
+      try {
+        await db.loginEvent.create({
+          data: {
+            userId: user.id,
+            provider: account?.provider ?? null,
+            ipAddress: null,
+            userAgent: null,
+          },
+        })
+      } catch (err) {
+        console.error(`[auth] loginEvent write failed user=${user.id}:`, err)
+      }
+    },
+  },
 };
 
 declare module "next-auth" {

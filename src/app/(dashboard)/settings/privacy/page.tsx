@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { AlertTriangle, Loader2, Download, X } from "lucide-react";
+import { AlertTriangle, Loader2, X } from "lucide-react";
 import { SectionCard } from "@/components/settings/section-card";
+import { DataExportButton } from "@/components/settings/data-export-button";
 
 const CONFIRM_PHRASE = "DELETE";
 
@@ -51,20 +52,9 @@ export default function PrivacyPage() {
 
       <SectionCard
         title="Export your data"
-        description="Download a copy of your applications, profile, and message history."
+        description="Download a JSON archive of your profile, applications, notes, and account metadata."
       >
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="inline-flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 text-zinc-500 text-sm font-medium px-4 py-2 cursor-not-allowed"
-        >
-          <Download className="w-4 h-4" />
-          Request export
-          <span className="text-[10px] uppercase tracking-wide bg-white/5 border border-white/10 px-1.5 py-0.5 rounded ml-1">
-            Soon
-          </span>
-        </button>
+        <DataExportButton />
       </SectionCard>
 
       <section className="rounded-2xl border border-red-900/40 bg-red-950/10 p-6 space-y-4">

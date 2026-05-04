@@ -39,3 +39,18 @@ export const EMAIL_CHANGE_RATE_PER_MINUTE = 1;
 export const EMAIL_CHANGE_WINDOW_MINUTE_MS = 60 * 1000;
 export const EMAIL_CHANGE_RATE_PER_HOUR = 5;
 export const EMAIL_CHANGE_WINDOW_HOUR_MS = 60 * 60 * 1000;
+
+// Phase 4 — Security & data export.
+// Cap visible sign-in activity rows to keep the page snappy and bounded.
+export const LOGIN_EVENTS_DISPLAY_LIMIT = 50;
+// Hard cap on JSON data export size (50 MB). Exceeding this returns 413.
+// The cap is checked AFTER serialization so the size accounts for any
+// JSON encoding overhead (escaping, base64 of resume bytes, etc.).
+export const DATA_EXPORT_MAX_BYTES = 50 * 1024 * 1024;
+// 1 export per hour per user — abuse prevention. Distinct key namespace from
+// email-change so the buckets don't collide.
+export const DATA_EXPORT_RATE_PER_HOUR = 1;
+export const DATA_EXPORT_WINDOW_HOUR_MS = 60 * 60 * 1000;
+// Schema version stamped into every export. Bump when shape changes so
+// downstream consumers can branch.
+export const DATA_EXPORT_SCHEMA_VERSION = 1 as const;

@@ -127,8 +127,25 @@ model User {
   savedJobs              SavedJob[]
   jobReports             JobReport[]
   emailChangeRequests    EmailChangeRequest[]
+  loginEvents            LoginEvent[]
 
   @@index([deletedAt])
+}
+
+// Append-only sign-in audit trail. One row per successful authentication.
+// ipAddress / userAgent are nullable because the NextAuth events.signIn
+// hook doesn't expose request context — they're populated only if a future
+// middleware path captures and forwards them.
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+  provider  String?
+
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 // Pending email-change requests. Each request has a hashed token sent to the

@@ -24,8 +24,6 @@ export const SETTINGS_NAV: ReadonlyArray<SettingsNavItem> = [
     label: "Security",
     href: "/settings/security",
     icon: Shield,
-    disabled: true,
-    comingSoon: true,
   },
   {
     label: "Notifications",

@@ -17,10 +17,11 @@ describe("SETTINGS_NAV", () => {
     expect(SETTINGS_NAV[0].href).toBe("/settings");
   });
 
-  it("flags Security as disabled + comingSoon (Phase 4)", () => {
+  it("Security is enabled in Phase 4", () => {
     const security = SETTINGS_NAV.find((i) => i.label === "Security");
-    expect(security?.disabled).toBe(true);
-    expect(security?.comingSoon).toBe(true);
+    expect(security?.disabled).toBeFalsy();
+    expect(security?.comingSoon).toBeFalsy();
+    expect(security?.href).toBe("/settings/security");
   });
 
   it("Billing is enabled and points at /settings/billing (Phase 2)", () => {
@@ -30,8 +31,15 @@ describe("SETTINGS_NAV", () => {
     expect(billing?.href).toBe("/settings/billing");
   });
 
-  it("Notifications, Billing, Referrals, Privacy are enabled in Phase 2", () => {
-    for (const label of ["Notifications", "Billing", "Referrals", "Privacy & data"]) {
+  it("all rows are enabled in Phase 4", () => {
+    for (const label of [
+      "Account",
+      "Security",
+      "Notifications",
+      "Billing",
+      "Referrals",
+      "Privacy & data",
+    ]) {
       const item = SETTINGS_NAV.find((i) => i.label === label);
       expect(item?.disabled).toBeFalsy();
     }
@@ -50,7 +58,7 @@ describe("SETTINGS_NAV", () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
-  it("exactly one row is disabled in Phase 2 (Security)", () => {
-    expect(SETTINGS_NAV.filter((i) => i.disabled).length).toBe(1);
+  it("zero rows are disabled in Phase 4", () => {
+    expect(SETTINGS_NAV.filter((i) => i.disabled).length).toBe(0);
   });
 });

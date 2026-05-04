@@ -84,21 +84,6 @@ describe("PATCH /api/account/profile", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 when image is not a URL", async () => {
-    mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
-    const res = await PATCH(makeRequest({ image: "not-a-url" }));
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when image URL is not on a DO Spaces host", async () => {
-    mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
-    const res = await PATCH(
-      makeRequest({ image: "https://evil.com/avatar.jpg" }),
-    );
-    expect(res.status).toBe(400);
-    expect(mockUpdate).not.toHaveBeenCalled();
-  });
-
   it("returns 400 when body has unknown keys (.strict() rejects)", async () => {
     mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
     const res = await PATCH(makeRequest({ name: "x", role: "ADMIN" }));
@@ -106,7 +91,16 @@ describe("PATCH /api/account/profile", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it("returns 204 and updates only the authed user (name only)", async () => {
+  it("returns 400 when image is supplied (avatars are not a feature)", async () => {
+    mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
+    const res = await PATCH(
+      makeRequest({ name: "Glenn", image: "https://x.com/y.png" }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns 204 and updates only the authed user", async () => {
     mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
     mockUpdate.mockResolvedValueOnce({ id: "u_1" });
     const res = await PATCH(makeRequest({ name: "Glenn" }));
@@ -114,30 +108,6 @@ describe("PATCH /api/account/profile", () => {
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "u_1" },
       data: { name: "Glenn" },
-    });
-  });
-
-  it("returns 204 and updates image when image is on a DO Spaces host", async () => {
-    mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
-    mockUpdate.mockResolvedValueOnce({ id: "u_1" });
-    const url =
-      "https://pipeline-uploads.nyc3.digitaloceanspaces.com/avatars/u_1/abc.png";
-    const res = await PATCH(makeRequest({ image: url }));
-    expect(res.status).toBe(204);
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: "u_1" },
-      data: { image: url },
-    });
-  });
-
-  it("allows nulling the avatar image", async () => {
-    mockSession.mockResolvedValueOnce({ user: { id: "u_1" } });
-    mockUpdate.mockResolvedValueOnce({ id: "u_1" });
-    const res = await PATCH(makeRequest({ image: null }));
-    expect(res.status).toBe(204);
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: "u_1" },
-      data: { image: null },
     });
   });
 

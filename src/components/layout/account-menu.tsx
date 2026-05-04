@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
@@ -14,7 +13,6 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { initialsFromSeed, seedToHue } from "@/lib/settings/avatar-seed";
 
 interface AccountMenuProps {
   variant: "sidebar" | "navbar";
@@ -33,43 +31,6 @@ const MENU_ITEMS: ReadonlyArray<MenuItem> = [
   { href: "/settings/referrals", label: "Referrals", icon: Gift },
 ];
 
-function AvatarBubble({
-  image,
-  seed,
-  size,
-}: {
-  image: string | null | undefined;
-  seed: string;
-  size: number;
-}) {
-  if (image) {
-    return (
-      <Image
-        src={image}
-        alt=""
-        width={size}
-        height={size}
-        className="rounded-full object-cover shrink-0"
-      />
-    );
-  }
-  const hue = seedToHue(seed);
-  return (
-    <div
-      className="rounded-full flex items-center justify-center text-white font-semibold shrink-0"
-      style={{
-        width: size,
-        height: size,
-        fontSize: Math.round(size * 0.4),
-        background: `linear-gradient(135deg, hsl(${hue} 70% 35%), hsl(${(hue + 40) % 360} 70% 25%))`,
-      }}
-      aria-hidden
-    >
-      {initialsFromSeed(seed)}
-    </div>
-  );
-}
-
 export function AccountMenu({ variant }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const { data: session } = useSession();
@@ -78,7 +39,6 @@ export function AccountMenu({ variant }: AccountMenuProps) {
 
   const email = session.user.email ?? "";
   const name = session.user.name ?? "";
-  const displaySeed = email || name || "user";
   const triggerLabel = name || email;
 
   const triggerClass =
@@ -90,11 +50,6 @@ export function AccountMenu({ variant }: AccountMenuProps) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button type="button" className={triggerClass} aria-label="Account menu">
-          <AvatarBubble
-            image={session.user.image}
-            seed={displaySeed}
-            size={variant === "sidebar" ? 28 : 28}
-          />
           <span className="flex-1 truncate text-left">{triggerLabel}</span>
           <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
         </button>
@@ -106,14 +61,11 @@ export function AccountMenu({ variant }: AccountMenuProps) {
           sideOffset={8}
           className="w-64 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150"
         >
-          <div className="p-3 border-b border-white/10 flex items-center gap-3">
-            <AvatarBubble image={session.user.image} seed={displaySeed} size={36} />
-            <div className="min-w-0 flex-1">
-              {name && (
-                <p className="text-sm font-medium text-white truncate">{name}</p>
-              )}
-              <p className="text-xs text-zinc-500 truncate">{email}</p>
-            </div>
+          <div className="p-3 border-b border-white/10 min-w-0">
+            {name && (
+              <p className="text-sm font-medium text-white truncate">{name}</p>
+            )}
+            <p className="text-xs text-zinc-500 truncate">{email}</p>
           </div>
           <nav className="p-1.5">
             {MENU_ITEMS.map(({ href, label, icon: Icon }) => (

@@ -22,7 +22,6 @@ export default async function SettingsAccountPage() {
       id: true,
       email: true,
       name: true,
-      image: true,
       createdAt: true,
     },
   });
@@ -44,7 +43,6 @@ export default async function SettingsAccountPage() {
 
       <IdentityForm
         initialName={user.name ?? ""}
-        initialImage={user.image}
         email={user.email ?? ""}
       />
 

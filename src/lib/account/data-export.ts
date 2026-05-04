@@ -133,7 +133,6 @@ export interface ExportPayload {
     id: string;
     email: string | null;
     name: string | null;
-    image: string | null;
     createdAt: string;
     role: string;
   };
@@ -181,7 +180,6 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
         id: true,
         email: true,
         name: true,
-        image: true,
         createdAt: true,
         role: true,
         referralCode: true,
@@ -361,7 +359,6 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
       id: user.id,
       email: user.email,
       name: user.name,
-      image: user.image,
       createdAt: isoStrict(user.createdAt),
       role: user.role,
     },

@@ -7,7 +7,6 @@ import { useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SectionCard } from "./section-card";
-import { AvatarUploader } from "./avatar-uploader";
 import { EmailChangeForm } from "./email-change-form";
 import {
   identitySchema,
@@ -16,14 +15,10 @@ import {
 
 interface IdentityFormProps {
   initialName: string;
-  initialImage: string | null;
   email: string;
 }
 
-async function patchProfile(payload: {
-  name?: string;
-  image?: string | null;
-}): Promise<void> {
+async function patchProfile(payload: { name: string }): Promise<void> {
   const res = await fetch("/api/account/profile", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -37,13 +32,8 @@ async function patchProfile(payload: {
   }
 }
 
-export function IdentityForm({
-  initialName,
-  initialImage,
-  email,
-}: IdentityFormProps) {
+export function IdentityForm({ initialName, email }: IdentityFormProps) {
   const { update: updateSession } = useSession();
-  const [image, setImage] = useState<string | null>(initialImage);
   const [submitting, setSubmitting] = useState(false);
 
   const {
@@ -71,33 +61,12 @@ export function IdentityForm({
     }
   }
 
-  async function handleAvatarChange(url: string) {
-    // Optimistic local update — even if PATCH fails, the user sees their
-    // upload immediately. Failure rolls back to the previous URL.
-    const previous = image;
-    setImage(url);
-    try {
-      await patchProfile({ image: url });
-      await updateSession();
-    } catch (err) {
-      console.error("[identity-form] avatar persist failed:", err);
-      setImage(previous);
-      toast.error("Failed to save avatar");
-    }
-  }
-
   return (
     <SectionCard
       title="Identity"
       description="How you appear across Pipeline."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <AvatarUploader
-          value={image}
-          fallbackSeed={email}
-          onChange={handleAvatarChange}
-        />
-
         <div>
           <label
             htmlFor="display-name"

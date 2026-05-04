@@ -69,10 +69,6 @@ export async function deleteUserAccount(userId: string): Promise<void> {
         resumeUrl: null,
         resumeFileName: null,
         customAnswers: Prisma.JsonNull,
-        voluntaryGender: null,
-        voluntaryRace: null,
-        voluntaryVeteranStatus: null,
-        voluntaryDisability: null,
         isComplete: false,
       },
     });

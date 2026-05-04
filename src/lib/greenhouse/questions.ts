@@ -209,10 +209,11 @@ export function autoAnswerQuestion(
   }
 
   // --- EEOC: gender identity ---
+  // We don't collect EEOC data — rely on decline-fallback when available.
   if (/\bgender\b/i.test(question.label)) {
     if (field.type !== "multi_value_single_select") return null;
     const options = field.values.map((v) => ({ id: v.value, label: v.label }));
-    const result = matchDemographicOption(options, profile.voluntaryGender, "gender");
+    const result = matchDemographicOption(options, null, "gender");
     if (result.optionId !== null) return { [fieldName]: result.optionId };
     return null;
   }
@@ -221,7 +222,7 @@ export function autoAnswerQuestion(
   if (/\brace\b|\bethnicity\b/i.test(question.label)) {
     if (field.type !== "multi_value_single_select" && field.type !== "multi_value_multi_select") return null;
     const options = field.values.map((v) => ({ id: v.value, label: v.label }));
-    const result = matchDemographicOption(options, profile.voluntaryRace, "race");
+    const result = matchDemographicOption(options, null, "race");
     if (result.optionId === null) return null;
     return field.type === "multi_value_multi_select"
       ? { [fieldName]: String(result.optionId) }
@@ -232,7 +233,7 @@ export function autoAnswerQuestion(
   if (/\bveteran\b/i.test(question.label)) {
     if (field.type !== "multi_value_single_select") return null;
     const options = field.values.map((v) => ({ id: v.value, label: v.label }));
-    const result = matchDemographicOption(options, profile.voluntaryVeteranStatus, "veteran");
+    const result = matchDemographicOption(options, null, "veteran");
     if (result.optionId !== null) return { [fieldName]: result.optionId };
     return null;
   }
@@ -241,7 +242,7 @@ export function autoAnswerQuestion(
   if (/disabilit/i.test(question.label)) {
     if (field.type !== "multi_value_single_select") return null;
     const options = field.values.map((v) => ({ id: v.value, label: v.label }));
-    const result = matchDemographicOption(options, profile.voluntaryDisability, "disability");
+    const result = matchDemographicOption(options, null, "disability");
     if (result.optionId !== null) return { [fieldName]: result.optionId };
     return null;
   }

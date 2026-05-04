@@ -45,10 +45,6 @@ function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     locationLng: null,
     workAuthorization: null,
     requiresSponsorship: false,
-    voluntaryGender: null,
-    voluntaryRace: null,
-    voluntaryVeteranStatus: null,
-    voluntaryDisability: null,
     customAnswers: null,
     isComplete: true,
     createdAt: new Date(),
@@ -75,90 +71,92 @@ function makeQuestion(
 }
 
 // ── EEOC label matching ──────────────────────────────────────────────────────
+//
+// We no longer collect EEOC data on the profile. The matcher always falls
+// back to a "decline" option when one is available, or returns null otherwise.
 
 describe("autoAnswerQuestion — EEOC gender", () => {
-  const q = makeQuestion("Gender Identity", "question_111", "multi_value_single_select", [
-    { value: 101, label: "Male" },
-    { value: 102, label: "Female" },
-    { value: 103, label: "Decline to self-identify" },
-  ]);
-
-  it("matches exact gender label", () => {
-    const profile = makeProfile({ voluntaryGender: "Female" });
-    expect(autoAnswerQuestion(q, profile)).toEqual({ question_111: 102 });
-  });
-
-  it("falls back to decline option when profile has no voluntaryGender", () => {
-    const profile = makeProfile({ voluntaryGender: null });
+  it("falls back to decline option when one is present", () => {
+    const q = makeQuestion("Gender Identity", "question_111", "multi_value_single_select", [
+      { value: 101, label: "Male" },
+      { value: 102, label: "Female" },
+      { value: 103, label: "Decline to self-identify" },
+    ]);
+    const profile = makeProfile();
     expect(autoAnswerQuestion(q, profile)).toEqual({ question_111: 103 });
   });
 
-  it("falls back to decline option when gender label has no match", () => {
-    const profile = makeProfile({ voluntaryGender: "Non-binary" });
-    expect(autoAnswerQuestion(q, profile)).toEqual({ question_111: 103 });
+  it("returns null when no decline option exists", () => {
+    const q = makeQuestion("Gender Identity", "question_111", "multi_value_single_select", [
+      { value: 101, label: "Male" },
+      { value: 102, label: "Female" },
+    ]);
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
   });
 });
 
 describe("autoAnswerQuestion — EEOC race/ethnicity", () => {
-  const qSingle = makeQuestion("Race/Ethnicity", "question_222", "multi_value_single_select", [
-    { value: 201, label: "White" },
-    { value: 202, label: "Black or African American" },
-    { value: 203, label: "Hispanic or Latino" },
-  ]);
-
-  const qMulti = makeQuestion("Race / Ethnicity", "question_223", "multi_value_multi_select", [
-    { value: 201, label: "White" },
-    { value: 202, label: "Black or African American" },
-  ]);
-
-  it("matches race on single-select (case-insensitive)", () => {
-    const profile = makeProfile({ voluntaryRace: "white" });
-    expect(autoAnswerQuestion(qSingle, profile)).toEqual({ question_222: 201 });
-  });
-
-  it("returns string value for multi-select race", () => {
-    const profile = makeProfile({ voluntaryRace: "White" });
-    expect(autoAnswerQuestion(qMulti, profile)).toEqual({ question_223: "201" });
-  });
-
-  it("returns null when voluntaryRace is null and no decline option exists", () => {
-    const profile = makeProfile({ voluntaryRace: null });
-    // qSingle has no decline option, so returns null
+  it("returns null when no decline option exists on single-select", () => {
+    const qSingle = makeQuestion("Race/Ethnicity", "question_222", "multi_value_single_select", [
+      { value: 201, label: "White" },
+      { value: 202, label: "Black or African American" },
+      { value: 203, label: "Hispanic or Latino" },
+    ]);
+    const profile = makeProfile();
     expect(autoAnswerQuestion(qSingle, profile)).toBeNull();
   });
 
-  it("falls back to decline for multi-select race when profile is null", () => {
+  it("falls back to decline for multi-select race", () => {
     const qMultiDecline = makeQuestion("Race / Ethnicity", "question_224", "multi_value_multi_select", [
       { value: 201, label: "White" },
       { value: 202, label: "Black or African American" },
       { value: 208, label: "Decline To Self Identify" },
     ]);
-    const profile = makeProfile({ voluntaryRace: null });
+    const profile = makeProfile();
     expect(autoAnswerQuestion(qMultiDecline, profile)).toEqual({ question_224: "208" });
   });
 });
 
 describe("autoAnswerQuestion — EEOC veteran status", () => {
-  const q = makeQuestion("Veteran Status", "question_333", "multi_value_single_select", [
-    { value: 301, label: "I am a protected veteran" },
-    { value: 302, label: "I am not a protected veteran" },
-  ]);
+  it("falls back to decline option when present", () => {
+    const q = makeQuestion("Veteran Status", "question_333", "multi_value_single_select", [
+      { value: 301, label: "I am a protected veteran" },
+      { value: 302, label: "I am not a protected veteran" },
+      { value: 303, label: "I don't wish to answer" },
+    ]);
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toEqual({ question_333: 303 });
+  });
 
-  it("matches veteran label", () => {
-    const profile = makeProfile({ voluntaryVeteranStatus: "I am not a protected veteran" });
-    expect(autoAnswerQuestion(q, profile)).toEqual({ question_333: 302 });
+  it("returns null when no decline option exists", () => {
+    const q = makeQuestion("Veteran Status", "question_333", "multi_value_single_select", [
+      { value: 301, label: "I am a protected veteran" },
+      { value: 302, label: "I am not a protected veteran" },
+    ]);
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
   });
 });
 
 describe("autoAnswerQuestion — EEOC disability", () => {
-  const q = makeQuestion("Disability Status", "question_444", "multi_value_single_select", [
-    { value: 401, label: "Yes, I have a disability" },
-    { value: 402, label: "No, I do not have a disability" },
-  ]);
+  it("falls back to decline option when present", () => {
+    const q = makeQuestion("Disability Status", "question_444", "multi_value_single_select", [
+      { value: 401, label: "Yes, I have a disability" },
+      { value: 402, label: "No, I do not have a disability" },
+      { value: 403, label: "I do not want to answer" },
+    ]);
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toEqual({ question_444: 403 });
+  });
 
-  it("matches disability label", () => {
-    const profile = makeProfile({ voluntaryDisability: "No, I do not have a disability" });
-    expect(autoAnswerQuestion(q, profile)).toEqual({ question_444: 402 });
+  it("returns null when no decline option exists", () => {
+    const q = makeQuestion("Disability Status", "question_444", "multi_value_single_select", [
+      { value: 401, label: "Yes, I have a disability" },
+      { value: 402, label: "No, I do not have a disability" },
+    ]);
+    const profile = makeProfile();
+    expect(autoAnswerQuestion(q, profile)).toBeNull();
   });
 });
 
@@ -248,15 +246,16 @@ describe("multi-select serialization", () => {
 // ── getUnansweredQuestions ───────────────────────────────────────────────────
 
 describe("getUnansweredQuestions", () => {
-  it("excludes EEOC questions that can be auto-answered from profile", () => {
+  it("excludes EEOC questions that can be answered via decline-fallback", () => {
     const questions: GreenhouseQuestion[] = [
       makeQuestion("Gender Identity", "question_111", "multi_value_single_select", [
         { value: 101, label: "Male" },
         { value: 102, label: "Female" },
+        { value: 103, label: "Decline to self-identify" },
       ], true),
       makeQuestion("Custom essay question", "question_999", "textarea", [], true),
     ];
-    const profile = makeProfile({ voluntaryGender: "Female" });
+    const profile = makeProfile();
     const unanswered = getUnansweredQuestions(questions, profile);
     expect(unanswered).toHaveLength(1);
     expect(unanswered[0].label).toBe("Custom essay question");

@@ -92,12 +92,19 @@ export function JobBoard() {
           if (replace) {
             setJobs(data.data);
             hasAnimatedRef.current = false;
-            hasMoreRef.current = data.data.length < newTotal;
+            // End-of-list when the response didn't fill `total` AND we got no rows
+            // back. Belt-and-suspenders against APIs that report a stale total.
+            hasMoreRef.current = data.data.length > 0 && data.data.length < newTotal;
           } else {
             setJobs((prev) => {
               const existingIds = new Set(prev.map((j) => j.id));
               const merged = [...prev, ...data.data!.filter((j) => !existingIds.has(j.id))];
-              hasMoreRef.current = merged.length < newTotal;
+              // Defensive: if the page returned no NEW rows (empty page, or all
+              // duplicates after dedup), treat as end-of-list even if `total`
+              // claims otherwise. Prevents the IntersectionObserver from
+              // hammering loadNextPage when the API mis-reports the total.
+              const grew = merged.length > prev.length;
+              hasMoreRef.current = grew && merged.length < newTotal;
               return merged;
             });
           }

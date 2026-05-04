@@ -44,10 +44,6 @@ const profileSchema = z.object({
   graduationYear: z.number().int().min(1950).max(2030).optional(),
   workAuthorization: z.string().optional(),
   requiresSponsorship: z.boolean().default(false),
-  voluntaryGender: z.string().optional(),
-  voluntaryRace: z.string().optional(),
-  voluntaryVeteranStatus: z.string().optional(),
-  voluntaryDisability: z.string().optional(),
 });
 
 export async function GET() {
@@ -67,52 +63,6 @@ export async function GET() {
     success: true,
     data: profile,
   });
-}
-
-const voluntarySchema = z.object({
-  voluntaryGender: z.string().nullable().optional(),
-  voluntaryRace: z.string().nullable().optional(),
-  voluntaryVeteranStatus: z.string().nullable().optional(),
-  voluntaryDisability: z.string().nullable().optional(),
-});
-
-export async function PATCH(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
-
-  const body = await request.json();
-  const parsed = voluntarySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: parsed.error.message },
-      { status: 400 }
-    );
-  }
-
-  const existing = await db.userProfile.findUnique({
-    where: { userId: session.user.id },
-  });
-  if (!existing) {
-    return NextResponse.json<ApiResponse<never>>(
-      {
-        success: false,
-        error: "Please save your main profile first before adding voluntary information.",
-      },
-      { status: 404 }
-    );
-  }
-
-  const profile = await db.userProfile.update({
-    where: { userId: session.user.id },
-    data: parsed.data,
-  });
-
-  return NextResponse.json<ApiResponse<UserProfile>>({ success: true, data: profile });
 }
 
 export async function PUT(request: Request) {

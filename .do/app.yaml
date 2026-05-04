@@ -115,9 +115,9 @@ jobs:
     dockerfile_path: Dockerfile
     kind: SCHEDULED
     schedule:
-      # TEMPORARY: 17:00 UTC = 13:00 EDT for verification.
-      # Revert to "0 9 * * *" (04:00 EST / 05:00 EDT) after confirming cron works.
-      cron: "0 17 * * *"
+      # 08:00 UTC = 4:00 AM EDT (summer) / 3:00 AM EST (winter).
+      # DO cron is pure UTC — it does not auto-shift for DST.
+      cron: "0 8 * * *"
     run_command: npx tsx scripts/sync-cron.ts
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb

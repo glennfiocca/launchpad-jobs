@@ -183,10 +183,6 @@ function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
     sponsorshipRequired: profile.requiresSponsorship,
     workAuthorized: !!profile.workAuthorization,
     openToRemote: profile.openToRemote,
-    gender: profile.voluntaryGender,
-    race: profile.voluntaryRace,
-    veteranStatus: profile.voluntaryVeteranStatus,
-    disability: profile.voluntaryDisability,
   };
 }
 
@@ -250,12 +246,14 @@ function buildSnapshot(
   if (profile.linkedinUrl) coreFieldExtras.linkedIn = profile.linkedinUrl;
   if (profile.githubUrl) coreFieldExtras.github = profile.githubUrl;
   if (profile.portfolioUrl) coreFieldExtras.website = profile.portfolioUrl;
-  // Always emit eeoc so extension can attempt decline fallback even when all values are null
+  // Always emit a null EEOC block so the extension/operator triggers
+  // "decline to answer" on Greenhouse/Ashby EEOC fields. We don't collect
+  // EEOC data from users, but we still need to signal opt-out at apply time.
   coreFieldExtras.eeoc = {
-    gender: profile.voluntaryGender ?? undefined,
-    race: profile.voluntaryRace ?? undefined,
-    veteranStatus: profile.voluntaryVeteranStatus ?? undefined,
-    disability: profile.voluntaryDisability ?? undefined,
+    gender: undefined,
+    race: undefined,
+    veteranStatus: undefined,
+    disability: undefined,
   };
 
   return {

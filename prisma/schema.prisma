@@ -205,12 +205,6 @@ model UserProfile {
   workAuthorization   String? // US_CITIZEN, GREEN_CARD, VISA, OTHER
   requiresSponsorship Boolean @default(false)
 
-  // Voluntary identification (EEOC)
-  voluntaryGender        String?
-  voluntaryRace          String?
-  voluntaryVeteranStatus String?
-  voluntaryDisability    String?
-
   // Custom free-form answers stored as JSON
   // { "questionKey": "answer" }
   customAnswers Json?

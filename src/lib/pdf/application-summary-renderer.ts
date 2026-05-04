@@ -305,7 +305,7 @@ function drawQAEntry(doc: PDFKit.PDFDocument, q: QAEntry): void {
 }
 
 function drawEeoc(doc: PDFKit.PDFDocument, eeoc: NonNullable<ApplicationSummaryData["eeoc"]>): void {
-  sectionHeader(doc, "Voluntary EEOC disclosures");
+  sectionHeader(doc, "EEOC disclosures");
   kvRow(doc, "Gender", fmtMaybe(eeoc.gender));
   kvRow(doc, "Race / ethnicity", fmtMaybe(eeoc.race));
   kvRow(doc, "Veteran status", fmtMaybe(eeoc.veteranStatus));

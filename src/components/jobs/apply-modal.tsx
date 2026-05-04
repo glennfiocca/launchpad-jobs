@@ -37,10 +37,6 @@ function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
     sponsorshipRequired: profile.requiresSponsorship,
     workAuthorized: !!profile.workAuthorization,
     openToRemote: profile.openToRemote,
-    gender: profile.voluntaryGender,
-    race: profile.voluntaryRace,
-    veteranStatus: profile.voluntaryVeteranStatus,
-    disability: profile.voluntaryDisability,
   };
 }
 

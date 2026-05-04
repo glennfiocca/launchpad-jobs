@@ -1,5 +1,5 @@
 /**
- * Shared matcher for Greenhouse voluntary demographic (EEOC) fields.
+ * Shared matcher for Greenhouse demographic (EEOC) form fields.
  * Provides tiered matching: explicit exact -> decline fallback.
  *
  * Canonical source — the extension (content.js) duplicates normalizeText

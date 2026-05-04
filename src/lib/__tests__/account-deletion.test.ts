@@ -125,10 +125,6 @@ describe("deleteUserAccount", () => {
     expect(d.resumeData).toBeNull();
     expect(d.resumeUrl).toBeNull();
     expect(d.resumeFileName).toBeNull();
-    expect(d.voluntaryGender).toBeNull();
-    expect(d.voluntaryRace).toBeNull();
-    expect(d.voluntaryVeteranStatus).toBeNull();
-    expect(d.voluntaryDisability).toBeNull();
     expect(d.isComplete).toBe(false);
   });
 

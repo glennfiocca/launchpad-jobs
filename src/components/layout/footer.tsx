@@ -122,6 +122,20 @@ export function Footer() {
                     Do Not Sell or Share
                   </Link>
                 </li>
+                <li>
+                  {/*
+                    Termly preference-center trigger. The "termly-display-preferences"
+                    class is the exact hook Termly's banner SDK binds to at runtime —
+                    do not rename. Plain <a> (not next/link) so the SDK's click
+                    handler runs without router interception.
+                  */}
+                  <a
+                    href="#"
+                    className="termly-display-preferences text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Consent Preferences
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
@@ -199,6 +213,10 @@ export function CompactSiteFooter() {
             <Link href="/cookies" className={compactLinkClass}>
               Cookies
             </Link>
+            {/* Termly preference-center trigger — see Footer for explanation. */}
+            <a href="#" className={`termly-display-preferences ${compactLinkClass}`}>
+              Preferences
+            </a>
           </nav>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 text-xs text-zinc-600">

@@ -67,21 +67,28 @@ export async function discoverAshbyCustomJobMap(
  * Build a `?ashby_jid={uuid}` URL on the org's customJobsPageUrl base.
  * Strips any preset ashby_jid + tracking params from the base so we don't
  * leak the org's example UUID or stale UTM tags.
+ *
+ * Returns null when the customJobsPageUrl points back to ashbyhq.com (e.g.
+ * Rev's stale config) — those URLs don't render specific job content
+ * client-side, so falling back to the original Ashby URL is no improvement.
  */
-function makeFallbackBuilder(customJobsPageUrl: string): (uuid: string) => string | null {
-  return (uuid: string) => {
-    try {
-      const u = new URL(customJobsPageUrl);
-      // Refuse to build for URLs that point back to the broken Ashby
-      // hosted board — those don't render any job content client-side.
-      if (u.hostname.endsWith("ashbyhq.com")) return null;
-      for (const k of ["ashby_jid", "utm_source", "utm_medium", "utm_campaign"]) {
-        u.searchParams.delete(k);
-      }
-      u.searchParams.set("ashby_jid", uuid);
-      return u.toString();
-    } catch {
-      return null;
+export function buildAshbyJidFallback(
+  customJobsPageUrl: string,
+  uuid: string,
+): string | null {
+  try {
+    const u = new URL(customJobsPageUrl);
+    if (u.hostname.endsWith("ashbyhq.com")) return null;
+    for (const k of ["ashby_jid", "utm_source", "utm_medium", "utm_campaign"]) {
+      u.searchParams.delete(k);
     }
-  };
+    u.searchParams.set("ashby_jid", uuid);
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function makeFallbackBuilder(customJobsPageUrl: string): (uuid: string) => string | null {
+  return (uuid: string) => buildAshbyJidFallback(customJobsPageUrl, uuid);
 }

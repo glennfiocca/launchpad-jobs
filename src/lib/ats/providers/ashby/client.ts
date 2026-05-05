@@ -13,6 +13,7 @@ import type {
   AshbyGraphQLResponse,
 } from "./types";
 import { mapAshbyJobToNormalized } from "./mapper";
+import { fetchAshbyOrgInfo, buildAshbyJidFallback } from "@/lib/ashby-custom-jobs";
 
 const ASHBY_BASE_URL = "https://api.ashbyhq.com/posting-api/job-board";
 const ASHBY_GRAPHQL_URL = "https://jobs.ashbyhq.com/api/non-user-graphql";
@@ -104,9 +105,30 @@ export class AshbyAtsClient implements AtsClient {
     const url = `${ASHBY_BASE_URL}/${this.boardName}?includeCompensation=true`;
     const response = await this.fetchJson<AshbyApiResponse>(url);
 
-    return response.jobs
+    const jobs = response.jobs
       .filter((job) => job.isListed)
       .map(mapAshbyJobToNormalized);
+
+    // Self-hoster URL rewrite. If the company has a `customJobsPageUrl`
+    // configured (Cursor, Deel, Skydio, ElevenLabs, etc.), the default
+    // `https://jobs.ashbyhq.com/{board}/{uuid}` URL we'd otherwise store
+    // lands on a dead SPA shell — the company has disabled the public
+    // Ashby board. Rewrite the listing URL to the `?ashby_jid={uuid}`
+    // fallback so users land on a working page.
+    //
+    // Cost: one extra GraphQL request per Ashby sync (~500ms). Acceptable.
+    // The slower per-slug scrape (Cursor → /careers/software-engineer-growth)
+    // happens out of band via `npm run backfill-ashby-custom-urls`. To stop
+    // sync from clobbering those cleaner URLs, sync.ts has a guard that
+    // refuses to overwrite a custom-domain absoluteUrl with a fresh sync
+    // value pointing back at jobs.ashbyhq.com.
+    const orgInfo = await fetchAshbyOrgInfo(this.boardName);
+    if (!orgInfo?.customJobsPageUrl) return jobs;
+
+    return jobs.map((job) => {
+      const fallback = buildAshbyJidFallback(orgInfo.customJobsPageUrl!, job.externalId);
+      return fallback ? { ...job, absoluteUrl: fallback } : job;
+    });
   }
 
   async getJobQuestions(

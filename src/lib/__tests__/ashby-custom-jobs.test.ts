@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { discoverAshbyCustomJobMap } from "../ashby-custom-jobs";
+import { discoverAshbyCustomJobMap, buildAshbyJidFallback } from "../ashby-custom-jobs";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -130,6 +130,22 @@ describe("discoverAshbyCustomJobMap", () => {
 
     const result = await discoverAshbyCustomJobMap("rev");
     expect(result?.buildFallbackUrl("00000000-0000-0000-0000-000000000000")).toBeNull();
+  });
+
+  it("buildAshbyJidFallback strips stale ashby_jid + utm tracking", () => {
+    const url = buildAshbyJidFallback(
+      "https://www.fullstory.com/careers?ashby_jid=stale&utm_source=x&utm_medium=y",
+      "baf1fc23-ffe2-43bb-b53d-fb7070740010",
+    );
+    expect(url).toBe(
+      "https://www.fullstory.com/careers?ashby_jid=baf1fc23-ffe2-43bb-b53d-fb7070740010",
+    );
+  });
+
+  it("buildAshbyJidFallback returns null for ashbyhq.com domains", () => {
+    expect(
+      buildAshbyJidFallback("https://jobs.ashbyhq.com/Rev", "00000000-0000-0000-0000-000000000000"),
+    ).toBeNull();
   });
 
   it("returns an empty map when the careers index has no slugs", async () => {

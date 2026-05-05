@@ -46,6 +46,61 @@ function companySlug(provider: AtsProvider, boardToken: string): string {
   return `${provider.toLowerCase()}-${boardToken}`;
 }
 
+/**
+ * "Stickiness" rule for absoluteUrl: if the existing row already points to
+ * a per-slug page on the company's own domain (e.g. cursor.com/careers/
+ * software-engineer-growth, written by the slug backfill), don't let a
+ * subsequent sync downgrade it to the ?ashby_jid fallback or the dead
+ * jobs.ashbyhq.com URL.
+ *
+ * Heuristic: a URL is considered "curated" when its hostname doesn't
+ * belong to the ATS provider's hosted-board domain AND it has a path
+ * deeper than just "/" or "/careers" (so a fallback like
+ * `https://cursor.com/careers?ashby_jid=...` won't trump a true slug URL
+ * `https://cursor.com/careers/software-engineer-growth`).
+ */
+export function shouldPreserveAbsoluteUrl(
+  existing: string | null,
+  incoming: string | null,
+): boolean {
+  if (!existing || !incoming) return false;
+  if (existing === incoming) return false;
+  const e = parseUrl(existing);
+  const i = parseUrl(incoming);
+  if (!e || !i) return false;
+
+  // If incoming is more specific (different host or longer/specific path),
+  // we generally trust it. The only case we want to short-circuit:
+  // existing is a slug-style URL on a custom domain, incoming is a query-
+  // string fallback on the same domain → keep existing.
+  const existingIsSlug =
+    !isAtsHostedHost(e.hostname) && pathDepth(e.pathname) >= pathDepth(i.pathname) + 1;
+  const incomingIsFallback = i.searchParams.has("ashby_jid");
+
+  return existingIsSlug && incomingIsFallback;
+}
+
+function parseUrl(s: string): URL | null {
+  try {
+    return new URL(s);
+  } catch {
+    return null;
+  }
+}
+
+function isAtsHostedHost(host: string): boolean {
+  const lower = host.toLowerCase();
+  return (
+    lower.endsWith("ashbyhq.com") ||
+    lower.endsWith("greenhouse.io") ||
+    lower.endsWith("greenhouse.com")
+  );
+}
+
+function pathDepth(pathname: string): number {
+  return pathname.split("/").filter(Boolean).length;
+}
+
 // ---------------------------------------------------------------------------
 // Provider-agnostic board sync
 // ---------------------------------------------------------------------------
@@ -223,6 +278,19 @@ export async function syncBoard(
       if (existing) {
         // Preserve original postedAt — don't overwrite with ATS updated_at
         const { postedAt: _ignored, ...updateData } = jobData;
+
+        // Don't downgrade a curated custom-domain absoluteUrl back to a
+        // generic URL. The Ashby client rewrites absoluteUrl to the
+        // ?ashby_jid={uuid} fallback for self-hosters, but per-slug
+        // backfills can write even cleaner URLs (e.g. cursor.com/careers/
+        // software-engineer-growth) — those should survive subsequent
+        // syncs unchanged.
+        if (
+          shouldPreserveAbsoluteUrl(existing.absoluteUrl, updateData.absoluteUrl)
+        ) {
+          updateData.absoluteUrl = existing.absoluteUrl;
+        }
+
         await db.job.update({
           where: { id: existing.id },
           data: {

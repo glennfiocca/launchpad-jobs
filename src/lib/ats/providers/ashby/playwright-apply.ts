@@ -14,6 +14,7 @@ import {
   isConfirmationPage,
   waitForFormLoad,
 } from "../../shared/playwright-utils";
+import { clickApplyTrigger } from "./click-apply-trigger";
 
 // ─── Ashby form selectors ───────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
   async apply(options: AtsApplyOptions): Promise<AtsApplyResult> {
     const {
       applyUrl,
+      applySelector,
+      jobExternalId,
       profile,
       trackingEmail,
       resumeBuffer,
@@ -95,6 +98,24 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
           manualApplyUrl,
         };
       }
+
+      // ── Click in-page "Apply" trigger if present ──────────────────────
+      // Self-hoster careers pages render the listing first; the form is
+      // gated behind an Apply button. On hosted Ashby boards there is no
+      // such trigger and `clickApplyTrigger` cleanly returns clicked=false
+      // — `waitForFormLoad` then sees the form that's already in DOM.
+      const triggerOutcome = await clickApplyTrigger(
+        page,
+        applySelector ?? null
+      );
+      console.log(
+        `[ashby-apply] apply-trigger-click ${JSON.stringify({
+          event: "apply-trigger-click",
+          clicked: triggerOutcome.clicked,
+          selector: triggerOutcome.selector,
+          jobId: jobExternalId,
+        })}`
+      );
 
       // ── Wait for form to render ───────────────────────────────────────
       let formLoaded = await waitForFormLoad(

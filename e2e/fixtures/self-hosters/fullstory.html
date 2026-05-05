@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>FullStory — Backend Engineer (fixture)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 32px; }
+    </style>
+  </head>
+  <body>
+    <h1>Backend Engineer</h1>
+    <p>About the role…</p>
+    <button id="apply-button" type="button">Apply</button>
+    <form id="application-form">
+      <input name="_systemfield_name" placeholder="Full name" />
+      <input name="_systemfield_email" type="email" placeholder="Email" />
+      <button type="submit">Submit Application</button>
+    </form>
+    <script>
+      // Form is already in the DOM; clicking Apply scrolls but doesn't
+      // fundamentally change visibility. The helper should still register
+      // a clicked=true outcome.
+      document.getElementById("apply-button").addEventListener("click", function () {
+        document.getElementById("application-form").scrollIntoView();
+      });
+    </script>
+  </body>
+</html>

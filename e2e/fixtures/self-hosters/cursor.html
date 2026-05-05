@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cursor — Engineer, Growth (fixture)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 32px; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Engineer, Growth</h1>
+    <p>About the role…</p>
+    <a href="#apply" id="apply-link">Apply now</a>
+    <form id="application-form" class="hidden">
+      <input name="_systemfield_name" placeholder="Full name" />
+      <input name="_systemfield_email" type="email" placeholder="Email" />
+      <button type="submit">Submit Application</button>
+    </form>
+    <script>
+      // Mirror real self-hoster behaviour: clicking the in-page apply link
+      // reveals a form that wasn't in the DOM (or was hidden) at page load.
+      document.getElementById("apply-link").addEventListener("click", function () {
+        document.getElementById("application-form").classList.remove("hidden");
+      });
+    </script>
+  </body>
+</html>

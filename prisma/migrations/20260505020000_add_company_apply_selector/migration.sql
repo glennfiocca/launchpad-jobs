@@ -1,0 +1,13 @@
+-- Add an optional `applySelector` column to Company. Track A.2 of
+-- HARDENING_PLAN.md introduces a per-company CSS selector override for the
+-- "Apply" trigger button on self-hoster careers pages. When non-null, the
+-- Ashby Playwright strategy uses ONLY this selector; otherwise it walks a
+-- generic fallback chain (a[href="#apply"], a:has-text("Apply for this job"),
+-- button:has-text("Apply"), [data-action="apply"]).
+--
+-- Opt-in only — no default seed. Per the locked decision in the plan,
+-- per-company overrides are added ONLY when generic selectors fail during
+-- A.2.4 smoke testing.
+--
+-- Nullable + no default → Postgres metadata-only ALTER, safe under load.
+ALTER TABLE "Company" ADD COLUMN "applySelector" TEXT;

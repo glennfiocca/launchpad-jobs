@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Deel — Senior Engineer (fixture)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 32px; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Senior Engineer</h1>
+    <p>About the role…</p>
+    <a href="javascript:void(0)" id="apply-anchor">Apply for this job</a>
+    <form id="application-form" class="hidden">
+      <input name="_systemfield_name" placeholder="Full name" />
+      <input name="_systemfield_email" type="email" placeholder="Email" />
+      <button type="submit">Submit Application</button>
+    </form>
+    <script>
+      document.getElementById("apply-anchor").addEventListener("click", function () {
+        document.getElementById("application-form").classList.remove("hidden");
+      });
+    </script>
+  </body>
+</html>

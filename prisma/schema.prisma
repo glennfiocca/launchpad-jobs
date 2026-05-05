@@ -311,6 +311,12 @@ model Company {
   size     String?
   about    String? @db.Text
 
+  /// CSS selector override for the apply trigger button on self-hoster
+  /// careers pages (Track A.2 of HARDENING_PLAN.md). When set, the Ashby
+  /// Playwright strategy uses this selector instead of the generic fallback
+  /// chain. Opt-in only — leave null to use generic selectors.
+  applySelector String?
+
   jobs Job[]
 
   createdAt DateTime @default(now())

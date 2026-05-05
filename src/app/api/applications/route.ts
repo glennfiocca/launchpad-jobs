@@ -289,6 +289,7 @@ async function runPlaywrightSubmission(opts: {
   boardToken: string;
   externalJobId: string;
   applyUrl: string | null;
+  applySelector: string | null;
   profile: UserProfile;
   trackingEmail: string;
   resumeBuffer: Buffer | undefined;
@@ -310,6 +311,7 @@ async function runPlaywrightSubmission(opts: {
       applyUrl: opts.applyUrl ?? (opts.provider === "ASHBY"
         ? `https://jobs.ashbyhq.com/${opts.boardToken}/${opts.externalJobId}/application`
         : `https://boards.greenhouse.io/${opts.boardToken}/jobs/${opts.externalJobId}`),
+      applySelector: opts.applySelector,
       profile: {
         firstName: opts.profile.firstName,
         lastName: opts.profile.lastName,
@@ -700,6 +702,10 @@ export async function POST(request: Request) {
     // rows that pre-date the A.1 column. The route.ts:310 fallback
     // handles the still-null case for hosted Ashby/Greenhouse.
     applyUrl: job.applyUrl ?? job.absoluteUrl,
+    // Per-company override for the apply trigger button selector
+    // (Track A.2 of HARDENING_PLAN.md). Null for the vast majority of
+    // companies — the generic chain handles them.
+    applySelector: job.company.applySelector ?? null,
     profile,
     trackingEmail,
     resumeBuffer,

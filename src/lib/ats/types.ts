@@ -77,6 +77,13 @@ export interface AtsApplyOptions {
   boardToken: string;
   jobExternalId: string;
   applyUrl: string;
+  /**
+   * Per-company CSS selector override for the "Apply" trigger button on
+   * self-hoster careers pages. When non-null, the Ashby Playwright strategy
+   * uses ONLY this selector instead of the generic fallback chain. Mirrors
+   * `Company.applySelector` (Track A.2 of HARDENING_PLAN.md).
+   */
+  applySelector?: string | null;
   profile: {
     firstName: string;
     lastName: string;

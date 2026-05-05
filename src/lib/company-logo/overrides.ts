@@ -58,6 +58,10 @@ const SHARED_OVERRIDES: Record<string, LogoOverride> = {
     website: "https://www.okta.com",
     logoUrl: "https://img.logo.dev/okta.com?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
   },
+  instructure: {
+    website: "https://www.instructure.com",
+    logoUrl: "https://img.logo.dev/instructure.com?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
+  },
   cohere: { website: "https://cohere.com" },
   perplexity: { website: "https://perplexity.ai" },
   openai: { website: "https://openai.com" },

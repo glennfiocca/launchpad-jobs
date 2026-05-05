@@ -13,6 +13,13 @@ import { isGpcRequest } from "@/lib/gpc/detect";
 // the dashboard.
 const PLAUSIBLE_INIT = `window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()`;
 
+// Termly consent banner + cookie auto-blocker. Loads BEFORE Plausible so
+// Termly can intercept and block analytics until the user consents (or
+// permanently if GPC is on — Termly respects the GPC signal automatically
+// and won't show the banner to those users). The website UUID is from
+// Termly Dashboard → Consent Banner → Install.
+const TERMLY_WEBSITE_UUID = "cab779b8-1bd3-4a4c-b9ff-51123bbcd9c4";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -33,6 +40,13 @@ export default async function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
+        {isProd && (
+          <Script
+            id="termly-banner"
+            src={`https://app.termly.io/resource-blocker/${TERMLY_WEBSITE_UUID}?autoBlock=on`}
+            strategy="beforeInteractive"
+          />
+        )}
         {isProd && !gpc && (
           <>
             <Script

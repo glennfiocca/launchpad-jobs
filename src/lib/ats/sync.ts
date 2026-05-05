@@ -6,6 +6,7 @@ import { generateUniquePublicJobId } from "../public-job-id";
 import { createNotification } from "../notifications";
 import { enrichCompanyLogo } from "../logo-enrichment";
 import { notifyIndexNow } from "../seo/indexnow";
+import { resolveCompanyName } from "../company-name";
 import { VALIDITY_WINDOW_DAYS } from "@/config/seo";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://trypipeline.ai").replace(/\/$/, "");
@@ -70,9 +71,10 @@ export async function syncBoard(
   // 1. Board metadata
   let boardWebsite: string | null = null;
   let boardLogoUrl: string | null = null;
+  let rawBoardName: string | null = null;
   try {
     const boardMeta = await client.getBoard();
-    result.companyName = companyName ?? boardMeta.name;
+    rawBoardName = boardMeta.name ?? null;
     boardWebsite = boardMeta.website ?? null;
     boardLogoUrl = boardMeta.logoUrl ?? null;
   } catch {
@@ -81,6 +83,16 @@ export async function syncBoard(
 
   const slug = companySlug(provider, boardToken);
   const effectiveLogo = logoUrl ?? boardLogoUrl;
+
+  // Resolve canonical company name. Caller-supplied `companyName` wins if
+  // provided (caller is presumed authoritative); otherwise we run the raw
+  // ATS-supplied name through the resolver so curated overrides + smart
+  // title-casing fix data quality issues at the write boundary.
+  result.companyName = companyName ?? resolveCompanyName({
+    provider,
+    slug,
+    rawName: rawBoardName,
+  }).name;
 
   // 2. Upsert company
   const company = await db.company.upsert({

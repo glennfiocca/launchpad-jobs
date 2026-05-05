@@ -1,0 +1,225 @@
+/**
+ * Consolidated company-logo backfill.
+ *
+ * Replaces the original two-script setup:
+ *   - scripts/backfill-websites.ts  (guess domain from token)
+ *   - scripts/enrich-logos.ts       (fetch logo.dev → upload Spaces)
+ *
+ * Now one script does both, gated by the same resolver the live sync uses.
+ * For each company:
+ *   1. Read the current Company.website + logoUrl
+ *   2. Look up CompanyBoard fields (admin overrides)
+ *   3. Run resolveCompanyLogoFull — which checks overrides, then ATS data,
+ *      then the multi-TLD heuristic
+ *   4. If website changed, update Company.website
+ *   5. If website is set and (logoUrl is missing OR --force-logo), re-fetch
+ *      from logo.dev and re-upload to Spaces
+ *
+ * Defaults to dry-run: prints diffs, writes nothing. --apply commits.
+ * --force-logo re-fetches even when Company.logoUrl already has a value
+ *   (use this to fix bad cached logos after the resolver was improved).
+ *
+ * Usage:
+ *   npx tsx scripts/backfill-company-logos.ts                # dry-run, websites only
+ *   npx tsx scripts/backfill-company-logos.ts --apply        # commit website fixes
+ *   npx tsx scripts/backfill-company-logos.ts --force-logo --apply
+ *                                                            # commit + refetch all logos
+ *   npx tsx scripts/backfill-company-logos.ts --slug=astronomer --apply
+ *                                                            # single company
+ */
+
+import "dotenv/config";
+import { db } from "../src/lib/db";
+import { resolveCompanyLogoFull } from "../src/lib/company-logo";
+import { enrichCompanyLogo } from "../src/lib/logo-enrichment";
+
+interface CliFlags {
+  apply: boolean;
+  forceLogo: boolean;
+  slug: string | null;
+  limit: number | null;
+}
+
+function parseFlags(argv: readonly string[]): CliFlags {
+  const flags: CliFlags = { apply: false, forceLogo: false, slug: null, limit: null };
+  for (const arg of argv) {
+    if (arg === "--apply") flags.apply = true;
+    else if (arg === "--force-logo") flags.forceLogo = true;
+    else if (arg.startsWith("--slug=")) flags.slug = arg.slice("--slug=".length);
+    else if (arg.startsWith("--limit=")) {
+      const n = Number.parseInt(arg.slice("--limit=".length), 10);
+      if (Number.isFinite(n) && n > 0) flags.limit = n;
+    }
+  }
+  return flags;
+}
+
+interface ProposedChange {
+  companyId: string;
+  slug: string;
+  provider: "GREENHOUSE" | "ASHBY";
+  name: string;
+  beforeWebsite: string | null;
+  afterWebsite: string | null;
+  websiteSource: string;
+  needsLogoRefresh: boolean;
+}
+
+async function main(): Promise<void> {
+  const flags = parseFlags(process.argv.slice(2));
+  console.log(`Mode: ${flags.apply ? "APPLY" : "dry-run"}`);
+  if (flags.slug) console.log(`Scope: slug=${flags.slug}`);
+  if (flags.forceLogo) console.log("Force-logo: every row with a website re-fetches from logo.dev");
+  if (flags.limit) console.log(`Limit: ${flags.limit}`);
+  console.log("");
+
+  const companies = await db.company.findMany({
+    where: flags.slug ? { slug: flags.slug } : {},
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      provider: true,
+      website: true,
+      logoUrl: true,
+    },
+    orderBy: { id: "asc" },
+    ...(flags.limit ? { take: flags.limit } : {}),
+  });
+
+  console.log(`Scanning ${companies.length.toLocaleString()} companies...\n`);
+
+  // Pre-load every CompanyBoard so we can resolve overrides without N+1 queries.
+  const boards = await db.companyBoard.findMany({
+    select: { provider: true, boardToken: true, website: true, logoUrl: true },
+  });
+  const boardMap = new Map<string, { website: string | null; logoUrl: string | null }>();
+  for (const b of boards) {
+    boardMap.set(`${b.provider}:${b.boardToken}`, {
+      website: b.website,
+      logoUrl: b.logoUrl,
+    });
+  }
+
+  const proposed: ProposedChange[] = [];
+  const sourceTally = new Map<string, number>();
+
+  for (const c of companies) {
+    // Translate Company.slug back to a board-token shape for CompanyBoard
+    // lookup. Greenhouse: slug === boardToken; Ashby: slug === "ashby-{token}".
+    const boardToken =
+      c.provider === "GREENHOUSE" ? c.slug : c.slug.replace(/^ashby-/, "");
+    const board = boardMap.get(`${c.provider}:${boardToken}`);
+
+    const result = await resolveCompanyLogoFull({
+      provider: c.provider,
+      slug: c.slug,
+      boardOverrideWebsite: board?.website ?? null,
+      boardOverrideLogoUrl: board?.logoUrl ?? null,
+      // No ATS metadata available here — we'd have to re-fetch each board to
+      // get it. The resolver still produces a useful answer from the
+      // override map + heuristic + CompanyBoard fields.
+    });
+
+    sourceTally.set(result.websiteSource, (sourceTally.get(result.websiteSource) ?? 0) + 1);
+
+    const websiteChanged = result.website !== c.website && result.website !== null;
+    const needsLogoRefresh =
+      websiteChanged ||
+      flags.forceLogo ||
+      (result.website !== null && c.logoUrl === null);
+
+    if (websiteChanged || needsLogoRefresh) {
+      proposed.push({
+        companyId: c.id,
+        slug: c.slug,
+        provider: c.provider,
+        name: c.name,
+        beforeWebsite: c.website,
+        afterWebsite: result.website,
+        websiteSource: result.websiteSource,
+        needsLogoRefresh,
+      });
+    }
+  }
+
+  console.log("Website source distribution:");
+  for (const [src, count] of [...sourceTally.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${src.padEnd(12)} ${String(count).padStart(6)}`);
+  }
+  console.log("");
+  console.log(`Companies needing changes: ${proposed.length.toLocaleString()}`);
+
+  // Print up to 30 sample diffs grouped by source so the operator can sanity-check.
+  const websiteChanges = proposed.filter((p) => p.afterWebsite !== p.beforeWebsite);
+  if (websiteChanges.length > 0) {
+    console.log(`\nSample of ${Math.min(30, websiteChanges.length)} website changes:`);
+    for (const p of websiteChanges.slice(0, 30)) {
+      console.log(
+        `  [${p.websiteSource}] ${p.name} (${p.slug})\n    ${p.beforeWebsite ?? "(null)"}\n    → ${p.afterWebsite ?? "(null)"}`,
+      );
+    }
+  }
+
+  if (!flags.apply) {
+    console.log("\nDry-run only — re-run with --apply to commit.");
+    await db.$disconnect();
+    return;
+  }
+
+  if (proposed.length === 0) {
+    console.log("\nNothing to apply.");
+    await db.$disconnect();
+    return;
+  }
+
+  console.log("\nApplying...");
+  let websitesUpdated = 0;
+  let logosEnriched = 0;
+  let logosFailed = 0;
+
+  for (const p of proposed) {
+    if (p.afterWebsite !== p.beforeWebsite && p.afterWebsite !== null) {
+      await db.company.update({
+        where: { id: p.companyId },
+        data: { website: p.afterWebsite },
+      });
+      websitesUpdated++;
+    }
+
+    if (p.needsLogoRefresh && p.afterWebsite) {
+      // Clear the old (potentially wrong) cached logo so enrichment will
+      // re-derive from the corrected website. logo.dev handles the new
+      // fetch; Spaces stores under a hostname-keyed object so the path
+      // changes when the domain changes — old objects stay orphaned but
+      // unreferenced (acceptable; we can prune Spaces in a separate pass).
+      if (flags.forceLogo) {
+        await db.company.update({
+          where: { id: p.companyId },
+          data: { logoUrl: null },
+        });
+      }
+
+      const cdnUrl = await enrichCompanyLogo({
+        id: p.companyId,
+        name: p.name,
+        website: p.afterWebsite,
+      });
+
+      if (cdnUrl) logosEnriched++;
+      else logosFailed++;
+    }
+
+    if ((websitesUpdated + logosEnriched + logosFailed) % 50 === 0) {
+      console.log(`  progress: ${websitesUpdated} websites, ${logosEnriched} logos enriched, ${logosFailed} logo failures`);
+    }
+  }
+
+  console.log(`\nDone: ${websitesUpdated} websites updated, ${logosEnriched} logos enriched, ${logosFailed} logo failures`);
+  await db.$disconnect();
+}
+
+main().catch((err: unknown) => {
+  console.error("Fatal:", err);
+  process.exit(1);
+});

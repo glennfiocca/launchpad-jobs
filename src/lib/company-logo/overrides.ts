@@ -1,0 +1,201 @@
+/**
+ * Curated website + logo overrides keyed by `(provider, slug)`.
+ *
+ * The resolver consults this map FIRST. If a slug matches, the override
+ * wins over both ATS-supplied metadata and the heuristic domain-guessing
+ * path. This is the escape hatch for cases where the heuristic gets it
+ * wrong — most commonly companies whose `.com` is squatted or owned by a
+ * different brand (e.g. Astronomer, whose real domain is astronomer.io).
+ *
+ * Three layers of resolution sit on top of this map:
+ *   1. CompanyBoard.website / CompanyBoard.logoUrl  ← admin per-row UI
+ *   2. SHARED_OVERRIDES below                       ← code-level truth
+ *   3. Greenhouse `board.website` / `board.logo`    ← ATS-reported
+ *   4. Heuristic multi-TLD probe                    ← last resort
+ *
+ * Add an entry here whenever a sync produces the wrong logo because the
+ * slug→domain heuristic guessed wrong. Curating ~50 entries beats writing
+ * an ML classifier.
+ */
+
+import type { AtsProvider } from "@prisma/client";
+
+export interface LogoOverride {
+  /** Canonical company website (used as input to the logo lookup). */
+  website?: string;
+  /** Override the resolved logo URL directly, bypassing logo.dev. */
+  logoUrl?: string;
+}
+
+/**
+ * Brand-truth overrides that apply across providers. Most entries live here
+ * because a brand's domain is the same regardless of which ATS hosts the
+ * board.
+ */
+const SHARED_OVERRIDES: Record<string, LogoOverride> = {
+  // Non-`.com` startups whose `.com` is owned by a different brand
+  astronomer: { website: "https://astronomer.io" },
+  stronomer: { website: "https://astronomer.io" }, // truncation alias
+  cohere: { website: "https://cohere.com" },
+  perplexity: { website: "https://perplexity.ai" },
+  openai: { website: "https://openai.com" },
+  anthropic: { website: "https://anthropic.com" },
+  hashicorp: { website: "https://hashicorp.com" },
+  mongodb: { website: "https://mongodb.com" },
+  langchain: { website: "https://langchain.com" },
+  coderabbit: { website: "https://coderabbit.ai" },
+  elevenlabs: { website: "https://elevenlabs.io" },
+  hockeystack: { website: "https://hockeystack.com" },
+  gptzero: { website: "https://gptzero.me" },
+  classdojo: { website: "https://classdojo.com" },
+  clickup: { website: "https://clickup.com" },
+  livekit: { website: "https://livekit.io" },
+  motherduck: { website: "https://motherduck.com" },
+  fullstory: { website: "https://fullstory.com" },
+  posthog: { website: "https://posthog.com" },
+  lancedb: { website: "https://lancedb.com" },
+  webai: { website: "https://webai.com" },
+  gigaml: { website: "https://giga.ml" },
+  signoz: { website: "https://signoz.io" },
+  revenuecat: { website: "https://revenuecat.com" },
+  stackone: { website: "https://stackone.com" },
+  fleetworks: { website: "https://fleetworks.ai" },
+  buildwithfern: { website: "https://buildwithfern.com" },
+  mazedesign: { website: "https://maze.co" },
+  stainlessapi: { website: "https://stainless.com" },
+  deepl: { website: "https://deepl.com" },
+  a16z: { website: "https://a16z.com" },
+  sweetgreen: { website: "https://sweetgreen.com" },
+  project44: { website: "https://project44.com" },
+  dbtlabsinc: { website: "https://getdbt.com" },
+  scaleai: { website: "https://scale.com" },
+  togetherai: { website: "https://together.ai" },
+  snorkelai: { website: "https://snorkel.ai" },
+  stabilityai: { website: "https://stability.ai" },
+  arizeai: { website: "https://arize.com" },
+  bluefishai: { website: "https://bluefish.ai" },
+  blackforestlabs: { website: "https://blackforestlabs.ai" },
+  figureai: { website: "https://figure.ai" },
+  furtherai: { website: "https://further.ai" },
+  apolloio: { website: "https://apollo.io" },
+  grafanalabs: { website: "https://grafana.com" },
+  cockroachlabs: { website: "https://cockroachlabs.com" },
+  ginkgobioworks: { website: "https://ginkgobioworks.com" },
+  abnormalsecurity: { website: "https://abnormalsecurity.com" },
+  orcasecurity: { website: "https://orca.security" },
+  sumologic: { website: "https://sumologic.com" },
+  newrelic: { website: "https://newrelic.com" },
+  sigmacomputing: { website: "https://sigmacomputing.com" },
+  launchdarkly: { website: "https://launchdarkly.com" },
+
+  // Tokens that obviously map to a different brand domain
+  doordashusa: { website: "https://doordash.com" },
+  couchbaseinc: { website: "https://couchbase.com" },
+  cariboubiosciencesinc: { website: "https://cariboubio.com" },
+  caredxinc: { website: "https://caredx.com" },
+  bottomlinetechnologies: { website: "https://bottomline.com" },
+  vianttechnology: { website: "https://viant.com" },
+  alarmcom: { website: "https://alarm.com" },
+  "1stdibscom": { website: "https://1stdibs.com" },
+  riotgames: { website: "https://riotgames.com" },
+  spacex: { website: "https://spacex.com" },
+  lucidmotors: { website: "https://lucidmotors.com" },
+  andurilindustries: { website: "https://anduril.com" },
+  appliedintuition: { website: "https://appliedintuition.com" },
+  aurorainnovation: { website: "https://aurora.tech" },
+  astspacemobile: { website: "https://ast-science.com" },
+  asteralabs: { website: "https://asteralabs.com" },
+  axiom: { website: "https://axiomspace.com" },
+  abcellera: { website: "https://abcellera.com" },
+  bridgebio: { website: "https://bridgebio.com" },
+  billiontoone: { website: "https://billiontoone.com" },
+
+  // Common Ashby brand domains
+  supabase: { website: "https://supabase.com" },
+  vercel: { website: "https://vercel.com" },
+  airbyte: { website: "https://airbyte.com" },
+  benchling: { website: "https://benchling.com" },
+  sentry: { website: "https://sentry.io" },
+  snowflake: { website: "https://snowflake.com" },
+  vanta: { website: "https://vanta.com" },
+  deel: { website: "https://deel.com" },
+  whatnot: { website: "https://whatnot.com" },
+  pinecone: { website: "https://pinecone.io" },
+  modal: { website: "https://modal.com" },
+  replit: { website: "https://replit.com" },
+  zapier: { website: "https://zapier.com" },
+  docker: { website: "https://docker.com" },
+  redis: { website: "https://redis.io" },
+  mintlify: { website: "https://mintlify.com" },
+  decagon: { website: "https://decagon.ai" },
+  cursor: { website: "https://cursor.com" },
+  anyscale: { website: "https://anyscale.com" },
+  cognition: { website: "https://cognition.ai" },
+  weaviate: { website: "https://weaviate.io" },
+  lovable: { website: "https://lovable.dev" },
+  mistral: { website: "https://mistral.ai" },
+  runway: { website: "https://runwayml.com" },
+  drata: { website: "https://drata.com" },
+  plaid: { website: "https://plaid.com" },
+  confluent: { website: "https://confluent.io" },
+  neon: { website: "https://neon.tech" },
+  prefect: { website: "https://prefect.io" },
+  babbel: { website: "https://babbel.com" },
+  preply: { website: "https://preply.com" },
+  classroomdojo: { website: "https://classdojo.com" },
+  exa: { website: "https://exa.ai" },
+  writer: { website: "https://writer.com" },
+  tavily: { website: "https://tavily.com" },
+  sierra: { website: "https://sierra.ai" },
+  tracebit: { website: "https://tracebit.com" },
+  infisical: { website: "https://infisical.com" },
+  deepgram: { website: "https://deepgram.com" },
+
+  // Hyphenated tokens
+  "norm-ai": { website: "https://norm.ai" },
+  "basis-ai": { website: "https://basis.ai" },
+  "fiddler-ai": { website: "https://fiddler.ai" },
+  "cogent-security": { website: "https://cogentsecurity.com" },
+  "talos-trading": { website: "https://talostrading.com" },
+  "pylon-labs": { website: "https://usepylon.com" },
+  "rox-data-corp": { website: "https://rox.com" },
+  "d-matrix": { website: "https://d-matrix.ai" },
+};
+
+const GREENHOUSE_OVERRIDES: Record<string, LogoOverride> = {};
+const ASHBY_OVERRIDES: Record<string, LogoOverride> = {};
+
+/**
+ * Look up a curated logo/website override for a given provider+slug pair.
+ * Provider-specific entries win over shared entries.
+ */
+export function lookupLogoOverride(
+  provider: AtsProvider,
+  slug: string,
+): LogoOverride | undefined {
+  const key = stripProviderPrefix(provider, slug).toLowerCase();
+  if (provider === "GREENHOUSE" && key in GREENHOUSE_OVERRIDES) {
+    return GREENHOUSE_OVERRIDES[key];
+  }
+  if (provider === "ASHBY" && key in ASHBY_OVERRIDES) {
+    return ASHBY_OVERRIDES[key];
+  }
+  return SHARED_OVERRIDES[key];
+}
+
+function stripProviderPrefix(provider: AtsProvider, slug: string): string {
+  const prefix = `${provider.toLowerCase()}-`;
+  return slug.startsWith(prefix) ? slug.slice(prefix.length) : slug;
+}
+
+export function allLogoOverrides(): {
+  shared: Readonly<Record<string, LogoOverride>>;
+  greenhouse: Readonly<Record<string, LogoOverride>>;
+  ashby: Readonly<Record<string, LogoOverride>>;
+} {
+  return {
+    shared: SHARED_OVERRIDES,
+    greenhouse: GREENHOUSE_OVERRIDES,
+    ashby: ASHBY_OVERRIDES,
+  };
+}

@@ -158,6 +158,7 @@ export async function executeSyncWork(
     name: string
     provider: AtsProvider
     logoUrl?: string
+    website?: string
   }
 
   let boards: BoardEntry[] = []
@@ -170,10 +171,12 @@ export async function executeSyncWork(
   const errorSummaries: string[] = []
 
   try {
-    // Load all active boards from CompanyBoard (multi-provider)
+    // Load all active boards from CompanyBoard (multi-provider). Pass
+    // through CompanyBoard.website + CompanyBoard.logoUrl as admin-curated
+    // overrides — the sync resolver gives them priority over ATS metadata.
     const dbBoards = await db.companyBoard.findMany({
       where: { isActive: true },
-      select: { boardToken: true, name: true, provider: true, logoUrl: true },
+      select: { boardToken: true, name: true, provider: true, logoUrl: true, website: true },
     })
 
     boards = dbBoards.map((b) => ({
@@ -181,6 +184,7 @@ export async function executeSyncWork(
       name: b.name,
       provider: b.provider,
       ...(b.logoUrl ? { logoUrl: b.logoUrl } : {}),
+      ...(b.website ? { website: b.website } : {}),
     }))
 
     // Fallback: if no Greenhouse boards in DB, use SEED_BOARDS via getActiveBoards()
@@ -203,7 +207,13 @@ export async function executeSyncWork(
     for (const board of boards) {
       const boardStart = new Date()
       try {
-        const result = await syncBoard(board.provider, board.token, board.name, board.logoUrl)
+        const result = await syncBoard(
+          board.provider,
+          board.token,
+          board.name,
+          board.logoUrl,
+          board.website,
+        )
         const boardEnd = new Date()
         const boardDuration = boardEnd.getTime() - boardStart.getTime()
 

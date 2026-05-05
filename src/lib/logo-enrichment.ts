@@ -6,6 +6,10 @@ import { uploadPublicBuffer } from "./spaces";
  * Fetches a logo from logo.dev, uploads it to Spaces, and persists the CDN
  * URL to Company.logoUrl.  Returns the CDN URL on success, null otherwise.
  * Never throws — all errors are caught and logged internally.
+ *
+ * The Spaces step is what makes this expensive but is also what avoids
+ * hitting logo.dev on every render — once cached, all readers serve from
+ * our CDN. Backfill scripts re-run this when they want a refresh.
  */
 export async function enrichCompanyLogo(
   company: { id: string; website: string | null; name: string }

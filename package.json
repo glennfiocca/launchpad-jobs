@@ -13,7 +13,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "enrich-logos": "tsx scripts/enrich-logos.ts",
+    "backfill-company-logos": "tsx scripts/backfill-company-logos.ts",
     "backfill-company-names": "tsx scripts/backfill-company-names.ts",
     "backfill-job-eligibility": "tsx scripts/backfill-job-eligibility.ts",
     "db:promote-admin": "tsx prisma/promote-admin.ts",

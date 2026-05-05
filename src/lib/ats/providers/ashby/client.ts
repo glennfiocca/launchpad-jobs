@@ -86,10 +86,16 @@ export class AshbyAtsClient implements AtsClient {
   }
 
   async getBoard(): Promise<BoardMeta> {
-    // Ashby has no separate board metadata endpoint — derive from the jobs response
+    // Ashby exposes no company-website signal at all (the Posting API has no
+    // board-metadata endpoint, and per-job responses lack a top-level URL).
+    // Returning the Ashby-hosted careers page as `website` was actively
+    // misleading the logo pipeline — it would query logo.dev for
+    // `jobs.ashbyhq.com` rather than the actual company. Returning null is
+    // honest; the resolver layers (CompanyBoard.website override, the
+    // curated overrides map, the multi-TLD heuristic) handle it from there.
     return {
       name: this.boardName,
-      website: `https://jobs.ashbyhq.com/${this.boardName}`,
+      website: null,
       logoUrl: null,
     };
   }

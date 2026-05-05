@@ -27,12 +27,12 @@ describe("AshbyAtsClient", () => {
   });
 
   describe("getBoard", () => {
-    it("returns board metadata derived from boardName", async () => {
+    it("returns null website + logoUrl — Ashby exposes no company-website signal", async () => {
       const board = await client.getBoard();
 
       expect(board).toEqual({
         name: "testco",
-        website: "https://jobs.ashbyhq.com/testco",
+        website: null,
         logoUrl: null,
       });
     });

@@ -7,6 +7,7 @@ import { createNotification } from "../notifications";
 import { enrichCompanyLogo } from "../logo-enrichment";
 import { notifyIndexNow } from "../seo/indexnow";
 import { resolveCompanyName } from "../company-name";
+import { resolveCompanyLogoSync } from "../company-logo";
 import { VALIDITY_WINDOW_DAYS } from "@/config/seo";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://trypipeline.ai").replace(/\/$/, "");
@@ -53,7 +54,8 @@ export async function syncBoard(
   provider: AtsProvider,
   boardToken: string,
   companyName?: string,
-  logoUrl?: string,
+  boardOverrideLogoUrl?: string,
+  boardOverrideWebsite?: string,
 ): Promise<SyncResult> {
   const client = getClient(provider, boardToken);
 
@@ -68,21 +70,20 @@ export async function syncBoard(
     errors: [],
   };
 
-  // 1. Board metadata
-  let boardWebsite: string | null = null;
-  let boardLogoUrl: string | null = null;
+  // 1. Board metadata (Greenhouse populates these sometimes; Ashby doesn't)
+  let atsWebsite: string | null = null;
+  let atsLogoUrl: string | null = null;
   let rawBoardName: string | null = null;
   try {
     const boardMeta = await client.getBoard();
     rawBoardName = boardMeta.name ?? null;
-    boardWebsite = boardMeta.website ?? null;
-    boardLogoUrl = boardMeta.logoUrl ?? null;
+    atsWebsite = boardMeta.website ?? null;
+    atsLogoUrl = boardMeta.logoUrl ?? null;
   } catch {
     // Non-fatal — sync continues without metadata
   }
 
   const slug = companySlug(provider, boardToken);
-  const effectiveLogo = logoUrl ?? boardLogoUrl;
 
   // Resolve canonical company name. Caller-supplied `companyName` wins if
   // provided (caller is presumed authoritative); otherwise we run the raw
@@ -94,21 +95,37 @@ export async function syncBoard(
     rawName: rawBoardName,
   }).name;
 
-  // 2. Upsert company
+  // Resolve canonical website + logo using the layered resolver.
+  // Order: CompanyBoard override → curated map → ATS-supplied → null.
+  // The async multi-TLD heuristic only runs in the offline backfill script.
+  const logo = resolveCompanyLogoSync({
+    provider,
+    slug,
+    boardOverrideWebsite: boardOverrideWebsite ?? null,
+    boardOverrideLogoUrl: boardOverrideLogoUrl ?? null,
+    atsWebsite,
+    atsLogoUrl,
+  });
+
+  // 2. Upsert company.
+  // Only update `website`/`logoUrl` when the resolver actually produced one.
+  // This intentionally leaves prior values intact when sync has nothing
+  // better — protects logos that were manually fixed via the backfill script
+  // from being overwritten by a subsequent sync that sees no metadata.
   const company = await db.company.upsert({
     where: { provider_slug: { provider, slug } },
     update: {
       name: result.companyName,
       provider,
-      ...(boardWebsite && { website: boardWebsite }),
-      ...(effectiveLogo && { logoUrl: effectiveLogo }),
+      ...(logo.website && { website: logo.website }),
+      ...(logo.logoUrl && { logoUrl: logo.logoUrl }),
     },
     create: {
       name: result.companyName,
       slug,
       provider,
-      website: boardWebsite,
-      logoUrl: effectiveLogo ?? undefined,
+      website: logo.website,
+      logoUrl: logo.logoUrl ?? undefined,
     },
   });
 

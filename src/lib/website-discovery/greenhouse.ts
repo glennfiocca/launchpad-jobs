@@ -19,9 +19,18 @@
  * blocked HTTP responses. Combined, the catalogue should be ~95%+ covered.
  */
 
+import { followRedirectChain } from "./follow-redirects";
+import { toApex } from "./to-apex";
+
 const GREENHOUSE_BOARD_BASE = "https://job-boards.greenhouse.io";
 const FETCH_TIMEOUT_MS = 8000;
 const USER_AGENT = "Mozilla/5.0 (compatible; LaunchpadDiscovery/1.0)";
+
+// ATS hostnames whose presence in a redirect target means "this is an
+// internal hop, not a brand signal." `boards.greenhouse.io/X` →
+// `boards.greenhouse.io/embed/...` is an internal redirect; we only
+// want the target if it left the ATS.
+const ATS_HOST_FRAGMENTS = ["greenhouse.io", "ashbyhq.com"] as const;
 
 // Patterns are tried in order. First non-greenhouse URL wins.
 const HEADER_LOGO_RE = /<a[^>]*class="logo"[^>]*href="(https?:\/\/[^"]+)"/i;
@@ -55,8 +64,20 @@ export async function discoverGreenhouseWebsite(
 /**
  * HTTP-only discovery — fast, no browser. Skips when CloudFront blocks
  * (403) or when the page renders nothing useful.
+ *
+ * Two-stage path:
+ *   1. Walk the redirect chain. If the chain lands on a non-ATS hostname,
+ *      that's the company's real careers page → use it (apex-stripped).
+ *   2. Otherwise, parse the response body for embedded brand signals.
  */
 async function discoverGreenhouseViaHttp(url: string): Promise<string | null> {
+  // Stage 1: redirect-chain capture. Many Greenhouse boards 301 to the
+  // company's hosted careers page; following that chain manually surfaces
+  // the brand signal we'd otherwise miss.
+  const finalUrl = await followRedirectChain(url);
+  if (finalUrl !== url && !isAtsHost(finalUrl)) {
+    return toApex(finalUrl);
+  }
 
   let html: string;
   try {
@@ -149,10 +170,27 @@ function isGreenhouseSelfReference(url: string): boolean {
 }
 
 /**
+ * Test whether a URL's hostname belongs to one of the ATS providers we
+ * already know to filter. Used by the redirect-follow path so we don't
+ * mistake an internal ATS hop for a brand signal.
+ */
+function isAtsHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return ATS_HOST_FRAGMENTS.some((frag) => host.includes(frag));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Strip query/hash and normalize trailing slash. Drop any path component
  * past root so we get the canonical website rather than e.g.
  * "https://stripe.com/jobs/search" — that's a sub-path, not the company's
  * homepage. The hostname is what matters for logo.dev anyway.
+ *
+ * Then run through `toApex()` to drop career-portal subdomains
+ * (`careers.X.com` → `X.com`) — logo.dev resolves apex domains better.
  */
 function normalize(url: string): string | null {
   try {
@@ -161,7 +199,7 @@ function normalize(url: string): string | null {
     // URL parsing because hostname-only is technically valid syntax. Real
     // company sites always have at least one dot in the hostname.
     if (!parsed.hostname.includes(".")) return null;
-    return `${parsed.protocol}//${parsed.hostname}`;
+    return toApex(`${parsed.protocol}//${parsed.hostname}`);
   } catch {
     return null;
   }

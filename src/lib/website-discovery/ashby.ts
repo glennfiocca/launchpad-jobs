@@ -12,6 +12,8 @@
  * style HTTP fetch.
  */
 
+import { toApex } from "./to-apex";
+
 const ASHBY_BOARD_BASE = "https://jobs.ashbyhq.com";
 const FETCH_TIMEOUT_MS = 8000;
 const USER_AGENT = "Mozilla/5.0 (compatible; LaunchpadDiscovery/1.0)";
@@ -42,26 +44,10 @@ export async function discoverAshbyWebsite(boardName: string): Promise<string | 
     const m = html.match(PUBLIC_WEBSITE_RE);
     if (!m) return null;
 
-    return normalize(m[1]);
+    // toApex() strips known career-portal subdomains and discards path/
+    // search/hash, leaving an apex-shaped URL ready for logo.dev lookup.
+    return toApex(m[1]);
   } catch {
     return null;
-  }
-}
-
-/**
- * Strip query string + trailing slash for a stable, canonical website value.
- * Keeps the protocol + hostname + any path the company uses (some brands
- * canonicalize to a `/jobs` or `/careers` path, but most just point to root).
- */
-function normalize(url: string): string {
-  try {
-    const parsed = new URL(url);
-    parsed.search = "";
-    parsed.hash = "";
-    let s = parsed.toString();
-    if (s.endsWith("/") && parsed.pathname === "/") s = s.slice(0, -1);
-    return s;
-  } catch {
-    return url;
   }
 }

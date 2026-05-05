@@ -513,3 +513,23 @@ When the context window is cleared and we resume, start with:
 2. Spawn the same investigation agents if the assumptions feel stale (>2 weeks old)
 3. Confirm the open questions above with the user
 4. Pick a track and start. The recommended order is in "Dependencies + sequence" above.
+
+---
+
+## How to use: `scripts/verify-company-websites.ts` (B.1)
+
+Read-only audit that fetches each `Company.website`, extracts brand signals (`<title>`, `og:site_name`, `application-name`, JSON-LD `Organization.name`), and computes a token-Jaccard similarity vs `Company.name`. Outputs CSV sorted ascending by score (most suspicious first).
+
+Run:
+
+```bash
+npx tsx scripts/verify-company-websites.ts                  # full catalogue
+npx tsx scripts/verify-company-websites.ts --top=50         # 50 most suspicious
+npx tsx scripts/verify-company-websites.ts --threshold=0.3  # only score < 0.3
+npx tsx scripts/verify-company-websites.ts --limit=20       # smoke run
+npx tsx scripts/verify-company-websites.ts --companyId=cm…  # single company
+```
+
+Interpret the score: `0.0` = no signal overlap (squat / wrong brand / blocked / fetch error — see `error` col), `~0.5` = partial match (often correct — homepage title is "Brand Tagline"), `1.0` = exact match. Eyeball anything `< 0.3`; anything `>= 0.5` is almost always correct. Network errors (`TIMEOUT`/`DNS`/`403`/`429`) score 0 — separate class from real mismatches; check the `error` column before flagging.
+
+Feeding results into the override DB: TBD until B.4 lands. For now, suspicious entries get added to `src/lib/company-logo/overrides.ts` by hand.

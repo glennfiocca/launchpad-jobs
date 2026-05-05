@@ -100,14 +100,16 @@ describe("discoverGreenhouseWebsite", () => {
     expect(await discoverGreenhouseWebsite("hashicorp")).toBeNull();
   });
 
-  it("strips paths down to the apex hostname", async () => {
+  it("strips paths and apex-strips career-portal subdomains", async () => {
+    // careers.airbnb.com is a known career-portal subdomain — toApex
+    // (via normalize) drops it to the apex so logo.dev resolves correctly.
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
         '<a href="https://careers.airbnb.com/positions/" class="logo">logo</a>',
     } as Response);
     expect(await discoverGreenhouseWebsite("airbnb")).toBe(
-      "https://careers.airbnb.com",
+      "https://airbnb.com",
     );
   });
 });

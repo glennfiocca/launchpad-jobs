@@ -44,7 +44,15 @@ export default async function RootLayout({
           <Script
             id="termly-banner"
             src={`https://app.termly.io/resource-blocker/${TERMLY_WEBSITE_UUID}?autoBlock=on`}
-            strategy="beforeInteractive"
+            // afterInteractive (not beforeInteractive). In the App Router,
+            // beforeInteractive only emits a <link rel="preload"> in the
+            // initial HTML — the browser fetches the script but never
+            // executes it, so Termly's runtime never binds to the
+            // .termly-display-preferences trigger. afterInteractive emits
+            // a real <script> tag that runs after hydration. Termly's
+            // auto-blocker uses a MutationObserver internally so it can
+            // still intercept resources loaded later in the same phase.
+            strategy="afterInteractive"
           />
         )}
         {isProd && !gpc && (

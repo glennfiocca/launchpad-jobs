@@ -107,34 +107,59 @@ export async function syncBoard(
     atsLogoUrl,
   });
 
+  // Resolved logoUrl semantics:
+  //   - Manual override (override map / CompanyBoard.logoUrl): treat as a
+  //     SOURCE URL — fetch + cache to Spaces. We do NOT write the source
+  //     URL into Company.logoUrl; the enrichment step does that with the
+  //     final Spaces CDN URL.
+  //   - ATS-supplied (Greenhouse board.logo): write directly to Company.
+  //     Greenhouse hosts these on its own CDN; no need to re-cache.
+  const isManualOverrideLogo =
+    logo.logoUrl !== null &&
+    (logo.logoSource === "override" || logo.logoSource === "board");
+  const writeAtsLogo =
+    logo.logoUrl !== null && logo.logoSource === "ats";
+
   // 2. Upsert company.
-  // Only update `website`/`logoUrl` when the resolver actually produced one.
-  // This intentionally leaves prior values intact when sync has nothing
-  // better — protects logos that were manually fixed via the backfill script
-  // from being overwritten by a subsequent sync that sees no metadata.
+  // Only update `website`/`logoUrl` when the resolver produced one. Manual
+  // overrides take the enrichment path (below) so we don't leak the source
+  // URL into Company.logoUrl mid-cache.
   const company = await db.company.upsert({
     where: { provider_slug: { provider, slug } },
     update: {
       name: result.companyName,
       provider,
       ...(logo.website && { website: logo.website }),
-      ...(logo.logoUrl && { logoUrl: logo.logoUrl }),
+      ...(writeAtsLogo && { logoUrl: logo.logoUrl }),
     },
     create: {
       name: result.companyName,
       slug,
       provider,
       website: logo.website,
-      logoUrl: logo.logoUrl ?? undefined,
+      logoUrl: writeAtsLogo ? logo.logoUrl ?? undefined : undefined,
     },
   });
 
-  // Enrich logo in background if missing — pass the resolved theme so the
-  // cached PNG matches the per-brand override (or the global default).
-  if (!company.logoUrl) {
+  // Enrich logo in background:
+  //   - Manual override → fetch the source URL, cache to Spaces under
+  //     logos/manual/{slug}.png, write the CDN URL.
+  //   - No logo at all → derive from website + theme via logo.dev.
+  if (isManualOverrideLogo && logo.logoUrl) {
+    enrichCompanyLogo(
+      { id: company.id, website: company.website, name: company.name, slug: company.slug },
+      { sourceUrl: logo.logoUrl },
+    )
+      .then((url) => {
+        if (!url) {
+          console.warn(`[logo-enrichment] Failed to cache override logo for: ${company.name}`);
+        }
+      })
+      .catch(() => undefined);
+  } else if (!company.logoUrl) {
     enrichCompanyLogo(
       { id: company.id, website: company.website, name: company.name },
-      logo.theme,
+      { theme: logo.theme },
     )
       .then((url) => {
         if (!url) {

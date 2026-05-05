@@ -86,6 +86,12 @@ interface ProposedChange {
   websiteSource: string;
   needsLogoRefresh: boolean;
   theme: "light" | "dark" | "auto";
+  /**
+   * If the override resolver gave us an explicit logoUrl, treat it as a
+   * fetch source instead of writing it as-is. The enrichment step will
+   * download + Spaces-cache it under logos/manual/{slug}.png.
+   */
+  overrideLogoSourceUrl: string | null;
 }
 
 async function main(): Promise<void> {
@@ -176,7 +182,20 @@ async function main(): Promise<void> {
       flags.forceLogo ||
       (effectiveWebsite !== null && c.logoUrl === null);
 
-    if (websiteChanged || needsLogoRefresh) {
+    // If the override resolver supplied an explicit logoUrl (override map
+    // or CompanyBoard.logoUrl), thread it through as a fetch source so
+    // enrichment caches it to Spaces.
+    const overrideLogoSourceUrl =
+      result.logoUrl !== null &&
+      (result.logoSource === "override" || result.logoSource === "board")
+        ? result.logoUrl
+        : null;
+
+    // Force a refresh whenever an override logo source is present — the
+    // bytes might have changed even if the URL didn't.
+    const finalNeedsRefresh = needsLogoRefresh || overrideLogoSourceUrl !== null;
+
+    if (websiteChanged || finalNeedsRefresh) {
       proposed.push({
         companyId: c.id,
         slug: c.slug,
@@ -186,8 +205,9 @@ async function main(): Promise<void> {
         afterWebsite: result.website,
         effectiveWebsite,
         websiteSource: result.websiteSource,
-        needsLogoRefresh,
+        needsLogoRefresh: finalNeedsRefresh,
         theme: result.theme,
+        overrideLogoSourceUrl,
       });
     }
   }
@@ -236,27 +256,32 @@ async function main(): Promise<void> {
       websitesUpdated++;
     }
 
-    if (p.needsLogoRefresh && p.effectiveWebsite) {
-      // Clear the old (potentially wrong) cached logo so enrichment will
-      // re-derive from the corrected website. logo.dev handles the new
-      // fetch; Spaces stores under a hostname-keyed object so the path
-      // changes when the domain changes — old objects stay orphaned but
-      // unreferenced (acceptable; we can prune Spaces in a separate pass).
-      if (flags.forceLogo) {
+    if (p.needsLogoRefresh) {
+      // Clear the old logo so enrichment writes a fresh URL. Spaces stores
+      // by either hostname or slug so the new key may differ from the old
+      // one — orphaned old objects are acceptable (separate Spaces prune
+      // pass can clean them up later).
+      if (flags.forceLogo || p.overrideLogoSourceUrl) {
         await db.company.update({
           where: { id: p.companyId },
           data: { logoUrl: null },
         });
       }
 
-      const cdnUrl = await enrichCompanyLogo(
-        {
-          id: p.companyId,
-          name: p.name,
-          website: p.effectiveWebsite,
-        },
-        p.theme,
-      );
+      // Override-supplied source URL → fetch + cache it directly.
+      // Otherwise → fall through to the website + theme path.
+      let cdnUrl: string | null = null;
+      if (p.overrideLogoSourceUrl) {
+        cdnUrl = await enrichCompanyLogo(
+          { id: p.companyId, name: p.name, website: p.effectiveWebsite, slug: p.slug },
+          { sourceUrl: p.overrideLogoSourceUrl },
+        );
+      } else if (p.effectiveWebsite) {
+        cdnUrl = await enrichCompanyLogo(
+          { id: p.companyId, name: p.name, website: p.effectiveWebsite },
+          { theme: p.theme },
+        );
+      }
 
       if (cdnUrl) logosEnriched++;
       else logosFailed++;

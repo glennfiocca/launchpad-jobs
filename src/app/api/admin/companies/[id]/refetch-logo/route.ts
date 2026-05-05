@@ -69,25 +69,33 @@ export async function POST(
     });
   }
 
-  // 2. Clear stale logoUrl and re-enrich. If the override directly supplies a
-  // logoUrl, prefer that and skip the logo.dev round-trip entirely.
+  // 2. Clear stale logoUrl, then re-enrich.
+  // If the resolver gave us an explicit logoUrl from an override, treat it
+  // as a fetch source — enrichment downloads it and caches to Spaces under
+  // logos/manual/{slug}.png. Otherwise derive from website + theme.
+  await db.company.update({
+    where: { id: company.id },
+    data: { logoUrl: null },
+  });
+
   if (resolved.logoUrl) {
-    await db.company.update({
-      where: { id: company.id },
-      data: { logoUrl: resolved.logoUrl },
-    });
+    await enrichCompanyLogo(
+      {
+        id: company.id,
+        name: company.name,
+        website: resolved.website ?? company.website,
+        slug: company.slug,
+      },
+      { sourceUrl: resolved.logoUrl },
+    );
   } else {
-    await db.company.update({
-      where: { id: company.id },
-      data: { logoUrl: null },
-    });
     await enrichCompanyLogo(
       {
         id: company.id,
         name: company.name,
         website: resolved.website ?? company.website,
       },
-      resolved.theme,
+      { theme: resolved.theme },
     );
   }
 

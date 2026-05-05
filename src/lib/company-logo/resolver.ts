@@ -44,17 +44,23 @@ export interface ResolveLogoResult {
 }
 
 /**
- * Synchronous resolver for the sync hot path. Covers steps 1-3.
+ * Resolver for the sync hot path. Covers steps 1-3 (no multi-TLD HTTP probe).
+ *
  * Returns websiteSource: "none" if none of the layers produced a value —
- * the caller (sync) leaves Company.website unchanged in that case, and
- * the heuristic + enrichment fire later from the backfill script.
+ * the caller (sync) leaves Company.website unchanged in that case, and the
+ * heuristic + enrichment fire later from the backfill script.
+ *
+ * Note: this function is async because the override lookup hits the DB
+ * (B.4 of HARDENING_PLAN.md). The "Sync" suffix in the name now refers to
+ * "no expensive multi-TLD HTTP probe, safe for the sync hot path", NOT
+ * to JavaScript synchronous semantics.
  */
-export function resolveCompanyLogoSync(
+export async function resolveCompanyLogoSync(
   input: ResolveLogoInput,
-): ResolveLogoResult {
+): Promise<ResolveLogoResult> {
   const { provider, slug, boardOverrideWebsite, boardOverrideLogoUrl, atsWebsite, atsLogoUrl } = input;
 
-  const override = lookupLogoOverride(provider, slug);
+  const override = await lookupLogoOverride(provider, slug);
 
   // Website resolution
   let website: string | null = null;
@@ -94,7 +100,7 @@ export function resolveCompanyLogoSync(
 export async function resolveCompanyLogoFull(
   input: ResolveLogoInput,
 ): Promise<ResolveLogoResult> {
-  const sync = resolveCompanyLogoSync(input);
+  const sync = await resolveCompanyLogoSync(input);
   if (sync.websiteSource !== "none") return sync;
 
   const guessed = await guessWebsiteFromSlug(input.slug);

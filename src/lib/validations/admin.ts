@@ -24,6 +24,20 @@ export const updateCompanyBoardSchema = createCompanyBoardSchema.partial().exten
   isActive: z.boolean().optional(),
 })
 
+// CompanyLogoOverride (Track B.4) — DB-backed runtime overrides edited via
+// /admin/logo-overrides. `slug` is the same key shape used by the resolver:
+// for Ashby boards, the resolver normalizes `ashby-supabase` → `supabase`
+// before lookup, so admin entries should use the normalized slug.
+export const createLogoOverrideSchema = z.object({
+  provider: z.enum(["GREENHOUSE", "ASHBY"]),
+  slug: z.string().min(1).max(200).trim().toLowerCase(),
+  website: z.string().url().optional().or(z.literal("")),
+  logoUrl: z.string().url().optional().or(z.literal("")),
+  notes: z.string().max(1000).optional().or(z.literal("")),
+})
+
+export const updateLogoOverrideSchema = createLogoOverrideSchema.partial()
+
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

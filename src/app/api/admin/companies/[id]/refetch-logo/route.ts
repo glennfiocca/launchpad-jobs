@@ -53,7 +53,7 @@ export async function POST(
     );
   }
 
-  const resolved = resolveCompanyLogoSync({
+  const resolved = await resolveCompanyLogoSync({
     provider: board.provider,
     slug,
     boardOverrideWebsite: board.website,

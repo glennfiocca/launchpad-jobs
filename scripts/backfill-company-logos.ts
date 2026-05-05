@@ -147,7 +147,7 @@ async function main(): Promise<void> {
     //   - If Company.website is null, run the FULL resolver (heuristic
     //     included) since we have nothing to lose.
     const result = c.website
-      ? resolveCompanyLogoSync({
+      ? await resolveCompanyLogoSync({
           provider: c.provider,
           slug: c.slug,
           boardOverrideWebsite: board?.website ?? null,

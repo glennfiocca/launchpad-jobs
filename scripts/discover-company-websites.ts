@@ -94,7 +94,7 @@ async function processBatch(
   return Promise.all(
     rows.map(async (c) => {
       // Curated override always wins — skip discovery entirely.
-      const override = lookupLogoOverride(c.provider, c.slug);
+      const override = await lookupLogoOverride(c.provider, c.slug);
       if (override?.website) {
         return {
           id: c.id,

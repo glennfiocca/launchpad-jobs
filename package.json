@@ -20,6 +20,7 @@
     "backfill-job-eligibility": "tsx scripts/backfill-job-eligibility.ts",
     "db:promote-admin": "tsx prisma/promote-admin.ts",
     "db:seed-boards": "tsx prisma/seed-company-boards.ts",
+    "db:seed-overrides": "tsx prisma/seed-overrides.ts",
     "db:seed-universities": "tsx prisma/seed-universities.ts",
     "db:seed:e2e": "tsx prisma/seed-e2e.ts",
     "test": "vitest run",

@@ -544,6 +544,24 @@ model CompanyBoard {
   @@unique([provider, boardToken])
 }
 
+// Runtime source-of-truth for curated logo/website overrides. Track B.4 of
+// HARDENING_PLAN.md promoted this from a TS constant
+// (src/lib/company-logo/overrides.ts) to a DB table so admins can edit
+// without a code deploy. The TS map remains as the deploy-time seed
+// (prisma/seed-overrides.ts) and a fallback when LOGO_OVERRIDES_FROM_DB=false.
+model CompanyLogoOverride {
+  id        String      @id @default(cuid())
+  provider  AtsProvider
+  slug      String
+  website   String?
+  logoUrl   String?
+  notes     String?     @db.Text
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([provider, slug])
+}
+
 enum FeedbackType {
   BUG
   FEATURE

@@ -168,7 +168,7 @@ export async function syncBoard(
   // Resolve canonical website + logo using the layered resolver.
   // Order: CompanyBoard override → curated map → ATS-supplied → null.
   // The async multi-TLD heuristic only runs in the offline backfill script.
-  const logo = resolveCompanyLogoSync({
+  const logo = await resolveCompanyLogoSync({
     provider,
     slug,
     boardOverrideWebsite: boardOverrideWebsite ?? null,

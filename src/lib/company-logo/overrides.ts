@@ -1,24 +1,28 @@
 /**
  * Curated website + logo overrides keyed by `(provider, slug)`.
  *
- * The resolver consults this map FIRST. If a slug matches, the override
- * wins over both ATS-supplied metadata and the heuristic domain-guessing
- * path. This is the escape hatch for cases where the heuristic gets it
- * wrong — most commonly companies whose `.com` is squatted or owned by a
- * different brand (e.g. Astronomer, whose real domain is astronomer.io).
+ * NOTE: This map is now a deploy-time SEED for the CompanyLogoOverride DB
+ * table. Runtime source of truth is the DB. To bootstrap a fresh deploy:
+ *   npm run db:seed-overrides
+ * Editing this file manually is OK only as a way to add bulk new entries
+ * before a deploy. For ad-hoc admin work, use /admin/logo-overrides UI.
  *
- * Three layers of resolution sit on top of this map:
+ * The resolver consults `lookupLogoOverride()` FIRST. If a slug matches, the
+ * override wins over both ATS-supplied metadata and the heuristic
+ * domain-guessing path. This is the escape hatch for cases where the
+ * heuristic gets it wrong — most commonly companies whose `.com` is squatted
+ * or owned by a different brand (e.g. Astronomer, whose real domain is
+ * astronomer.io).
+ *
+ * Three layers of resolution sit on top:
  *   1. CompanyBoard.website / CompanyBoard.logoUrl  ← admin per-row UI
- *   2. SHARED_OVERRIDES below                       ← code-level truth
+ *   2. CompanyLogoOverride DB row + this map        ← curated truth
  *   3. Greenhouse `board.website` / `board.logo`    ← ATS-reported
  *   4. Heuristic multi-TLD probe                    ← last resort
- *
- * Add an entry here whenever a sync produces the wrong logo because the
- * slug→domain heuristic guessed wrong. Curating ~50 entries beats writing
- * an ML classifier.
  */
 
 import type { AtsProvider } from "@prisma/client";
+import { db } from "@/lib/db";
 
 export interface LogoOverride {
   /** Canonical company website (used as input to the logo lookup). */
@@ -197,10 +201,88 @@ const GREENHOUSE_OVERRIDES: Record<string, LogoOverride> = {};
 const ASHBY_OVERRIDES: Record<string, LogoOverride> = {};
 
 /**
- * Look up a curated logo/website override for a given provider+slug pair.
- * Provider-specific entries win over shared entries.
+ * In-process cache for DB-backed override lookups. Process-local Map (NOT
+ * Redis) — admin edits invalidate via `invalidateLogoOverrideCache()` from
+ * the API routes, and the 60s TTL bounds staleness across processes.
  */
-export function lookupLogoOverride(
+interface CacheEntry {
+  value: LogoOverride | null;
+  expiresAt: number;
+}
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 60_000;
+
+function cacheKey(provider: AtsProvider, slug: string): string {
+  return `${provider}:${slug}`;
+}
+
+/**
+ * Drop all cached override lookups. Called from POST/PATCH/DELETE on the
+ * admin API so admin edits become visible within the next request, not
+ * after the 60s TTL.
+ */
+export function invalidateLogoOverrideCache(): void {
+  cache.clear();
+}
+
+/**
+ * Look up a curated logo/website override for a given provider+slug pair.
+ *
+ * Reads the DB-backed `CompanyLogoOverride` table by default. If the env var
+ * `LOGO_OVERRIDES_FROM_DB=false`, falls back to the TS map directly (for
+ * environments without DB access — e.g. unit tests, CLI scripts running
+ * against a mock).
+ *
+ * Returns `null` (NOT `undefined`) when no override is found. The
+ * `LogoOverride | null` return type signals "queried, found nothing"
+ * distinct from a thrown error. The legacy synchronous TS-map fallback
+ * `lookupFromTsMap()` remains `undefined`-returning for back-compat.
+ */
+export async function lookupLogoOverride(
+  provider: AtsProvider,
+  slug: string,
+): Promise<LogoOverride | null> {
+  if (process.env.LOGO_OVERRIDES_FROM_DB === "false") {
+    return lookupFromTsMap(provider, slug) ?? null;
+  }
+
+  const key = cacheKey(provider, slug);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  // Strip provider prefix to match the seed key shape (e.g. "ashby-supabase"
+  // → "supabase"). The DB stores raw slugs as supplied by callers; we look
+  // up with the normalized form first, then fall back to the raw form so
+  // both paths work during the migration window.
+  const normalized = stripProviderPrefix(provider, slug).toLowerCase();
+  const row =
+    (await db.companyLogoOverride.findUnique({
+      where: { provider_slug: { provider, slug: normalized } },
+    })) ??
+    (await db.companyLogoOverride.findUnique({
+      where: { provider_slug: { provider, slug } },
+    }));
+
+  const value: LogoOverride | null = row
+    ? {
+        website: row.website ?? undefined,
+        logoUrl: row.logoUrl ?? undefined,
+      }
+    : (lookupFromTsMap(provider, slug) ?? null);
+
+  cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  return value;
+}
+
+/**
+ * Pure synchronous lookup against the bundled TS map. Used as the fallback
+ * path when `LOGO_OVERRIDES_FROM_DB=false` and as the source for the seed
+ * script. Kept as a separate export so non-DB call sites (CLI scripts,
+ * tests) can still use the map directly without a Prisma dependency.
+ */
+export function lookupFromTsMap(
   provider: AtsProvider,
   slug: string,
 ): LogoOverride | undefined {

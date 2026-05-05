@@ -33,6 +33,12 @@ vi.mock("../../db", () => ({
     applicationStatusHistory: {
       create: vi.fn(),
     },
+    // Track B.4: lookupLogoOverride hits the DB by default. The sync hot
+    // path under test invokes it via resolveCompanyLogoSync — return null
+    // so the resolver falls through to the TS-map fallback.
+    companyLogoOverride: {
+      findUnique: vi.fn(async () => null),
+    },
   },
 }));
 

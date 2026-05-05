@@ -115,6 +115,10 @@ const SHARED_OVERRIDES: Record<string, LogoOverride> = {
   sigmacomputing: { website: "https://sigmacomputing.com" },
   launchdarkly: { website: "https://launchdarkly.com" },
 
+  // Generic-name GH boards owned by smaller companies (not the big-brand
+  // namesake the heuristic would otherwise guess).
+  crescent: { website: "https://www.crescentway.com" },
+
   // Tokens that obviously map to a different brand domain
   doordashusa: { website: "https://doordash.com" },
   couchbaseinc: { website: "https://couchbase.com" },

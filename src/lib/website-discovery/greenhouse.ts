@@ -154,11 +154,15 @@ function isGreenhouseSelfReference(url: string): boolean {
  * "https://stripe.com/jobs/search" — that's a sub-path, not the company's
  * homepage. The hostname is what matters for logo.dev anyway.
  */
-function normalize(url: string): string {
+function normalize(url: string): string | null {
   try {
     const parsed = new URL(url);
+    // Reject malformed hostnames: "careers.godaddy" (no TLD) sneaks through
+    // URL parsing because hostname-only is technically valid syntax. Real
+    // company sites always have at least one dot in the hostname.
+    if (!parsed.hostname.includes(".")) return null;
     return `${parsed.protocol}//${parsed.hostname}`;
   } catch {
-    return url;
+    return null;
   }
 }

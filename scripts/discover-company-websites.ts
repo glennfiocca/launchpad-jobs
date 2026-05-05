@@ -82,7 +82,14 @@ function deriveBoardToken(provider: AtsProvider, slug: string): string {
 }
 
 async function processBatch(
-  rows: Array<{ id: string; slug: string; provider: AtsProvider; name: string; website: string | null }>,
+  rows: Array<{
+    id: string;
+    slug: string;
+    provider: AtsProvider;
+    name: string;
+    website: string | null;
+    jobExternalId: string | null;
+  }>,
 ): Promise<DiscoveryRow[]> {
   return Promise.all(
     rows.map(async (c) => {
@@ -102,7 +109,14 @@ async function processBatch(
       }
 
       const boardToken = deriveBoardToken(c.provider, c.slug);
-      const result = await discoverWebsite(c.provider, boardToken);
+      // For Greenhouse, pass an active job's external ID so discovery
+      // hits a real per-job page (~80-150 KB of SEO-friendly HTML) rather
+      // than the JS-rendered board index. Hugely more reliable.
+      const result = await discoverWebsite(
+        c.provider,
+        boardToken,
+        c.jobExternalId ?? undefined,
+      );
 
       const after = result.website;
       const changed = after !== null && normalizeHost(c.website) !== normalizeHost(after);
@@ -133,11 +147,33 @@ async function main(): Promise<void> {
   if (flags.slug) where.slug = flags.slug;
   if (flags.provider) where.provider = flags.provider;
 
-  const companies = await db.company.findMany({
+  const rawCompanies = await db.company.findMany({
     where,
-    select: { id: true, slug: true, provider: true, name: true, website: true },
+    select: {
+      id: true,
+      slug: true,
+      provider: true,
+      name: true,
+      website: true,
+      // One active job per company is enough — used as the SEO-rich
+      // per-job page target for Greenhouse discovery.
+      jobs: {
+        where: { isActive: true },
+        select: { externalId: true },
+        take: 1,
+      },
+    },
     orderBy: { id: "asc" },
   });
+
+  const companies = rawCompanies.map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    provider: c.provider,
+    name: c.name,
+    website: c.website,
+    jobExternalId: c.jobs[0]?.externalId ?? null,
+  }));
 
   console.log(`Scanning ${companies.length.toLocaleString()} companies...\n`);
 
@@ -163,6 +199,8 @@ async function main(): Promise<void> {
         userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         viewport: { width: 1280, height: 800 },
       });
+      // Index by id so we can retrieve each miss's job-external-id.
+      const jobIdById = new Map(companies.map((c) => [c.id, c.jobExternalId]));
       try {
         let recovered = 0;
         let i = 0;
@@ -171,7 +209,13 @@ async function main(): Promise<void> {
           const page = await context.newPage();
           try {
             const boardToken = deriveBoardToken(row.provider, row.slug);
-            const website = await discoverGreenhouseViaBrowser(boardToken, page);
+            const jobExternalId = jobIdById.get(row.id) ?? undefined;
+            // Per-page hard timeout to avoid the indefinite hang we hit
+            // earlier — kills any single board that won't respond.
+            const website = await Promise.race<string | null>([
+              discoverGreenhouseViaBrowser(boardToken, page, jobExternalId),
+              new Promise((resolve) => setTimeout(() => resolve(null), 25_000)),
+            ]);
             if (website) {
               row.after = website;
               row.source = "greenhouse";

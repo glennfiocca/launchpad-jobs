@@ -20,13 +20,16 @@ export interface DiscoveryResult {
 export async function discoverWebsite(
   provider: AtsProvider,
   boardToken: string,
+  /** Optional: external ID of an active job for this board. Greenhouse
+   *  uses it to scrape a job-page (much more reliable than board-page). */
+  jobExternalId?: string,
 ): Promise<DiscoveryResult> {
   if (provider === "ASHBY") {
     const website = await discoverAshbyWebsite(boardToken);
     return { website, source: website ? "ashby" : "none" };
   }
   if (provider === "GREENHOUSE") {
-    const website = await discoverGreenhouseWebsite(boardToken);
+    const website = await discoverGreenhouseWebsite(boardToken, jobExternalId);
     return { website, source: website ? "greenhouse" : "none" };
   }
   return { website: null, source: "none" };

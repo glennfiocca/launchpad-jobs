@@ -29,22 +29,34 @@ const HEADER_LOGO_RE_ALT = /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*class="logo"/i;
 const CANONICAL_RE = /<link[^>]*rel="canonical"[^>]*href="(https?:\/\/[^"]+)"/i;
 const OG_URL_RE = /<meta[^>]*property="og:url"[^>]*content="(https?:\/\/[^"]+)"/i;
 
-export async function discoverGreenhouseWebsite(boardToken: string): Promise<string | null> {
+export async function discoverGreenhouseWebsite(
+  boardToken: string,
+  jobExternalId?: string,
+): Promise<string | null> {
   if (!boardToken) return null;
 
-  // Try the cheap HTTP path first; only spin up a browser when it fails.
-  const fast = await discoverGreenhouseViaHttp(boardToken);
-  if (fast) return fast;
+  // Job pages are dramatically more reliable than the board-index page:
+  // they're SEO-targeted and ship full server-rendered HTML (~80-150 KB)
+  // including the header logo link, canonical URL, og tags. Board pages
+  // are mostly JS-rendered shells (920 bytes; CloudFront-blocked).
+  // Pass the external ID of any active job for this board to use the
+  // job-page path. Falls back to board-page when no job ID is provided
+  // (or, in the future, when the job-page path returns null).
+  if (jobExternalId) {
+    const fromJob = await discoverGreenhouseViaHttp(
+      `${GREENHOUSE_BOARD_BASE}/${encodeURIComponent(boardToken)}/jobs/${encodeURIComponent(jobExternalId)}`,
+    );
+    if (fromJob) return fromJob;
+  }
 
-  return null;
+  return discoverGreenhouseViaHttp(`${GREENHOUSE_BOARD_BASE}/${encodeURIComponent(boardToken)}`);
 }
 
 /**
  * HTTP-only discovery — fast, no browser. Skips when CloudFront blocks
- * (403) or when the bare Greenhouse template renders nothing useful.
+ * (403) or when the page renders nothing useful.
  */
-async function discoverGreenhouseViaHttp(boardToken: string): Promise<string | null> {
-  const url = `${GREENHOUSE_BOARD_BASE}/${encodeURIComponent(boardToken)}`;
+async function discoverGreenhouseViaHttp(url: string): Promise<string | null> {
 
   let html: string;
   try {
@@ -95,8 +107,11 @@ async function discoverGreenhouseViaHttp(boardToken: string): Promise<string | n
 export async function discoverGreenhouseViaBrowser(
   boardToken: string,
   page: import("playwright").Page,
+  jobExternalId?: string,
 ): Promise<string | null> {
-  const url = `${GREENHOUSE_BOARD_BASE}/${encodeURIComponent(boardToken)}`;
+  const url = jobExternalId
+    ? `${GREENHOUSE_BOARD_BASE}/${encodeURIComponent(boardToken)}/jobs/${encodeURIComponent(jobExternalId)}`
+    : `${GREENHOUSE_BOARD_BASE}/${encodeURIComponent(boardToken)}`;
 
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });

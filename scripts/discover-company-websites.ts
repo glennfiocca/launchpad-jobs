@@ -28,6 +28,7 @@ import "dotenv/config";
 import type { AtsProvider } from "@prisma/client";
 import { db } from "../src/lib/db";
 import { discoverWebsite } from "../src/lib/website-discovery";
+import { discoverGreenhouseViaBrowser } from "../src/lib/website-discovery/greenhouse";
 import { lookupLogoOverride } from "../src/lib/company-logo";
 
 interface CliFlags {
@@ -35,12 +36,14 @@ interface CliFlags {
   slug: string | null;
   provider: AtsProvider | null;
   concurrency: number;
+  browser: boolean;
 }
 
 function parseFlags(argv: readonly string[]): CliFlags {
-  const flags: CliFlags = { apply: false, slug: null, provider: null, concurrency: 6 };
+  const flags: CliFlags = { apply: false, slug: null, provider: null, concurrency: 6, browser: false };
   for (const arg of argv) {
     if (arg === "--apply") flags.apply = true;
+    else if (arg === "--browser") flags.browser = true;
     else if (arg.startsWith("--slug=")) flags.slug = arg.slice("--slug=".length);
     else if (arg.startsWith("--provider=")) {
       const v = arg.slice("--provider=".length).toUpperCase();
@@ -145,6 +148,46 @@ async function main(): Promise<void> {
     results.push(...batchResults);
     if ((i + flags.concurrency) % 60 < flags.concurrency) {
       console.log(`  scanned ${Math.min(i + flags.concurrency, companies.length)} / ${companies.length}`);
+    }
+  }
+
+  // Browser fallback: re-attempt the misses with a real Chromium page.
+  // Slow but robust against CloudFront WAF and JS-rendered templates.
+  if (flags.browser) {
+    const misses = results.filter((r) => r.source === "miss" && r.provider === "GREENHOUSE");
+    if (misses.length > 0) {
+      console.log(`\nRetrying ${misses.length} GH misses via browser...`);
+      const { chromium } = await import("playwright");
+      const browser = await chromium.launch({ headless: true });
+      const context = await browser.newContext({
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        viewport: { width: 1280, height: 800 },
+      });
+      try {
+        let recovered = 0;
+        let i = 0;
+        for (const row of misses) {
+          i++;
+          const page = await context.newPage();
+          try {
+            const boardToken = deriveBoardToken(row.provider, row.slug);
+            const website = await discoverGreenhouseViaBrowser(boardToken, page);
+            if (website) {
+              row.after = website;
+              row.source = "greenhouse";
+              row.changed = normalizeHost(row.before) !== normalizeHost(website);
+              recovered++;
+            }
+          } finally {
+            await page.close();
+          }
+          if (i % 20 === 0) console.log(`  browser progress: ${i}/${misses.length} (${recovered} recovered)`);
+        }
+        console.log(`  browser recovered: ${recovered}/${misses.length}`);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
     }
   }
 

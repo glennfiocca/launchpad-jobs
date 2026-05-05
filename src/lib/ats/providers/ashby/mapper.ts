@@ -57,7 +57,15 @@ export function mapAshbyJobToNormalized(ashbyJob: AshbyApiJob): NormalizedJob {
       : null,
     remote: ashbyJob.isRemote ?? false,
     absoluteUrl: ashbyJob.jobUrl || null,
-    applyUrl: ashbyJob.applyUrl || null,
+    // applyUrl is intentionally left null here. The Ashby Posting API returns
+    // `https://jobs.ashbyhq.com/{board}/{uuid}/application` for every job —
+    // for self-hosters that URL renders an empty SPA shell. The client's
+    // getJobs() re-derives both URLs together (see client.ts) using the same
+    // slug/fallback resolution, so applyUrl is set in lockstep with
+    // absoluteUrl. For hosted (non-self-hoster) Ashby companies, applyUrl
+    // stays null and the Playwright caller falls back to the canonical
+    // jobs.ashbyhq.com URL pattern (see src/app/api/applications/route.ts).
+    applyUrl: null,
     content: ashbyJob.descriptionHtml || null,
     postedAt: ashbyJob.publishedAt ? new Date(ashbyJob.publishedAt) : null,
     compensation: extractCompensation(ashbyJob),

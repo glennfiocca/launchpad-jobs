@@ -85,9 +85,20 @@ The presigned resume URL has a **300-second (5-minute) TTL**.
 
 ## Chrome Extension
 
-See `extensions/pipeline-operator/README.md` for installation instructions.
+See `extensions/pipeline-operator/README.md` for first-time installation instructions.
 
-The extension supports **Greenhouse** and **Ashby** apply pages.
+As of v1.1.1 the extension matches `<all_urls>` and self-gates on the `#pipelineFill=` JWT hash, so it injects on **any** apply page (Greenhouse, Ashby, and self-hosted careers pages such as `cursor.com/careers`, `deel.com/careers`, etc.) without needing per-domain manifest entries. The script no-ops on every other page.
+
+### Updating the extension
+
+The extension is distributed as unpacked source — there is no Chrome Web Store listing. To pick up code changes:
+
+1. Operator pulls the latest `launchpad` repo (`git pull`).
+2. Open `chrome://extensions/`.
+3. Click the **Refresh** icon on the *Pipeline Operator* card.
+4. Confirm the version on the card matches `manifest.json`.
+
+The extension will now inject on any URL when a `#pipelineFill=` hash is present (including self-hosted careers pages). No reinstall, no zip, no review.
 
 ### Greenhouse (`job-boards.greenhouse.io`)
 

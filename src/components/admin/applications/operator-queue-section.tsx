@@ -134,17 +134,22 @@ export function OperatorQueueSection({ application, currentUserId }: Props) {
         return
       }
       const { token } = json.data as { token: string }
-      // Prefer the embed URL — it always renders the form directly, unlike the
-      // detail page which may require an extra click-through on some boards.
+      // Prefer the snapshot's manualApplyUrl — for Ashby self-hosters this is
+      // the live custom-domain page (e.g. cursor.com/careers/...); for hosted
+      // boards it's still the canonical jobs.ashbyhq.com / greenhouse.io URL
+      // captured at apply time. Fall back to the hosted-embed URL pattern only
+      // when no snapshot URL is available (legacy rows pre-A.1).
       const boardToken = snapshot?.boardToken
       const externalId = snapshot?.externalId
       const atsUrl = provider === "ASHBY"
-        ? (boardToken && externalId
-          ? `https://jobs.ashbyhq.com/${encodeURIComponent(boardToken)}/${encodeURIComponent(externalId)}/application`
-          : snapshot?.manualApplyUrl)
-        : (boardToken && externalId
-          ? `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(boardToken)}&token=${encodeURIComponent(externalId)}`
-          : snapshot?.manualApplyUrl)
+        ? (snapshot?.manualApplyUrl
+          ?? (boardToken && externalId
+            ? `https://jobs.ashbyhq.com/${encodeURIComponent(boardToken)}/${encodeURIComponent(externalId)}/application`
+            : undefined))
+        : (snapshot?.manualApplyUrl
+          ?? (boardToken && externalId
+            ? `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(boardToken)}&token=${encodeURIComponent(externalId)}`
+            : undefined))
       if (!atsUrl) {
         setMsg(`No ${providerLabel} URL in snapshot — cannot open prefilled form.`)
         return

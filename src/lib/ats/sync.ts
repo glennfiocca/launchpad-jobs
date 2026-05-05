@@ -80,6 +80,21 @@ export function shouldPreserveAbsoluteUrl(
   return existingIsSlug && incomingIsFallback;
 }
 
+/**
+ * Parallel stickiness rule for `applyUrl`. After A.1 the Ashby client sets
+ * `applyUrl` and `absoluteUrl` to the same URL for self-hosters, so the
+ * downgrade pattern we guard against (slug → ashby_jid fallback) is
+ * identical. Kept as a separate export so callers signal intent + tests
+ * can target each field independently — but the logic delegates to
+ * `shouldPreserveAbsoluteUrl` to avoid drift.
+ */
+export function shouldPreserveApplyUrl(
+  existing: string | null,
+  incoming: string | null,
+): boolean {
+  return shouldPreserveAbsoluteUrl(existing, incoming);
+}
+
 function parseUrl(s: string): URL | null {
   try {
     return new URL(s);
@@ -253,6 +268,7 @@ export async function syncBoard(
       boardToken,
       provider,
       absoluteUrl: normalizedJob.absoluteUrl,
+      applyUrl: normalizedJob.applyUrl,
       content: normalizedJob.content,
       isActive: true,
       postedAt: normalizedJob.postedAt,
@@ -290,6 +306,15 @@ export async function syncBoard(
           shouldPreserveAbsoluteUrl(existing.absoluteUrl, updateData.absoluteUrl)
         ) {
           updateData.absoluteUrl = existing.absoluteUrl;
+        }
+        // Same guard for applyUrl. Both URLs now move in lockstep for
+        // self-hosters (see Ashby client.getJobs), so the same downgrade
+        // pattern applies — slug → ?ashby_jid fallback during a transient
+        // discovery failure.
+        if (
+          shouldPreserveApplyUrl(existing.applyUrl, updateData.applyUrl)
+        ) {
+          updateData.applyUrl = existing.applyUrl;
         }
 
         await db.job.update({

@@ -66,7 +66,10 @@ export async function POST(
   const applyResult = await strategy.apply({
     boardToken: app.job.boardToken,
     jobExternalId: app.job.externalId,
-    applyUrl: app.job.absoluteUrl ?? (provider === "ASHBY"
+    // Prefer dedicated applyUrl (rewritten to live custom-domain page for
+    // Ashby self-hosters); fall back to absoluteUrl for legacy rows; final
+    // fallback is the canonical hosted URL pattern per provider.
+    applyUrl: app.job.applyUrl ?? app.job.absoluteUrl ?? (provider === "ASHBY"
       ? `https://jobs.ashbyhq.com/${app.job.boardToken}/${app.job.externalId}/application`
       : `https://boards.greenhouse.io/${app.job.boardToken}/jobs/${app.job.externalId}`),
     profile: {

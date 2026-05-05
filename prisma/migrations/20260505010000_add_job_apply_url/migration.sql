@@ -1,0 +1,15 @@
+-- Add a dedicated `applyUrl` column to Job. Until now the application
+-- submission path treated `Job.absoluteUrl` as the apply URL, but Track A.1
+-- of HARDENING_PLAN.md splits the two so that:
+--   - `absoluteUrl` is the human-facing "View original listing" deeplink
+--   - `applyUrl`    is the machine-facing target for Playwright submission +
+--                   the JWT-snapshot manualApplyUrl
+-- For Ashby self-hosters both URLs end up pointing at the same custom-domain
+-- page (the apply form lives on the listing page); for hosted boards they
+-- diverge (absoluteUrl → /jobs/{id}, applyUrl → /jobs/{id}/application).
+--
+-- Nullable + no default → Postgres metadata-only ALTER, safe under load.
+-- The Ashby client populates this column on every successful sync; the
+-- existing /api/applications fallback (jobs.ashbyhq.com/{board}/{id}/application
+-- for hosted Ashby) keeps working when the column is null.
+ALTER TABLE "Job" ADD COLUMN "applyUrl" TEXT;

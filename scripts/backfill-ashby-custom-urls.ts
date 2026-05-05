@@ -1,14 +1,17 @@
 /**
  * Detect Ashby self-hosters (companies whose hosted-board page is dead
  * because they redirect users to their own careers site) and rewrite each
- * affected Job's `absoluteUrl` to the canonical custom-domain URL.
+ * affected Job's `absoluteUrl` AND `applyUrl` to the canonical custom-domain
+ * URL. Both fields move in lockstep — the apply form lives on the listing
+ * page for self-hosters, so the same URL serves "view listing" and "submit
+ * application".
  *
  * Algorithm per Ashby company:
  *   1. Query Ashby GraphQL for `customJobsPageUrl`. If null, skip — the
  *      hosted board works fine and the existing absoluteUrls are correct.
  *   2. Scrape the careers index for /careers/{slug} links.
  *   3. For each slug, fetch the page and grab the embedded Ashby UUID.
- *   4. Map UUID → custom URL. Update each matching Job.absoluteUrl.
+ *   4. Map UUID → custom URL. Update each matching Job's absoluteUrl + applyUrl.
  *
  * Idempotent: re-running just no-ops on jobs already pointed at the right
  * URL.
@@ -72,26 +75,51 @@ async function main(): Promise<void> {
     // able to rewrite via the ?ashby_jid={uuid} fallback.
     const jobs = await db.job.findMany({
       where: { companyId: company.id, isActive: true },
-      select: { id: true, externalId: true, absoluteUrl: true, title: true },
+      select: { id: true, externalId: true, absoluteUrl: true, applyUrl: true, title: true },
     });
 
-    const updates: Array<{ id: string; before: string | null; after: string; title: string; via: "slug" | "ashby_jid" }> = [];
+    interface UrlUpdate {
+      id: string;
+      before: string | null;
+      beforeApply: string | null;
+      after: string;
+      title: string;
+      via: "slug" | "ashby_jid";
+    }
+    const updates: UrlUpdate[] = [];
     let usedSlug = 0;
     let usedFallback = 0;
     let stillBroken = 0;
     for (const j of jobs) {
+      // Resolve the canonical URL for this job (slug first, fallback second).
+      // Both absoluteUrl and applyUrl get rewritten to the same value — the
+      // apply form lives on the listing page for self-hosters.
       const slugUrl = map.byUuid.get(j.externalId);
       if (slugUrl) {
-        if (j.absoluteUrl !== slugUrl) {
-          updates.push({ id: j.id, before: j.absoluteUrl, after: slugUrl, title: j.title, via: "slug" });
+        if (j.absoluteUrl !== slugUrl || j.applyUrl !== slugUrl) {
+          updates.push({
+            id: j.id,
+            before: j.absoluteUrl,
+            beforeApply: j.applyUrl,
+            after: slugUrl,
+            title: j.title,
+            via: "slug",
+          });
         }
         usedSlug++;
         continue;
       }
       const fallback = map.buildFallbackUrl(j.externalId);
       if (fallback) {
-        if (j.absoluteUrl !== fallback) {
-          updates.push({ id: j.id, before: j.absoluteUrl, after: fallback, title: j.title, via: "ashby_jid" });
+        if (j.absoluteUrl !== fallback || j.applyUrl !== fallback) {
+          updates.push({
+            id: j.id,
+            before: j.absoluteUrl,
+            beforeApply: j.applyUrl,
+            after: fallback,
+            title: j.title,
+            via: "ashby_jid",
+          });
         }
         usedFallback++;
         continue;
@@ -110,7 +138,8 @@ async function main(): Promise<void> {
     // Show a small sample for sanity-check
     for (const u of updates.slice(0, 3)) {
       console.log(`              [${u.via}] ${u.title.slice(0, 50)}`);
-      console.log(`                ${u.before ?? "(null)"}`);
+      console.log(`                absolute: ${u.before ?? "(null)"}`);
+      console.log(`                apply:    ${u.beforeApply ?? "(null)"}`);
       console.log(`                → ${u.after}`);
     }
 
@@ -120,7 +149,7 @@ async function main(): Promise<void> {
           for (const u of updates) {
             await tx.job.update({
               where: { id: u.id },
-              data: { absoluteUrl: u.after },
+              data: { absoluteUrl: u.after, applyUrl: u.after },
             });
           }
         },

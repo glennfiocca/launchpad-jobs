@@ -695,7 +695,11 @@ export async function POST(request: Request) {
     provider: job.provider ?? "GREENHOUSE",
     boardToken: job.boardToken,
     externalJobId: job.externalId,
-    applyUrl: job.absoluteUrl,
+    // Prefer the dedicated applyUrl (rewritten to a live custom-domain
+    // page for Ashby self-hosters). Fall back to absoluteUrl for legacy
+    // rows that pre-date the A.1 column. The route.ts:310 fallback
+    // handles the still-null case for hosted Ashby/Greenhouse.
+    applyUrl: job.applyUrl ?? job.absoluteUrl,
     profile,
     trackingEmail,
     resumeBuffer,

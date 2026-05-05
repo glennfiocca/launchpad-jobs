@@ -47,7 +47,10 @@ describe("mapAshbyJobToNormalized", () => {
       employmentType: "Full-time",
       remote: false,
       absoluteUrl: "https://jobs.ashbyhq.com/testco/145ff46b",
-      applyUrl: "https://jobs.ashbyhq.com/testco/145ff46b/application",
+      // applyUrl is intentionally null — the client.getJobs() pass re-derives
+      // it together with absoluteUrl using the self-hoster slug map. See
+      // src/lib/ats/providers/ashby/client.ts and HARDENING_PLAN.md A.1.1.
+      applyUrl: null,
       content: "<p>We are looking for a senior engineer...</p>",
       postedAt: new Date("2025-11-14T00:46:58.989+00:00"),
       compensation: undefined,

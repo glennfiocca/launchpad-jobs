@@ -15,39 +15,42 @@
  */
 
 (function init() {
-  console.log("[pipeline-operator] Content script loaded on:", window.location.href)
-
-  // Priority 1: Token in URL hash (most reliable — set by admin page, no cross-origin dependency)
+  // FAIL-FAST GATE — extension matches <all_urls>, so this script loads on every page.
+  // The ONLY legitimate trigger is a #pipelineFill= JWT hash set by the admin page,
+  // OR a pending session-storage token persisted from an in-flight navigation cascade
+  // (CTA click → embed redirect on the same admin-initiated flow).
+  // If neither is present, return immediately. Do NOT log, render UI, mutate the DOM,
+  // or register any message listeners on arbitrary third-party pages.
   const hashParams = new URLSearchParams(window.location.hash.slice(1))
   const hashToken = hashParams.get("pipelineFill")
+
   if (hashToken) {
     console.log("[pipeline-operator] Token found in URL hash, length:", hashToken.length)
-    // Clean the token from the URL bar immediately
+    // Strip token from URL bar before any further work
     window.history.replaceState(null, "", window.location.pathname + window.location.search)
     fillFormFromToken(hashToken)
     return
   }
-  console.log("[pipeline-operator] No token in hash, checking session storage...")
 
-  // Priority 2: Token persisted from a navigation cascade (CTA click or embed redirect)
+  // No hash token — only proceed if a pending session-storage token exists.
+  // Anything else is a no-op page (extension is now <all_urls>).
   chrome.storage.session.get(["pipelineFillToken", "pipelineFillExpiry"], (result) => {
     if (result.pipelineFillToken && result.pipelineFillExpiry > Date.now()) {
+      console.log("[pipeline-operator] Resuming fill from session storage on:", window.location.href)
       chrome.storage.session.remove(["pipelineFillToken", "pipelineFillExpiry"])
       fillFormFromToken(result.pipelineFillToken)
-      return
+      // Register the message listener only on the resumed flow, not on arbitrary pages.
+      window.addEventListener("message", (event) => {
+        if (event.data?.type === "PIPELINE_FILL" && event.data?.token) {
+          fillFormFromToken(event.data.token)
+        }
+      })
+      // Legacy postMessage opener fallback — only relevant during an active fill flow
+      if (window.opener) {
+        window.opener.postMessage({ type: "PIPELINE_REQUEST_TOKEN" }, "*")
+      }
     }
-
-    // Priority 3: Request token from the admin tab via postMessage (legacy fallback)
-    if (window.opener) {
-      window.opener.postMessage({ type: "PIPELINE_REQUEST_TOKEN" }, "*")
-    }
-  })
-
-  // Also accept direct messages (e.g. from background.js relay or re-trigger)
-  window.addEventListener("message", (event) => {
-    if (event.data?.type === "PIPELINE_FILL" && event.data?.token) {
-      fillFormFromToken(event.data.token)
-    }
+    // else: no hash, no pending token → silent exit. Script does nothing on this page.
   })
 })()
 

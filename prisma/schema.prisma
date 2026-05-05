@@ -336,7 +336,13 @@ model Job {
 
   // Greenhouse identifiers
   boardToken  String
-  absoluteUrl String? // Greenhouse job URL
+  absoluteUrl String? // Human-facing "View original listing" deeplink
+  /// Machine-facing apply URL used by the Playwright submission path + the
+  /// JWT-snapshot manualApplyUrl. For Ashby self-hosters this equals
+  /// absoluteUrl (the apply form is on the listing page). For hosted
+  /// boards it differs (e.g. /jobs/{id}/application). Nullable — when
+  /// null, the apply caller derives a canonical fallback per provider.
+  applyUrl    String?
 
   // Full job content (HTML from Greenhouse)
   content String? @db.Text

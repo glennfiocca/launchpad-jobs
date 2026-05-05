@@ -18,6 +18,16 @@ import { discoverAshbyCustomJobMap } from "@/lib/ashby-custom-jobs";
 const ASHBY_BASE_URL = "https://api.ashbyhq.com/posting-api/job-board";
 const ASHBY_GRAPHQL_URL = "https://jobs.ashbyhq.com/api/non-user-graphql";
 
+/**
+ * Feature flag for the self-hoster URL rewrite. Defaults to ON. Flip to
+ * `false` to revert to the legacy behavior (applyUrl/absoluteUrl stay at
+ * whatever the mapper produced — i.e. raw jobs.ashbyhq.com URLs) for
+ * forensics. See docs/HARDENING_PLAN.md → Cross-cutting concerns.
+ */
+function isApplyCustomUrlsEnabled(): boolean {
+  return process.env.APPLY_USE_CUSTOM_URLS !== "false";
+}
+
 const ASHBY_FIELD_TYPE_MAP: Record<AshbyFieldType, NormalizedFieldType> = {
   String: "text",
   SocialLink: "text",
@@ -128,6 +138,7 @@ export class AshbyAtsClient implements AtsClient {
     //
     // For non-self-hosters, returns null after the GraphQL check (~500ms)
     // and the loop below short-circuits.
+    if (!isApplyCustomUrlsEnabled()) return jobs;
     const customMap = await discoverAshbyCustomJobMap(this.boardName);
     if (!customMap) return jobs;
 
@@ -135,7 +146,12 @@ export class AshbyAtsClient implements AtsClient {
       const slugUrl = customMap.byUuid.get(job.externalId);
       const fallbackUrl = customMap.buildFallbackUrl(job.externalId);
       const newUrl = slugUrl ?? fallbackUrl;
-      return newUrl ? { ...job, absoluteUrl: newUrl } : job;
+      // Self-hosters serve the apply form on the same page as the listing.
+      // Setting applyUrl alongside absoluteUrl keeps the Playwright apply
+      // path + JWT-snapshot manualApplyUrl pointed at the live page.
+      return newUrl
+        ? { ...job, absoluteUrl: newUrl, applyUrl: newUrl }
+        : job;
     });
   }
 

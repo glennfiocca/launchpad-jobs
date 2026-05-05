@@ -35,6 +35,7 @@ function makeJob(overrides: {
     remote: false,
     boardToken: "acme",
     absoluteUrl: null,
+    applyUrl: null,
     content: "<p>Build great things at Acme. We are hiring engineers.</p>",
     salaryMin: null,
     salaryMax: null,

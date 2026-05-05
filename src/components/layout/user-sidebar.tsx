@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
 import {
   Briefcase,
-  Bookmark,
   LayoutDashboard,
   User,
   Shield,
@@ -30,7 +29,9 @@ const publicNavItems = [
 ]
 
 const authNavItems = [
-  { href: "/jobs/saved", label: "Saved Jobs", icon: Bookmark },
+  // Saved Jobs is no longer a sidebar entry — it's a view toggle on the
+  // Browse Jobs page (/jobs?saved=1). The legacy /jobs/saved route still
+  // resolves via a redirect for backward compat with bookmarks/emails.
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profile", label: "Profile", icon: User },
 ]
@@ -44,10 +45,10 @@ export function UserSidebar() {
 
   function isActive(href: string) {
     if (href === "/jobs") {
-      // exact match only — don't highlight Browse Jobs when on /jobs/saved or sub-routes
-      return pathname === "/jobs" || pathname?.startsWith("/jobs?") || false
+      // Browse Jobs is now the sole entrypoint to the saved view too — keep
+      // it highlighted whenever the user is anywhere under /jobs.
+      return pathname?.startsWith("/jobs") ?? false
     }
-    if (href === "/jobs/saved") return pathname?.startsWith("/jobs/saved") ?? false
     if (href === "/dashboard") return pathname?.startsWith("/dashboard") ?? false
     if (href === "/admin") return pathname?.startsWith("/admin") ?? false
     return pathname === href

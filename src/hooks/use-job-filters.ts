@@ -20,6 +20,7 @@ function parseFilters(params: URLSearchParams): JobFilters {
     salaryMin: salMinRaw ? Number(salMinRaw) : undefined,
     salaryMax: salMaxRaw ? Number(salMaxRaw) : undefined,
     sort: (params.get("sort") as SortOption) ?? undefined,
+    saved: params.get("saved") === "1" ? true : undefined,
   };
 }
 
@@ -38,6 +39,7 @@ function filtersToParams(filters: JobFilters): URLSearchParams {
   if (filters.salaryMin !== undefined) p.set("salMin", String(filters.salaryMin));
   if (filters.salaryMax !== undefined) p.set("salMax", String(filters.salaryMax));
   if (filters.sort && filters.sort !== "newest") p.set("sort", filters.sort);
+  if (filters.saved) p.set("saved", "1");
   return p;
 }
 
@@ -53,7 +55,22 @@ export function useJobFilters() {
 
   const updateFilters = useCallback(
     (updates: Partial<JobFilters>) => {
-      const next = { ...filters, ...updates };
+      const next: JobFilters = { ...filters, ...updates };
+
+      // Sort default coupling to the Saved view:
+      //   - Toggling Saved ON with the default ("newest") sort → switch to
+      //     "recently_saved", which is the more useful default for a list of
+      //     things YOU saved. The user can still change the dropdown.
+      //   - Toggling Saved OFF while sort is "recently_saved" → reset to
+      //     "newest", since recently_saved is meaningless outside the saved
+      //     view (the API ignores it without saved=1).
+      if (updates.saved === true && (filters.sort ?? "newest") === "newest") {
+        next.sort = "recently_saved";
+      }
+      if (updates.saved === undefined && filters.saved && next.sort === "recently_saved") {
+        next.sort = "newest";
+      }
+
       const params = filtersToParams(next);
       // Preserve ?job= param when updating filters
       const jobParam = searchParams.get("job");
@@ -67,10 +84,17 @@ export function useJobFilters() {
     const params = new URLSearchParams();
     const jobParam = searchParams.get("job");
     if (jobParam) params.set("job", jobParam);
+    // Saved is a view, not a filter — preserve it across "Clear all".
+    if (searchParams.get("saved") === "1") {
+      params.set("saved", "1");
+      params.set("sort", "recently_saved");
+    }
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
+  // `saved` is intentionally NOT counted as an active filter — it represents
+  // a different view, not a refinement, so "Clear all" leaves it intact.
   const hasFilters = !!(
     filters.query ||
     filters.location ||

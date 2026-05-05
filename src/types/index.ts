@@ -91,7 +91,7 @@ export interface PendingQuestion {
 
 // Job filter params
 export type DatePostedOption = "today" | "3days" | "week" | "month" | "any";
-export type SortOption = "newest" | "relevance";
+export type SortOption = "newest" | "relevance" | "recently_saved";
 
 export interface JobFilters {
   query?: string;
@@ -106,6 +106,8 @@ export interface JobFilters {
   salaryMin?: number;
   salaryMax?: number;
   sort?: SortOption;
+  /** Restrict to current user's saved jobs. Requires authentication. */
+  saved?: boolean;
   page?: number;
   limit?: number;
 }

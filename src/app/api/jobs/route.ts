@@ -39,9 +39,12 @@ export async function GET(request: Request) {
     salaryMax,
     sort,
     provider,
+    saved,
     page,
     limit,
   } = parsed.data;
+
+  const wantSaved = saved === "true";
 
   // V1 location matching strategy (documented):
   // When locationCity is provided, use it for LIKE matching (covers most ATS text like "Austin, TX").
@@ -65,14 +68,18 @@ export async function GET(request: Request) {
   //   - "newest" sort never needs the profile.
   // This skips a UserProfile lookup on every infinite-scroll page-2+ hit.
   let relevanceProfile: RelevanceProfile | null = null;
+  let userId: string | null = null;
   const hasFtsQuery = !!query;
   const profileFetchNeeded =
     isFirstPage && (sort === "relevance" || hasFtsQuery);
-  if (profileFetchNeeded) {
+  // Saved-view also needs the session — to filter to the user's SavedJob rows.
+  if (profileFetchNeeded || wantSaved) {
     const session = await getServerSession(authOptions);
-    if (session?.user?.id) {
+    userId = session?.user?.id ?? null;
+
+    if (userId && profileFetchNeeded) {
       const profile = await db.userProfile.findUnique({
-        where: { userId: session.user.id },
+        where: { userId },
         select: {
           locationCity: true,
           locationState: true,
@@ -88,6 +95,18 @@ export async function GET(request: Request) {
         relevanceProfile = profile;
       }
     }
+  }
+
+  // Saved view requires authentication. An unauthenticated request to
+  // ?saved=true short-circuits to an empty result rather than 401 — the UI
+  // shows the same tabs (with the Saved tab grayed out) and gracefully
+  // renders an empty list, which is friendlier than a hard auth error.
+  if (wantSaved && !userId) {
+    return NextResponse.json<ApiResponse<JobWithCompany[]>>({
+      success: true,
+      data: [],
+      meta: { total: 0, page, limit },
+    });
   }
 
   // Build location where clause: structured city takes priority over legacy location param
@@ -111,6 +130,7 @@ export async function GET(request: Request) {
   const structuralWhere: Prisma.JobWhereInput = {
     isActive: true,
     ...usEligibleWhere(),
+    ...(wantSaved && userId && { savedJobs: { some: { userId } } }),
     ...(provider && { provider }),
     ...(remote === "true" && { remote: true }),
     ...(employmentType && { employmentType }),
@@ -126,6 +146,84 @@ export async function GET(request: Request) {
     }),
   };
 
+  // Dedicated path: Saved tab + "recently saved" sort. We need to order by
+  // SavedJob.createdAt DESC, which Prisma can't express via orderBy on a
+  // related table. Solved with a JOIN in raw SQL: efficient because the
+  // SavedJob (userId, createdAt DESC) compound index makes this a no-cost
+  // index scan even at scale.
+  if (wantSaved && userId && sort === "recently_saved") {
+    const savedConditions: Prisma.Sql[] = [
+      Prisma.sql`sj."userId" = ${userId}`,
+      Prisma.sql`j."isActive" = true`,
+    ];
+    const eligibility = usEligibleSqlCondition();
+    if (eligibility) savedConditions.push(eligibility);
+    if (provider) savedConditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
+    if (remote === "true") savedConditions.push(Prisma.sql`j."remote" = true`);
+    if (employmentType) savedConditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
+    if (dateCutoff) savedConditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
+    if (salaryMin !== undefined) savedConditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
+    if (salaryMax !== undefined) savedConditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
+    if (useStructuredLocation && locationCity) {
+      savedConditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + locationCity + "%"})`);
+      if (locationState) {
+        savedConditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + locationState + "%"})`);
+      }
+    } else if (effectiveLocation) {
+      savedConditions.push(Prisma.sql`LOWER(j."location") LIKE LOWER(${"%" + effectiveLocation + "%"})`);
+    }
+    if (department) savedConditions.push(Prisma.sql`LOWER(j."department") LIKE LOWER(${"%" + department + "%"})`);
+    if (company) {
+      savedConditions.push(
+        Prisma.sql`j."companyId" IN (SELECT id FROM "Company" WHERE LOWER(name) LIKE LOWER(${"%" + company + "%"}))`,
+      );
+    }
+    if (query) {
+      savedConditions.push(Prisma.sql`j."searchVector" @@ plainto_tsquery('english', ${query})`);
+    }
+
+    const savedWhereClause = Prisma.join(savedConditions, " AND ");
+
+    const [rawIds, countRows, facetData] = await Promise.all([
+      db.$queryRaw<Array<{ id: string }>>`
+        SELECT j.id
+        FROM "SavedJob" sj
+        INNER JOIN "Job" j ON j.id = sj."jobId"
+        WHERE ${savedWhereClause}
+        ORDER BY sj."createdAt" DESC
+        LIMIT ${limit} OFFSET ${skip}
+      `,
+      db.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "SavedJob" sj
+        INNER JOIN "Job" j ON j.id = sj."jobId"
+        WHERE ${savedWhereClause}
+      `,
+      isFirstPage ? buildFacets(structuralWhere) : Promise.resolve(null),
+    ]);
+
+    const ids = rawIds.map((r) => r.id);
+    const total = Number(countRows[0]?.count ?? 0);
+
+    const jobs =
+      ids.length > 0
+        ? await db.job.findMany({
+            where: { id: { in: ids } },
+            include: { company: true, _count: { select: { applications: true } } },
+          })
+        : [];
+
+    // Re-order to match the recently-saved sort
+    const idIndex = new Map(ids.map((id, i) => [id, i]));
+    jobs.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
+
+    return NextResponse.json<ApiResponse<JobWithCompany[]>>({
+      success: true,
+      data: jobs as JobWithCompany[],
+      meta: { total, page, limit, ...(facetData && { facets: facetData }) },
+    });
+  }
+
   // FTS path: use PostgreSQL tsvector/GIN for text queries
   if (query) {
     const conditions: Prisma.Sql[] = [
@@ -134,6 +232,11 @@ export async function GET(request: Request) {
     ];
     const eligibility = usEligibleSqlCondition();
     if (eligibility) conditions.push(eligibility);
+    if (wantSaved && userId) {
+      conditions.push(
+        Prisma.sql`j.id IN (SELECT "jobId" FROM "SavedJob" WHERE "userId" = ${userId})`,
+      );
+    }
 
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
@@ -236,6 +339,11 @@ export async function GET(request: Request) {
     const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];
     const eligibility = usEligibleSqlCondition();
     if (eligibility) conditions.push(eligibility);
+    if (wantSaved && userId) {
+      conditions.push(
+        Prisma.sql`j.id IN (SELECT "jobId" FROM "SavedJob" WHERE "userId" = ${userId})`,
+      );
+    }
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
     if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);

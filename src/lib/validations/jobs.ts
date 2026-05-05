@@ -9,7 +9,7 @@ export const DATE_POSTED_OPTIONS = [
   "any",
 ] as const;
 
-export const SORT_OPTIONS = ["newest", "relevance"] as const;
+export const SORT_OPTIONS = ["newest", "relevance", "recently_saved"] as const;
 
 export const EMPLOYMENT_TYPE_OPTIONS = [
   "full_time",
@@ -39,6 +39,7 @@ export const jobsQuerySchema = z.object({
   salaryMax: z.coerce.number().int().min(0).max(10_000_000).optional(),
   sort: z.enum(SORT_OPTIONS).default("newest"),
   provider: z.enum(["GREENHOUSE", "ASHBY"]).optional(), // filter by ATS provider
+  saved: z.enum(["true", "false"]).optional(),          // restrict to current user's saved jobs
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });

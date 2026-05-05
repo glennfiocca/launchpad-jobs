@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
 import { JobDetail } from "./job-detail";
+import { JobViewTabs } from "./job-view-tabs";
+import { EmptySavedState } from "./empty-saved-state";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import type { JobWithCompany, JobFacets, ApiResponse, ApplicationWithJob } from "@/types";
 import { Loader2 } from "lucide-react";
@@ -23,8 +25,10 @@ export function JobBoard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
-  const { filters } = useJobFilters();
+  const { filters, updateFilters } = useJobFilters();
   const jobIdFromUrl = searchParams.get("job");
+  const isAuthenticated = sessionStatus === "authenticated";
+  const onSavedView = !!filters.saved;
 
   const [jobs, setJobs] = useState<JobWithCompany[]>([]);
   const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
@@ -102,6 +106,7 @@ export function JobBoard() {
       if (f.salaryMin !== undefined) params.set("salaryMin", String(f.salaryMin));
       if (f.salaryMax !== undefined) params.set("salaryMax", String(f.salaryMax));
       if (f.sort) params.set("sort", f.sort);
+      if (f.saved) params.set("saved", "true");
 
       try {
         const res = await fetch(`/api/jobs?${params}`, { signal: controller.signal });
@@ -254,17 +259,35 @@ export function JobBoard() {
     return () => { cancelled = true; };
   }, [session?.user?.id, sessionStatus]);
 
-  const handleSaveToggle = useCallback((jobId: string, saved: boolean) => {
-    setSavedJobIds((prev) => {
-      const next = new Set(prev);
-      if (saved) {
-        next.add(jobId);
-      } else {
-        next.delete(jobId);
+  const handleSaveToggle = useCallback(
+    (jobId: string, saved: boolean) => {
+      setSavedJobIds((prev) => {
+        const next = new Set(prev);
+        if (saved) {
+          next.add(jobId);
+        } else {
+          next.delete(jobId);
+        }
+        return next;
+      });
+
+      // On the Saved view, an un-save makes the row no longer belong here.
+      // Drop it from the rendered list immediately and adjust the count so
+      // the user sees the same numbers the next page-load would.
+      if (!saved && filtersRef.current.saved) {
+        setJobs((prev) => prev.filter((j) => j.id !== jobId));
+        setTotal((t) => Math.max(0, t - 1));
       }
-      return next;
-    });
-  }, []);
+    },
+    []
+  );
+
+  const handleViewChange = useCallback(
+    (next: "all" | "saved") => {
+      updateFilters({ saved: next === "saved" ? true : undefined });
+    },
+    [updateFilters]
+  );
 
   // Select job from loaded list when URL param matches
   useEffect(() => {
@@ -331,6 +354,15 @@ export function JobBoard() {
           selected ? "hidden lg:flex" : "flex"
         }`}
       >
+        <div className="mb-4 flex justify-center md:justify-start">
+          <JobViewTabs
+            active={onSavedView ? "saved" : "all"}
+            savedCount={isAuthenticated ? savedJobIds.size : null}
+            isAuthenticated={isAuthenticated}
+            onChange={handleViewChange}
+          />
+        </div>
+
         <FiltersBar facets={facets} />
 
         <div
@@ -342,12 +374,16 @@ export function JobBoard() {
               <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
             </div>
           ) : jobs.length === 0 ? (
-            <div className="text-center py-24">
-              <p className="text-slate-400 text-lg">No jobs found</p>
-              <p className="text-slate-400 text-sm mt-1">
-                Try adjusting your filters
-              </p>
-            </div>
+            onSavedView && isAuthenticated ? (
+              <EmptySavedState onBrowseAll={() => handleViewChange("all")} />
+            ) : (
+              <div className="text-center py-24">
+                <p className="text-slate-400 text-lg">No jobs found</p>
+                <p className="text-slate-400 text-sm mt-1">
+                  Try adjusting your filters
+                </p>
+              </div>
+            )
           ) : (
             <>
               <p className="text-sm text-slate-500 mb-3">

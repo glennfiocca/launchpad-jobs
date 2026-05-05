@@ -41,9 +41,23 @@ export interface LogoOverride {
  * board.
  */
 const SHARED_OVERRIDES: Record<string, LogoOverride> = {
-  // Non-`.com` startups whose `.com` is owned by a different brand
-  astronomer: { website: "https://astronomer.io" },
-  stronomer: { website: "https://astronomer.io" }, // truncation alias
+  // Non-`.com` startups whose `.com` is owned by a different brand.
+  // Astronomer + Okta use admin-supplied logo URLs (logo.dev's default
+  // JPEG variant) because their theme=dark/light variants both render
+  // poorly on our dark surface — the JPEG has a real white background
+  // baked into the pixels, which pops cleanly on #0a0a0a.
+  astronomer: {
+    website: "https://astronomer.io",
+    logoUrl: "https://img.logo.dev/astronomer.io?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
+  },
+  stronomer: {
+    website: "https://astronomer.io",
+    logoUrl: "https://img.logo.dev/astronomer.io?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
+  },
+  okta: {
+    website: "https://www.okta.com",
+    logoUrl: "https://img.logo.dev/okta.com?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
+  },
   cohere: { website: "https://cohere.com" },
   perplexity: { website: "https://perplexity.ai" },
   openai: { website: "https://openai.com" },

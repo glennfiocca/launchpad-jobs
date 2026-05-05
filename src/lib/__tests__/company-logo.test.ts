@@ -5,16 +5,14 @@ import {
 } from "../company-logo";
 
 describe("lookupLogoOverride", () => {
-  it("returns the Astronomer override (canonical .io domain)", () => {
-    expect(lookupLogoOverride("GREENHOUSE", "astronomer")).toEqual({
-      website: "https://astronomer.io",
-    });
+  it("returns the Astronomer override with canonical .io domain", () => {
+    const o = lookupLogoOverride("GREENHOUSE", "astronomer");
+    expect(o?.website).toBe("https://astronomer.io");
   });
 
   it("handles the truncated 'stronomer' alias", () => {
-    expect(lookupLogoOverride("GREENHOUSE", "stronomer")).toEqual({
-      website: "https://astronomer.io",
-    });
+    const o = lookupLogoOverride("GREENHOUSE", "stronomer");
+    expect(o?.website).toBe("https://astronomer.io");
   });
 
   it("strips the ashby- prefix before lookup", () => {

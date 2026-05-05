@@ -115,9 +115,11 @@ jobs:
     dockerfile_path: Dockerfile
     kind: SCHEDULED
     schedule:
-      # 08:00 UTC = 4:00 AM EDT (summer) / 3:00 AM EST (winter).
-      # DO cron is pure UTC — it does not auto-shift for DST.
-      cron: "0 8 * * *"
+      # Every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC.
+      # DO cron is pure UTC — does not auto-shift for DST.
+      # Cadence aligned with how often new jobs roll in across our ATS
+      # population; daily was leaving job listings ~24h stale.
+      cron: "0 */6 * * *"
     run_command: npx tsx scripts/sync-cron.ts
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb

@@ -79,7 +79,10 @@ interface ProposedChange {
   provider: "GREENHOUSE" | "ASHBY";
   name: string;
   beforeWebsite: string | null;
+  /** The new website value the resolver wants to write (null = leave alone). */
   afterWebsite: string | null;
+  /** The website we'll feed to logo.dev — afterWebsite ?? beforeWebsite. */
+  effectiveWebsite: string | null;
   websiteSource: string;
   needsLogoRefresh: boolean;
   theme: "light" | "dark" | "auto";
@@ -154,6 +157,13 @@ async function main(): Promise<void> {
 
     sourceTally.set(result.websiteSource, (sourceTally.get(result.websiteSource) ?? 0) + 1);
 
+    // The website we'll actually use for this company. If the resolver
+    // produced a better answer (override, ATS, heuristic), use that.
+    // Otherwise keep whatever Company.website already had — important for
+    // --force-logo passes that need to refresh every cached PNG against the
+    // existing (presumably-correct) website.
+    const effectiveWebsite = result.website ?? c.website;
+
     // Compare on the normalized host so "https://www.mongodb.com" and
     // "https://mongodb.com" don't register as a change worth applying.
     const beforeHost = normalizeHost(c.website);
@@ -164,7 +174,7 @@ async function main(): Promise<void> {
     const needsLogoRefresh =
       websiteChanged ||
       flags.forceLogo ||
-      (result.website !== null && c.logoUrl === null);
+      (effectiveWebsite !== null && c.logoUrl === null);
 
     if (websiteChanged || needsLogoRefresh) {
       proposed.push({
@@ -174,6 +184,7 @@ async function main(): Promise<void> {
         name: c.name,
         beforeWebsite: c.website,
         afterWebsite: result.website,
+        effectiveWebsite,
         websiteSource: result.websiteSource,
         needsLogoRefresh,
         theme: result.theme,
@@ -225,7 +236,7 @@ async function main(): Promise<void> {
       websitesUpdated++;
     }
 
-    if (p.needsLogoRefresh && p.afterWebsite) {
+    if (p.needsLogoRefresh && p.effectiveWebsite) {
       // Clear the old (potentially wrong) cached logo so enrichment will
       // re-derive from the corrected website. logo.dev handles the new
       // fetch; Spaces stores under a hostname-keyed object so the path
@@ -242,7 +253,7 @@ async function main(): Promise<void> {
         {
           id: p.companyId,
           name: p.name,
-          website: p.afterWebsite,
+          website: p.effectiveWebsite,
         },
         p.theme,
       );

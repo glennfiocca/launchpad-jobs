@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import { requireAdminSession } from "../../_helpers"
 import { acquireSyncLock, executeSyncWork } from "@/lib/sync-runner"
 import { initializeAtsProviders } from "@/lib/ats/init"
+import { createLogger } from "@/lib/logger"
 import type { ApiResponse } from "@/types"
+
+const log = createLogger({ component: "sync", entry: "admin-route" })
 
 export async function POST() {
   const { error, session } = await requireAdminSession()
@@ -22,9 +25,10 @@ export async function POST() {
 
   // Fire-and-forget: route returns 202, worker runs in background
   executeSyncWork(lock.syncLogId).catch((err) => {
-    console.error(
-      `[sync] Background worker fatal: syncLogId=${lock.syncLogId} error=${err instanceof Error ? err.message : String(err)}`,
-    )
+    log.error("Background worker fatal", {
+      syncLogId: lock.syncLogId,
+      error: err instanceof Error ? err.message : String(err),
+    })
   })
 
   return NextResponse.json<ApiResponse<{ syncLogId: string; status: string }>>(

@@ -2,7 +2,12 @@ import Link from "next/link"
 import { db } from "@/lib/db"
 import { StatCard } from "@/components/admin/stat-card"
 import { TriggerSyncButton } from "@/components/admin/trigger-sync-button"
-import type { LogoSource, SyncStatus } from "@prisma/client"
+import {
+  SyncLogFilters,
+  type ProviderFilter,
+  type SyncStatusFilter,
+} from "@/components/admin/sync/sync-log-filters"
+import type { AtsProvider, LogoSource, Prisma, SyncStatus } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -60,12 +65,101 @@ const LOGO_SOURCE_ROWS: ReadonlyArray<{ key: LogoSource | "null"; label: string 
   { key: "null", label: "Not yet enriched" },
 ]
 
-export default async function SyncLogsPage() {
+// ─── searchParams parsing — Track D.2 of HARDENING_PLAN.md ──────────────────
+//
+// Next.js App Router gives us `searchParams: { [key: string]: string | string[] | undefined }`.
+// We narrow each input to its strict union (or undefined) before building
+// the Prisma `where` so we never pass an unsanitised string to the query.
+
+type SyncSearchParams = {
+  status?: string | string[]
+  provider?: string | string[]
+  fromDate?: string | string[]
+  toDate?: string | string[]
+  page?: string | string[]
+}
+
+interface PageProps {
+  searchParams: Promise<SyncSearchParams> | SyncSearchParams
+}
+
+const VALID_STATUSES: ReadonlySet<SyncStatusFilter> = new Set([
+  "SUCCESS",
+  "PARTIAL_FAILURE",
+  "FAILURE",
+  "all",
+])
+
+const VALID_PROVIDERS: ReadonlySet<ProviderFilter> = new Set(["GREENHOUSE", "ASHBY", "all"])
+
+function firstString(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0]
+  return value
+}
+
+function parseStatus(raw: string | undefined): SyncStatusFilter {
+  if (raw && VALID_STATUSES.has(raw as SyncStatusFilter)) return raw as SyncStatusFilter
+  return "all"
+}
+
+function parseProvider(raw: string | undefined): ProviderFilter {
+  if (raw && VALID_PROVIDERS.has(raw as ProviderFilter)) return raw as ProviderFilter
+  return "all"
+}
+
+// Accept ISO date (YYYY-MM-DD) or full ISO datetime. Returns null if unparseable.
+function parseDate(raw: string | undefined): Date | null {
+  if (!raw) return null
+  const d = new Date(raw)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+export default async function SyncLogsPage({ searchParams }: PageProps) {
+  const resolved = await Promise.resolve(searchParams)
+  const statusFilter = parseStatus(firstString(resolved.status))
+  const providerFilter = parseProvider(firstString(resolved.provider))
+  const fromDateRaw = firstString(resolved.fromDate)
+  const toDateRaw = firstString(resolved.toDate)
+  const fromDate = parseDate(fromDateRaw)
+  const toDate = parseDate(toDateRaw)
+
+  // Provider filter — SyncLog has no `provider` column. Provider lives on
+  // Company, joined to SyncBoardResult via boardToken. We resolve the token
+  // set once, then filter SyncLog by `boardResults.some.boardToken in set`.
+  let boardTokensForProvider: string[] | null = null
+  if (providerFilter !== "all") {
+    const companies = await db.company.findMany({
+      where: { provider: providerFilter as AtsProvider },
+      select: { slug: true },
+    })
+    boardTokensForProvider = companies.map((c) => c.slug)
+  }
+
+  // Build the Prisma where for SyncLog.
+  const startedAtFilter: Prisma.DateTimeFilter | undefined =
+    fromDate || toDate
+      ? {
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {}),
+        }
+      : undefined
+
+  const where: Prisma.SyncLogWhereInput = {
+    ...(statusFilter !== "all" ? { status: statusFilter as SyncStatus } : {}),
+    ...(startedAtFilter ? { startedAt: startedAtFilter } : {}),
+    ...(boardTokensForProvider
+      ? {
+          boardResults: { some: { boardToken: { in: boardTokensForProvider } } },
+        }
+      : {}),
+  }
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
   const [logs, totalSyncs30d, completedCount30d, lastSync, logoSourceGroups] =
     await Promise.all([
       db.syncLog.findMany({
+        where,
         take: 50,
         orderBy: { startedAt: "desc" },
       }),
@@ -98,6 +192,12 @@ export default async function SyncLogsPage() {
     logoCountByKey.set(key, g._count._all)
     logoTotal += g._count._all
   }
+
+  const filtersActive =
+    statusFilter !== "all" ||
+    providerFilter !== "all" ||
+    Boolean(fromDate) ||
+    Boolean(toDate)
 
   return (
     <div className="space-y-6">
@@ -162,6 +262,18 @@ export default async function SyncLogsPage() {
         </ul>
       </div>
 
+      {/* Filter bar — Track D.2 of HARDENING_PLAN.md. Client component;
+          submits via URL search params so the server re-renders with new
+          Prisma filters. */}
+      <SyncLogFilters
+        initial={{
+          status: statusFilter,
+          provider: providerFilter,
+          fromDate: fromDateRaw ?? "",
+          toDate: toDateRaw ?? "",
+        }}
+      />
+
       {/* Table */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
@@ -180,7 +292,9 @@ export default async function SyncLogsPage() {
             {logs.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
-                  No sync logs yet. Trigger a sync to get started.
+                  {filtersActive
+                    ? "No sync runs match these filters. Try widening the date range or clearing filters."
+                    : "No sync logs yet. Trigger a sync to get started."}
                 </td>
               </tr>
             ) : (

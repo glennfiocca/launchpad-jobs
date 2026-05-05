@@ -8,6 +8,9 @@
 // scripts, so we explicitly init here. No-op when SENTRY_DSN is unset
 // (e.g. local dev), mirroring sentry.server.config.ts.
 import * as Sentry from "@sentry/nextjs"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger({ component: "sync", entry: "cron" })
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -40,18 +43,20 @@ async function ping(suffix: HeartbeatSuffix = ""): Promise<void> {
 
 async function main() {
   if (!process.env.DATABASE_URL) {
-    console.error("[sync-cron] ERROR: DATABASE_URL not set")
+    log.error("DATABASE_URL not set")
     process.exit(1)
   }
 
-  console.log(`[sync-cron] Started at: ${new Date().toISOString()}`)
-  console.log(`[sync-cron] Node version: ${process.version}`)
-  console.log(`[sync-cron] Working directory: ${process.cwd()}`)
-  console.log("[sync-cron] Importing sync-runner...")
+  log.info("Started", {
+    startedAt: new Date().toISOString(),
+    nodeVersion: process.version,
+    cwd: process.cwd(),
+  })
+  log.info("Importing sync-runner")
 
   const { runSync } = await import("@/lib/sync-runner")
 
-  console.log("[sync-cron] Import successful, running sync directly (no HTTP)")
+  log.info("Import successful, running sync directly (no HTTP)")
 
   await ping("/start")
   const result = await runSync("cron")
@@ -59,25 +64,34 @@ async function main() {
   // completed run from the heartbeat's perspective (some boards ran).
   await ping(result.status === "FAILURE" ? "/fail" : "")
 
-  console.log(`[sync-cron] SyncLog ID: ${result.syncLogId}`)
-  console.log(`[sync-cron] Boards: ${result.boardsSynced}/${result.totalBoards} synced, ${result.boardsFailed} failed`)
-  console.log(`[sync-cron] Jobs: +${result.totalAdded} added, ~${result.totalUpdated} updated, -${result.totalDeactivated} deactivated`)
-  console.log(`[sync-cron] Applications updated: ${result.totalApplicationsUpdated}`)
-  console.log(`[sync-cron] Duration: ${result.durationMs}ms`)
-  console.log(`[sync-cron] Status: ${result.status}`)
+  const runLog = log.child({ syncLogId: result.syncLogId })
+  runLog.info("Run summary", {
+    boardsSynced: result.boardsSynced,
+    totalBoards: result.totalBoards,
+    boardsFailed: result.boardsFailed,
+    added: result.totalAdded,
+    updated: result.totalUpdated,
+    deactivated: result.totalDeactivated,
+    applicationsUpdated: result.totalApplicationsUpdated,
+    durationMs: result.durationMs,
+    status: result.status,
+  })
 
   if (result.boardsFailed > 0) {
-    console.warn(`[sync-cron] WARNING: ${result.boardsFailed} boards failed`)
+    runLog.warn("Some boards failed", { boardsFailed: result.boardsFailed })
   }
 
-  console.log(`[sync-cron] Completed at: ${new Date().toISOString()}`)
+  runLog.info("Completed", { completedAt: new Date().toISOString() })
   process.exit(0)
 }
 
 main().catch(async (err) => {
   if (err && typeof err === "object" && "name" in err && err.name === "SyncAlreadyRunningError") {
-    const runningSyncLogId = "runningSyncLogId" in err ? err.runningSyncLogId : "unknown"
-    console.log(`[sync-cron] Skipped: another sync is already running (syncLogId: ${runningSyncLogId})`)
+    const runningSyncLogId =
+      "runningSyncLogId" in err && typeof err.runningSyncLogId === "string"
+        ? err.runningSyncLogId
+        : "unknown"
+    log.info("Skipped: another sync is already running", { runningSyncLogId })
     // Lock contention is not an outage — emit a normal heartbeat so
     // Healthchecks doesn't fire a false alert.
     await ping("")
@@ -86,6 +100,8 @@ main().catch(async (err) => {
   // Top-level crash before runSync produced a result — signal /fail so
   // Healthchecks alerts even if runSync itself never returned.
   await ping("/fail")
-  console.error(`[sync-cron] FATAL: ${err instanceof Error ? err.stack ?? err.message : String(err)}`)
+  log.error("FATAL", {
+    error: err instanceof Error ? err.stack ?? err.message : String(err),
+  })
   process.exit(1)
 })

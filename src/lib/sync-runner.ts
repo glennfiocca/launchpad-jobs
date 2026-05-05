@@ -4,6 +4,11 @@ import { db } from "@/lib/db"
 import { getActiveBoards } from "@/lib/greenhouse/sync"
 import { initializeAtsProviders } from "@/lib/ats/init"
 import { syncBoard } from "@/lib/ats/sync"
+import { createLogger } from "@/lib/logger"
+
+// Bound at module load — every sync-runner emit gets `component=sync` so logs
+// are filterable in DO. Per-call sites narrow further via `.child()`.
+const baseLog = createLogger({ component: "sync" })
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,9 +86,11 @@ export async function reconcileStaleRuns(
   })
 
   for (const run of staleRuns) {
-    console.warn(
-      `[sync] Reconciled stale run: syncLogId=${run.id} reconciledAt=${reconciledAt.toISOString()} thresholdMs=${effectiveThreshold}`,
-    )
+    baseLog.warn("Reconciled stale run", {
+      syncLogId: run.id,
+      reconciledAt: reconciledAt.toISOString(),
+      thresholdMs: effectiveThreshold,
+    })
   }
 
   return staleRuns.length
@@ -122,15 +129,14 @@ export async function acquireSyncLock(
       select: { id: true },
     })
     const runningSyncLogId = blocking?.id ?? "unknown"
-    console.warn(
-      `[sync] Lock rejected: triggeredBy=${triggeredBy} blockedBy=${runningSyncLogId}`,
-    )
+    baseLog.warn("Lock rejected", {
+      triggeredBy,
+      blockedBy: runningSyncLogId,
+    })
     return { acquired: false, runningSyncLogId }
   }
 
-  console.log(
-    `[sync] Lock acquired: syncLogId=${id} triggeredBy=${triggeredBy}`,
-  )
+  baseLog.info("Lock acquired", { syncLogId: id, triggeredBy })
   return { acquired: true, syncLogId: id }
 }
 
@@ -147,6 +153,10 @@ export async function executeSyncWork(
 ): Promise<SyncRunResult> {
   // Ensure all ATS providers are registered before syncing
   initializeAtsProviders()
+
+  // Bind syncLogId on every log line in this run — saves repeating it at
+  // each call site and guarantees structured field presence per D.1.3.
+  const log = baseLog.child({ syncLogId })
 
   const syncLog = await db.syncLog.findUniqueOrThrow({
     where: { id: syncLogId },
@@ -201,11 +211,14 @@ export async function executeSyncWork(
       boards = [...boards, ...seedEntries]
     }
 
-    console.log(
-      `[sync] Boards fetched: syncLogId=${syncLogId} count=${boards.length}`,
-    )
+    log.info("Boards fetched", { count: boards.length })
 
     for (const board of boards) {
+      const boardLog = log.child({
+        boardToken: board.token,
+        boardName: board.name,
+        provider: board.provider,
+      })
       const boardStart = new Date()
       try {
         const result = await syncBoard(
@@ -239,14 +252,18 @@ export async function executeSyncWork(
         if (hasErrors) {
           boardsFailed++
           errorSummaries.push(`${board.name}: ${result.errors.join("; ")}`)
-          console.warn(
-            `[sync] Board failed: syncLogId=${syncLogId} board=${board.name} provider=${board.provider} errors=${result.errors.length} durationMs=${boardDuration}`,
-          )
+          boardLog.warn("Board failed", {
+            errors: result.errors.length,
+            durationMs: boardDuration,
+          })
         } else {
           boardsSynced++
-          console.log(
-            `[sync] Board synced: syncLogId=${syncLogId} board=${board.name} provider=${board.provider} added=${result.jobsAdded} updated=${result.jobsUpdated} deactivated=${result.jobsDeactivated} durationMs=${boardDuration}`,
-          )
+          boardLog.info("Board synced", {
+            added: result.jobsAdded,
+            updated: result.jobsUpdated,
+            deactivated: result.jobsDeactivated,
+            durationMs: boardDuration,
+          })
         }
 
         totalAdded += result.jobsAdded
@@ -281,9 +298,7 @@ export async function executeSyncWork(
         })
         boardsFailed++
         errorSummaries.push(`${board.name}: ${errMsg}`)
-        console.error(
-          `[sync] Board exception: syncLogId=${syncLogId} board=${board.name} provider=${board.provider} error=${errMsg}`,
-        )
+        boardLog.error("Board exception", { error: errMsg })
       }
     }
 
@@ -316,9 +331,12 @@ export async function executeSyncWork(
       },
     })
 
-    console.log(
-      `[sync] Completed: syncLogId=${syncLogId} status=${status} boards=${boardsSynced}/${boards.length} durationMs=${durationMs}`,
-    )
+    log.info("Completed", {
+      status,
+      boardsSynced,
+      totalBoards: boards.length,
+      durationMs,
+    })
 
     return {
       syncLogId,
@@ -341,9 +359,7 @@ export async function executeSyncWork(
     })
     const completedAt = new Date()
     const errMsg = err instanceof Error ? err.message : String(err)
-    console.error(
-      `[sync] Fatal error: syncLogId=${syncLogId} error=${errMsg}`,
-    )
+    log.error("Fatal error", { error: errMsg })
     try {
       await db.syncLog.update({
         where: { id: syncLogId },
@@ -358,9 +374,9 @@ export async function executeSyncWork(
         },
       })
     } catch (updateErr) {
-      console.error(
-        `[sync] Failed to update SyncLog on fatal error: syncLogId=${syncLogId} error=${updateErr instanceof Error ? updateErr.message : String(updateErr)}`,
-      )
+      log.error("Failed to update SyncLog on fatal error", {
+        error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+      })
     }
     throw err
   }

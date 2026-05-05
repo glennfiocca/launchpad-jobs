@@ -90,6 +90,9 @@ Both the cron and digest call `Sentry.init()` when `SENTRY_DSN` is present
 exceptions in the digest path call `Sentry.captureException` with
 `tags.component = "sync-digest"` before exiting non-zero.
 
+See [`docs/sentry-alerts.md`](./sentry-alerts.md) for the alert-rule config
+that turns these captures into pages/notifications.
+
 ## Alert response
 
 | Alert | First action |

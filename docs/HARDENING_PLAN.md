@@ -1,6 +1,10 @@
 # Pipeline Hardening + Apply Workflow Spec
 
 **Status**: Decisions locked, ready to implement
+**Outcome docs**:
+- `docs/sync-playbook.md` — operator runbook for the 6h sync cadence
+- `docs/sentry-alerts.md` — Sentry alert configuration
+- `docs/operator-assisted-apply.md` — apply workflow + extension install
 **Author**: produced from a single multi-hour session ending 2026-05-05
 **Scope**: every gap left by the company-name + logo + URL + sync work shipped this session
 **Goal**: zero remaining "we'll deal with that later" items

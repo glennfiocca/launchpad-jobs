@@ -106,8 +106,9 @@ describe("lookupOverride", () => {
   });
 
   it("strips the ashby- prefix before lookup", () => {
-    // No Ashby overrides configured yet — should return undefined cleanly.
-    expect(lookupOverride("ASHBY", "ashby-someboard")).toBeUndefined();
+    // SHARED_OVERRIDES applies cross-provider — "openai" hits regardless of ATS.
+    expect(lookupOverride("ASHBY", "ashby-openai")).toBe("OpenAI");
+    expect(lookupOverride("ASHBY", "ashby-langchain")).toBe("LangChain");
   });
 
   it("returns undefined for unknown slugs", () => {
@@ -182,5 +183,23 @@ describe("resolveCompanyName", () => {
     });
     expect(result.name).toBe("Acmecorp");
     expect(result.source).toBe("slug");
+  });
+
+  it("converts hyphens to spaces in the heuristic fallback", () => {
+    const result = resolveCompanyName({
+      provider: "ASHBY",
+      slug: "ashby-some-multi-word-co",
+      rawName: "some-multi-word-co",
+    });
+    expect(result.name).toBe("Some Multi Word Co");
+  });
+
+  it("hits a shared override from the Ashby side", () => {
+    const result = resolveCompanyName({
+      provider: "ASHBY",
+      slug: "ashby-openai",
+      rawName: "openai",
+    });
+    expect(result).toEqual({ name: "OpenAI", source: "override" });
   });
 });

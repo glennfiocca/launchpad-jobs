@@ -130,16 +130,29 @@ function printDiffs(diffs: readonly DiffRow[]): void {
 }
 
 async function applyDiffs(diffs: readonly DiffRow[]): Promise<void> {
-  // Use a transaction so a partial failure doesn't leave the DB half-updated.
-  await db.$transaction(async (tx) => {
-    for (const d of diffs) {
-      if (d.table === "company") {
-        await tx.company.update({ where: { id: d.id }, data: { name: d.after } });
-      } else {
-        await tx.companyBoard.update({ where: { id: d.id }, data: { name: d.after } });
-      }
-    }
-  });
+  // Chunked batches keep us under the per-transaction timeout. Each batch
+  // is its own transaction — a mid-run failure leaves prior batches applied,
+  // which is fine because the backfill is idempotent (re-running picks up
+  // exactly the rows that still differ).
+  const BATCH_SIZE = 50;
+  const TX_TIMEOUT_MS = 30_000;
+
+  for (let i = 0; i < diffs.length; i += BATCH_SIZE) {
+    const batch = diffs.slice(i, i + BATCH_SIZE);
+    await db.$transaction(
+      async (tx) => {
+        for (const d of batch) {
+          if (d.table === "company") {
+            await tx.company.update({ where: { id: d.id }, data: { name: d.after } });
+          } else {
+            await tx.companyBoard.update({ where: { id: d.id }, data: { name: d.after } });
+          }
+        }
+      },
+      { timeout: TX_TIMEOUT_MS },
+    );
+    console.log(`  applied ${Math.min(i + BATCH_SIZE, diffs.length)} / ${diffs.length}`);
+  }
 }
 
 async function main(): Promise<void> {

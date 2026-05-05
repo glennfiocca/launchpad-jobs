@@ -36,7 +36,6 @@ const ACRONYMS = new Set([
   "erp",
   "llc",
   "inc",
-  "co",
   "usa",
   "uk",
   "eu",
@@ -151,9 +150,13 @@ export function looksMalformed(name: string): boolean {
 /**
  * Convenience: normalize a name end-to-end using only the heuristic path.
  * The resolver invokes this as the last-resort fallback.
+ *
+ * Hyphens are converted to spaces because the malformed-name path is dominated
+ * by slug-shaped inputs (e.g. "pylon-labs" -> "Pylon Labs"). Brand names with
+ * intentional hyphens (e.g. "d-Matrix") need an explicit override anyway.
  */
 export function normalizeName(input: string): string {
   const stripped = stripCorporateSuffix(input);
-  const candidate = stripped || input;
+  const candidate = (stripped || input).replace(/-/g, " ");
   return smartTitleCase(candidate);
 }

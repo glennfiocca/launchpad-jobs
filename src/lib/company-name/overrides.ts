@@ -1,21 +1,28 @@
 /**
- * Curated canonical-name overrides keyed by `(provider, slug)`.
+ * Curated canonical-name overrides.
  *
  * The resolver consults this map FIRST. If the slug matches, the value here
  * is treated as truth and overwrites whatever the ATS reported. This is the
  * escape hatch for names that the heuristic title-caser cannot reach
  * (truncations like "stronomer", brand-stylized casing like "OpenAI").
  *
- * Slug format:
- *   - GREENHOUSE: the raw board token (e.g. "openai", "doordashusa")
- *   - ASHBY:      "ashby-{boardToken}"
+ * Most canonical names live in SHARED_OVERRIDES — a brand's display name is
+ * the same regardless of which ATS hosts the board. Provider-specific maps
+ * exist for the rare case where the same token means different things in
+ * different ATSes; provider-specific values win over shared values.
  *
- * Add new entries any time a sync surfaces a malformed name.
+ * Slug normalization for lookup:
+ *   - GREENHOUSE: raw board token, lowercased
+ *   - ASHBY:      "ashby-" prefix is stripped, lowercased
  */
 
 import type { AtsProvider } from "@prisma/client";
 
-const GREENHOUSE_OVERRIDES: Record<string, string> = {
+/**
+ * Brand canonicalization that applies regardless of ATS provider.
+ * Keyed by the lowercased "bare" token (no provider prefix).
+ */
+const SHARED_OVERRIDES: Record<string, string> = {
   // Brand-stylized casing
   openai: "OpenAI",
   anthropic: "Anthropic",
@@ -28,6 +35,7 @@ const GREENHOUSE_OVERRIDES: Record<string, string> = {
   cargurus: "CarGurus",
   buzzfeed: "BuzzFeed",
   hellofresh: "HelloFresh",
+  doordash: "DoorDash",
   doordashusa: "DoorDash",
   godaddy: "GoDaddy",
   costar: "CoStar",
@@ -41,6 +49,32 @@ const GREENHOUSE_OVERRIDES: Record<string, string> = {
   alarmcom: "Alarm.com",
   airsculpt: "AirSculpt",
   realpha: "reAlpha",
+  elevenlabs: "ElevenLabs",
+  langchain: "LangChain",
+  coderabbit: "CodeRabbit",
+  hockeystack: "HockeyStack",
+  gptzero: "GPTZero",
+  classdojo: "ClassDojo",
+  clickup: "ClickUp",
+  livekit: "LiveKit",
+  motherduck: "MotherDuck",
+  fullstory: "FullStory",
+  posthog: "PostHog",
+  lancedb: "LanceDB",
+  webai: "WebAI",
+  gigaml: "GigaML",
+  signoz: "SigNoz",
+  revenuecat: "RevenueCat",
+  stackone: "StackOne",
+  fleetworks: "FleetWorks",
+  buildwithfern: "Fern",
+  mazedesign: "Maze",
+  stainlessapi: "Stainless",
+  a16z: "a16z",
+  sweetgreen: "sweetgreen",
+  project44: "project44",
+  dbt: "dbt",
+  dbtlabsinc: "dbt Labs",
 
   // Truncations + obvious typos seen in the wild
   astronomer: "Astronomer",
@@ -93,7 +127,7 @@ const GREENHOUSE_OVERRIDES: Record<string, string> = {
   yld: "YLD",
   ww: "Weight Watchers",
 
-  // Common ".ai" / ".io" brands surfacing as lowercase
+  // ".ai" / ".io" brands that appear without the suffix in the slug
   scaleai: "Scale AI",
   togetherai: "Together AI",
   snorkelai: "Snorkel AI",
@@ -102,6 +136,7 @@ const GREENHOUSE_OVERRIDES: Record<string, string> = {
   bluefishai: "Bluefish AI",
   blackforestlabs: "Black Forest Labs",
   figureai: "Figure AI",
+  furtherai: "Further AI",
   apolloio: "Apollo.io",
   grafanalabs: "Grafana Labs",
   cockroachlabs: "Cockroach Labs",
@@ -111,30 +146,47 @@ const GREENHOUSE_OVERRIDES: Record<string, string> = {
   sumologic: "Sumo Logic",
   newrelic: "New Relic",
   sigmacomputing: "Sigma Computing",
-  dbtlabsinc: "dbt Labs",
   launchdarkly: "LaunchDarkly",
+
+  // Hyphenated Ashby tokens that resolve cleanly to spaced names
+  "norm-ai": "Norm AI",
+  "basis-ai": "Basis AI",
+  "fiddler-ai": "Fiddler AI",
+  "cogent-security": "Cogent Security",
+  "talos-trading": "Talos Trading",
+  "pylon-labs": "Pylon Labs",
+  "rox-data-corp": "Rox Data Corp",
+  "d-matrix": "d-Matrix",
+};
+
+const GREENHOUSE_OVERRIDES: Record<string, string> = {
+  // Greenhouse-specific overrides go here. Most canonical names live in
+  // SHARED_OVERRIDES. Use this map only when the same token must resolve
+  // to a different name on Greenhouse vs Ashby (rare).
 };
 
 const ASHBY_OVERRIDES: Record<string, string> = {
-  // Add Ashby-specific overrides here as we discover them.
-  // Keys are raw board tokens (without the "ashby-" prefix).
+  // Ashby-specific overrides go here. Empty for now — see SHARED_OVERRIDES.
 };
 
 /**
  * Look up a curated override for a given provider+slug pair.
  *
- * @param provider  AtsProvider enum value
- * @param slug      The slug stored on Company (board token for GH; "ashby-{token}" for Ashby)
- * @returns         The canonical name, or undefined if no override exists
+ * Provider-specific overrides win over shared overrides. The provider prefix
+ * (e.g. "ashby-") is stripped before lookup.
  */
 export function lookupOverride(
   provider: AtsProvider,
   slug: string,
 ): string | undefined {
   const key = stripProviderPrefix(provider, slug).toLowerCase();
-  if (provider === "GREENHOUSE") return GREENHOUSE_OVERRIDES[key];
-  if (provider === "ASHBY") return ASHBY_OVERRIDES[key];
-  return undefined;
+  if (provider === "GREENHOUSE" && key in GREENHOUSE_OVERRIDES) {
+    return GREENHOUSE_OVERRIDES[key];
+  }
+  if (provider === "ASHBY" && key in ASHBY_OVERRIDES) {
+    return ASHBY_OVERRIDES[key];
+  }
+  return SHARED_OVERRIDES[key];
 }
 
 function stripProviderPrefix(provider: AtsProvider, slug: string): string {
@@ -146,8 +198,13 @@ function stripProviderPrefix(provider: AtsProvider, slug: string): string {
  * Exposed for tests + admin tooling that want to inspect the full override set.
  */
 export function allOverrides(): {
+  shared: Readonly<Record<string, string>>;
   greenhouse: Readonly<Record<string, string>>;
   ashby: Readonly<Record<string, string>>;
 } {
-  return { greenhouse: GREENHOUSE_OVERRIDES, ashby: ASHBY_OVERRIDES };
+  return {
+    shared: SHARED_OVERRIDES,
+    greenhouse: GREENHOUSE_OVERRIDES,
+    ashby: ASHBY_OVERRIDES,
+  };
 }

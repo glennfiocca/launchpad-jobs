@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { LogoSource } from "@prisma/client";
 import { generateUniquePublicJobId } from "@/lib/public-job-id";
 import { createGreenhouseClient, isRemoteJob, extractDepartment } from "./client";
 import { createNotification } from "@/lib/notifications";
@@ -41,22 +42,31 @@ export async function syncGreenhouseBoard(
     // Non-fatal — sync continues without website; enrichment will be a no-op
   }
 
-  // Upsert company
+  // Upsert company. logoSource (Track B.5 of HARDENING_PLAN.md) is set to
+  // `override` when a caller-supplied logoUrl is being written — that's a
+  // SEED_BOARDS / CompanyBoard.logoUrl entry, treated as override-class.
   const company = await db.company.upsert({
     where: { provider_slug: { provider: "GREENHOUSE", slug: boardToken } },
     update: {
       name: companyName,
       ...(boardWebsite && { website: boardWebsite }),
-      ...(logoUrl && { logoUrl }),
+      ...(logoUrl && { logoUrl, logoSource: LogoSource.override }),
     },
-    create: { name: companyName, slug: boardToken, website: boardWebsite, logoUrl },
+    create: {
+      name: companyName,
+      slug: boardToken,
+      website: boardWebsite,
+      logoUrl,
+      logoSource: logoUrl ? LogoSource.override : undefined,
+    },
   });
 
-  // Enrich logo in the background if one isn't already stored
+  // Enrich logo in the background if one isn't already stored.
+  // enrichCompanyLogo persists `Company.logoSource` itself.
   if (!company.logoUrl) {
     enrichCompanyLogo({ id: company.id, website: company.website, name: company.name })
-      .then((url) => {
-        if (!url) {
+      .then((res) => {
+        if (!res.logoUrl) {
           console.warn(`[logo-enrichment] No logo found for company: ${company.name}`);
         }
       })

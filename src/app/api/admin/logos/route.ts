@@ -97,8 +97,8 @@ async function runBackfill(): Promise<void> {
         currentRun.progress.current = company.name;
       }
 
-      const cdnUrl = await enrichCompanyLogo(company);
-      if (cdnUrl) {
+      const result = await enrichCompanyLogo(company);
+      if (result.logoUrl) {
         enriched++;
       } else {
         failed++;

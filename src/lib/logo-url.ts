@@ -22,12 +22,20 @@
 
 /**
  * Builds a logo.dev URL for a given website.
+ *
+ * Includes `fallback=monogram` (Track B.5 of HARDENING_PLAN.md) so brands
+ * without logo.dev coverage render a monogram-style placeholder instead of
+ * a 404. Documented param: https://www.logo.dev/docs/logos
  */
 export function getLogoUrl(website: string): string | null {
   try {
     const hostname = new URL(website).hostname;
     const token = process.env.NEXT_PUBLIC_LOGO_DEV_KEY ?? "";
-    const params = new URLSearchParams({ token, retina: "true" });
+    const params = new URLSearchParams({
+      token,
+      retina: "true",
+      fallback: "monogram",
+    });
     return `https://img.logo.dev/${hostname}?${params.toString()}`;
   } catch {
     return null;

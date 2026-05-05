@@ -21,6 +21,16 @@ describe("getLogoUrl", () => {
     expect(p.searchParams.get("size")).toBeNull();
   });
 
+  it("includes fallback=monogram so non-covered brands render a placeholder (B.5)", () => {
+    // Track B.5 of HARDENING_PLAN.md: brands without logo.dev coverage
+    // should render a monogram-style placeholder rather than 404. The
+    // `fallback=monogram` query param is the documented logo.dev escape
+    // hatch.
+    const url = getLogoUrl("https://nonexistent-brand-xyz.example");
+    const p = new URL(url!);
+    expect(p.searchParams.get("fallback")).toBe("monogram");
+  });
+
   it("uses the hostname as the path", () => {
     const url = getLogoUrl("https://okta.com");
     const p = new URL(url!);
@@ -75,5 +85,11 @@ describe("normalizeLogoUrl", () => {
   it("passes through a data: URL unchanged", () => {
     const dataUrl = "data:image/png;base64,abc123";
     expect(normalizeLogoUrl(dataUrl)).toBe(dataUrl);
+  });
+
+  it("preserves fallback=monogram when present (B.5)", () => {
+    const url = `https://img.logo.dev/okta.com?token=${TOKEN}&retina=true&fallback=monogram`;
+    const p = new URL(normalizeLogoUrl(url));
+    expect(p.searchParams.get("fallback")).toBe("monogram");
   });
 });

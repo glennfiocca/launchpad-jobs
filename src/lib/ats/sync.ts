@@ -1,4 +1,5 @@
 import type { AtsProvider } from "@prisma/client";
+import { LogoSource } from "@prisma/client";
 import type { NormalizedJob } from "./types";
 import { getClient } from "./registry";
 import { db } from "../db";
@@ -194,13 +195,20 @@ export async function syncBoard(
   // Only update `website`/`logoUrl` when the resolver produced one. Manual
   // overrides take the enrichment path (below) so we don't leak the source
   // URL into Company.logoUrl mid-cache.
+  //
+  // logoSource (Track B.5 of HARDENING_PLAN.md): when we write an ATS-
+  // supplied URL directly we tag it `override` (ATS metadata is treated
+  // as an authoritative external source — same class as a curated
+  // override). Enrichment paths overwrite this with `spaces_cache` once
+  // they cache the bytes. Override-based enrichment keeps the row's
+  // existing logoSource until enrichment writes its result.
   const company = await db.company.upsert({
     where: { provider_slug: { provider, slug } },
     update: {
       name: result.companyName,
       provider,
       ...(logo.website && { website: logo.website }),
-      ...(writeAtsLogo && { logoUrl: logo.logoUrl }),
+      ...(writeAtsLogo && { logoUrl: logo.logoUrl, logoSource: LogoSource.override }),
     },
     create: {
       name: result.companyName,
@@ -208,6 +216,7 @@ export async function syncBoard(
       provider,
       website: logo.website,
       logoUrl: writeAtsLogo ? logo.logoUrl ?? undefined : undefined,
+      logoSource: writeAtsLogo ? LogoSource.override : undefined,
     },
   });
 
@@ -215,13 +224,15 @@ export async function syncBoard(
   //   - Manual override → fetch the source URL, cache to Spaces under
   //     logos/manual/{slug}.png, write the CDN URL.
   //   - No logo at all → derive from website + theme via logo.dev.
+  // Both paths now persist `Company.logoSource` via enrichCompanyLogo
+  // (returns `{ logoUrl, source }` post Track B.5).
   if (isManualOverrideLogo && logo.logoUrl) {
     enrichCompanyLogo(
       { id: company.id, website: company.website, name: company.name, slug: company.slug },
       { sourceUrl: logo.logoUrl },
     )
-      .then((url) => {
-        if (!url) {
+      .then((res) => {
+        if (!res.logoUrl) {
           console.warn(`[logo-enrichment] Failed to cache override logo for: ${company.name}`);
         }
       })
@@ -232,8 +243,8 @@ export async function syncBoard(
       website: company.website,
       name: company.name,
     })
-      .then((url) => {
-        if (!url) {
+      .then((res) => {
+        if (!res.logoUrl) {
           console.warn(`[logo-enrichment] No logo found for company: ${company.name}`);
         }
       })

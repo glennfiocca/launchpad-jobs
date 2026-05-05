@@ -270,16 +270,18 @@ async function main(): Promise<void> {
       // Otherwise → fall through to the website + theme path.
       let cdnUrl: string | null = null;
       if (p.overrideLogoSourceUrl) {
-        cdnUrl = await enrichCompanyLogo(
+        const r = await enrichCompanyLogo(
           { id: p.companyId, name: p.name, website: p.effectiveWebsite, slug: p.slug },
           { sourceUrl: p.overrideLogoSourceUrl },
         );
+        cdnUrl = r.logoUrl;
       } else if (p.effectiveWebsite) {
-        cdnUrl = await enrichCompanyLogo({
+        const r = await enrichCompanyLogo({
           id: p.companyId,
           name: p.name,
           website: p.effectiveWebsite,
         });
+        cdnUrl = r.logoUrl;
       }
 
       if (cdnUrl) logosEnriched++;

@@ -78,6 +78,18 @@ enum Role {
   ADMIN
 }
 
+/// Where a Company.logoUrl ultimately came from. Populated by the sync /
+/// enrichment pipeline at write-time. Track B.5 of HARDENING_PLAN.md —
+/// surfaced in the admin sync dashboard so we can see what % of brands
+/// fall through to the monogram fallback.
+enum LogoSource {
+  override
+  logodev
+  spaces_cache
+  monogram
+  none
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -306,6 +318,11 @@ model Company {
   provider AtsProvider @default(GREENHOUSE)
 
   logoUrl  String?
+  /// Where logoUrl came from — set alongside logoUrl on every write by
+  /// the resolver/enrichment pipeline. Null until the next sync cycle
+  /// populates it (Track B.5 of HARDENING_PLAN.md). Surfaced as a
+  /// distribution stat in /admin/sync.
+  logoSource LogoSource?
   website  String?
   industry String?
   size     String?

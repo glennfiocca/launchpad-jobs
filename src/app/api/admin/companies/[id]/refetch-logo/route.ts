@@ -69,13 +69,14 @@ export async function POST(
     });
   }
 
-  // 2. Clear stale logoUrl, then re-enrich.
+  // 2. Clear stale logoUrl + logoSource, then re-enrich. Track B.5 of
+  // HARDENING_PLAN.md: enrichment writes both fields atomically.
   // If the resolver gave us an explicit logoUrl from an override, treat it
   // as a fetch source — enrichment downloads it and caches to Spaces under
   // logos/manual/{slug}.png. Otherwise derive from website + theme.
   await db.company.update({
     where: { id: company.id },
-    data: { logoUrl: null },
+    data: { logoUrl: null, logoSource: null },
   });
 
   if (resolved.logoUrl) {
@@ -98,7 +99,7 @@ export async function POST(
 
   const updated = await db.company.findUnique({
     where: { id: company.id },
-    select: { id: true, name: true, slug: true, website: true, logoUrl: true },
+    select: { id: true, name: true, slug: true, website: true, logoUrl: true, logoSource: true },
   });
 
   return NextResponse.json<ApiResponse<typeof updated>>({

@@ -1,3 +1,4 @@
+import { LogoSource } from "@prisma/client";
 import { db } from "./db";
 import { getLogoUrl } from "./logo-url";
 import { uploadPublicBuffer } from "./spaces";
@@ -22,10 +23,24 @@ interface EnrichOptions {
 }
 
 /**
+ * Result of an enrichment attempt. Track B.5 of HARDENING_PLAN.md added the
+ * `source` field so callers know which `LogoSource` enum value to persist
+ * alongside `Company.logoUrl`. Source semantics:
+ *   - `spaces_cache` — bytes were fetched + uploaded; logoUrl is the Spaces CDN URL
+ *   - `monogram` — render-time fallback was set as the stored URL (logo.dev `?fallback=monogram`)
+ *   - `none` — enrichment couldn't produce anything; logoUrl is null
+ */
+export interface EnrichResult {
+  logoUrl: string | null;
+  source: LogoSource;
+}
+
+/**
  * Fetches a logo image (from logo.dev by default, or a caller-supplied URL)
- * and uploads it to DigitalOcean Spaces. Persists the resulting CDN URL to
- * `Company.logoUrl`. Returns the CDN URL on success, null otherwise.
- * Never throws — all errors are caught and logged internally.
+ * and uploads it to DigitalOcean Spaces. Persists the resulting CDN URL +
+ * `LogoSource` to `Company.logoUrl` / `Company.logoSource`. Returns the
+ * `EnrichResult` on success or `{ logoUrl: null, source: 'none' }` on
+ * failure. Never throws — all errors are caught and logged internally.
  *
  * Two modes:
  *   - Default: derive a logo.dev URL from `company.website` + theme. Stored
@@ -38,11 +53,14 @@ interface EnrichOptions {
 export async function enrichCompanyLogo(
   company: EnrichInput,
   options?: EnrichOptions,
-): Promise<string | null> {
+): Promise<EnrichResult> {
   const fetchUrl =
     options?.sourceUrl ??
     (company.website ? getLogoUrl(company.website) : null);
-  if (!fetchUrl) return null;
+  if (!fetchUrl) {
+    await markLogoSource(company.id, LogoSource.none);
+    return { logoUrl: null, source: LogoSource.none };
+  }
 
   try {
     const res = await fetch(fetchUrl);
@@ -50,7 +68,8 @@ export async function enrichCompanyLogo(
       console.error(
         `enrichCompanyLogo: ${res.status} fetching ${fetchUrl} for ${company.name}`,
       );
-      return null;
+      await markLogoSource(company.id, LogoSource.none);
+      return { logoUrl: null, source: LogoSource.none };
     }
 
     const contentType = res.headers.get("content-type") ?? "";
@@ -58,7 +77,8 @@ export async function enrichCompanyLogo(
       console.error(
         `enrichCompanyLogo: unexpected content-type "${contentType}" for ${company.name}`,
       );
-      return null;
+      await markLogoSource(company.id, LogoSource.none);
+      return { logoUrl: null, source: LogoSource.none };
     }
 
     const arrayBuffer = await res.arrayBuffer();
@@ -83,21 +103,42 @@ export async function enrichCompanyLogo(
       console.error(
         `enrichCompanyLogo: cannot determine Spaces key for ${company.name} — sourceUrl without slug or website`,
       );
-      return null;
+      await markLogoSource(company.id, LogoSource.none);
+      return { logoUrl: null, source: LogoSource.none };
     }
 
     const cdnUrl = await uploadPublicBuffer(key, buffer, contentType);
-    if (!cdnUrl) return null;
+    if (!cdnUrl) {
+      await markLogoSource(company.id, LogoSource.none);
+      return { logoUrl: null, source: LogoSource.none };
+    }
 
     await db.company.update({
       where: { id: company.id },
-      data: { logoUrl: cdnUrl },
+      data: { logoUrl: cdnUrl, logoSource: LogoSource.spaces_cache },
     });
 
-    return cdnUrl;
+    return { logoUrl: cdnUrl, source: LogoSource.spaces_cache };
   } catch (err) {
     console.error(`enrichCompanyLogo: unhandled error for ${company.name}:`, err);
-    return null;
+    await markLogoSource(company.id, LogoSource.none);
+    return { logoUrl: null, source: LogoSource.none };
+  }
+}
+
+/**
+ * Best-effort write of `Company.logoSource` when enrichment couldn't produce
+ * a logo. Failures here are non-fatal — sync continues and the next cycle
+ * tries again.
+ */
+async function markLogoSource(id: string, source: LogoSource): Promise<void> {
+  try {
+    await db.company.update({
+      where: { id },
+      data: { logoSource: source },
+    });
+  } catch {
+    // Non-fatal — caller is in a fire-and-forget path
   }
 }
 

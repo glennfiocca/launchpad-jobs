@@ -2,7 +2,7 @@ import Link from "next/link"
 import { db } from "@/lib/db"
 import { StatCard } from "@/components/admin/stat-card"
 import { TriggerSyncButton } from "@/components/admin/trigger-sync-button"
-import type { SyncStatus } from "@prisma/client"
+import type { LogoSource, SyncStatus } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -49,28 +49,55 @@ function formatTriggeredBy(triggeredBy: string): string {
   return triggeredBy
 }
 
+// Display order + labels for the LogoSource distribution panel.
+// Track B.5 of HARDENING_PLAN.md.
+const LOGO_SOURCE_ROWS: ReadonlyArray<{ key: LogoSource | "null"; label: string }> = [
+  { key: "spaces_cache", label: "Spaces cache" },
+  { key: "override", label: "Override / ATS-supplied" },
+  { key: "logodev", label: "logo.dev (uncached)" },
+  { key: "monogram", label: "Monogram fallback" },
+  { key: "none", label: "None (enrichment failed)" },
+  { key: "null", label: "Not yet enriched" },
+]
+
 export default async function SyncLogsPage() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
-  const [logs, totalSyncs30d, completedCount30d, lastSync] = await Promise.all([
-    db.syncLog.findMany({
-      take: 50,
-      orderBy: { startedAt: "desc" },
-    }),
-    db.syncLog.count({
-      where: { startedAt: { gte: thirtyDaysAgo } },
-    }),
-    db.syncLog.count({
-      where: {
-        startedAt: { gte: thirtyDaysAgo },
-        status: { in: ["SUCCESS", "PARTIAL_FAILURE"] },
-      },
-    }),
-    db.syncLog.findFirst({ orderBy: { startedAt: "desc" } }),
-  ])
+  const [logs, totalSyncs30d, completedCount30d, lastSync, logoSourceGroups] =
+    await Promise.all([
+      db.syncLog.findMany({
+        take: 50,
+        orderBy: { startedAt: "desc" },
+      }),
+      db.syncLog.count({
+        where: { startedAt: { gte: thirtyDaysAgo } },
+      }),
+      db.syncLog.count({
+        where: {
+          startedAt: { gte: thirtyDaysAgo },
+          status: { in: ["SUCCESS", "PARTIAL_FAILURE"] },
+        },
+      }),
+      db.syncLog.findFirst({ orderBy: { startedAt: "desc" } }),
+      // Logos by source distribution. Tiny query — single GROUP BY on a
+      // small enum column on Company. Renders as a flat row list (no
+      // charting library — keeps the bundle lean).
+      db.company.groupBy({
+        by: ["logoSource"],
+        _count: { _all: true },
+      }),
+    ])
 
   const successRate =
     totalSyncs30d > 0 ? Math.round((completedCount30d / totalSyncs30d) * 100) : null
+
+  const logoCountByKey = new Map<LogoSource | "null", number>()
+  let logoTotal = 0
+  for (const g of logoSourceGroups) {
+    const key: LogoSource | "null" = g.logoSource ?? "null"
+    logoCountByKey.set(key, g._count._all)
+    logoTotal += g._count._all
+  }
 
   return (
     <div className="space-y-6">
@@ -102,6 +129,37 @@ export default async function SyncLogsPage() {
           value={successRate !== null ? `${successRate}%` : "—"}
           sub={totalSyncs30d > 0 ? `${completedCount30d} of ${totalSyncs30d} completed (SUCCESS or PARTIAL)` : undefined}
         />
+      </div>
+
+      {/* Logos by source — Track B.5 of HARDENING_PLAN.md. Surfaces the
+          distribution of where each Company.logoUrl came from so we can
+          tell at a glance how many brands fall through to the monogram
+          fallback. */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-zinc-300">Logos by source</h2>
+          <span className="text-xs text-zinc-500 tabular-nums">
+            {logoTotal.toLocaleString()} companies
+          </span>
+        </div>
+        <ul className="space-y-1.5">
+          {LOGO_SOURCE_ROWS.map((row) => {
+            const count = logoCountByKey.get(row.key) ?? 0
+            const pct = logoTotal > 0 ? Math.round((count / logoTotal) * 100) : 0
+            return (
+              <li
+                key={row.key}
+                className="flex items-center justify-between text-xs"
+              >
+                <span className="text-zinc-400">{row.label}</span>
+                <span className="text-zinc-300 tabular-nums">
+                  {count.toLocaleString()}{" "}
+                  <span className="text-zinc-500">({pct}%)</span>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       </div>
 
       {/* Table */}

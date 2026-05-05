@@ -100,4 +100,45 @@ describe("resolveCompanyLogoSync", () => {
     expect(r.websiteSource).toBe("override");
   });
 
+  // Track B.5 of HARDENING_PLAN.md: every code path that produces a logoUrl
+  // must report a step source so the writer can derive the persisted
+  // `Company.logoSource` value. These tests pin the step values the
+  // ats/sync.ts upsert path branches on (override / board / ats / none).
+  describe("logoSource step values (B.5)", () => {
+    it("override-map-supplied logoUrl reports logoSource='override'", async () => {
+      const r = await resolveCompanyLogoSync({
+        provider: "GREENHOUSE",
+        slug: "astronomer", // override map has logoUrl
+      });
+      expect(r.logoUrl).toContain("img.logo.dev/astronomer.io");
+      expect(r.logoSource).toBe("override");
+    });
+
+    it("board-override logoUrl reports logoSource='board'", async () => {
+      const r = await resolveCompanyLogoSync({
+        provider: "GREENHOUSE",
+        slug: "astronomer",
+        boardOverrideLogoUrl: "https://cdn.example.com/astronomer.png",
+      });
+      expect(r.logoSource).toBe("board");
+    });
+
+    it("ATS-supplied logoUrl reports logoSource='ats'", async () => {
+      const r = await resolveCompanyLogoSync({
+        provider: "GREENHOUSE",
+        slug: "newco",
+        atsLogoUrl: "https://greenhouse.cdn.example.com/newco.png",
+      });
+      expect(r.logoSource).toBe("ats");
+    });
+
+    it("nothing produces a logoUrl → logoSource='none'", async () => {
+      const r = await resolveCompanyLogoSync({
+        provider: "GREENHOUSE",
+        slug: "completely-empty",
+      });
+      expect(r.logoUrl).toBeNull();
+      expect(r.logoSource).toBe("none");
+    });
+  });
 });

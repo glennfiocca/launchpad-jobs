@@ -12,6 +12,7 @@ function makeJob(overrides: {
     slug: "acme",
     provider: "GREENHOUSE" as const,
     logoUrl: null,
+    logoSource: null,
     website: null,
     industry: null,
     size: null,

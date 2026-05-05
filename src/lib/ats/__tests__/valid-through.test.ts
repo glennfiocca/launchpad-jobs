@@ -55,7 +55,7 @@ vi.mock("../../notifications", () => ({
 }));
 
 vi.mock("../../logo-enrichment", () => ({
-  enrichCompanyLogo: vi.fn(async () => null),
+  enrichCompanyLogo: vi.fn(async () => ({ logoUrl: null, source: "none" })),
 }));
 
 import { getClient } from "../registry";

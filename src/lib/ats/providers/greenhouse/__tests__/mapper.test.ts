@@ -78,6 +78,9 @@ describe("mapGreenhouseJobToNormalized", () => {
       applyUrl: "https://boards.greenhouse.io/acme/jobs/12345",
       content: "<p>Job description here</p>",
       postedAt: new Date("2025-06-01T10:00:00Z"),
+      countryCode: "US",
+      locationCategory: "US_BASED",
+      isUSEligible: true,
     });
   });
 

@@ -51,6 +51,9 @@ describe("mapAshbyJobToNormalized", () => {
       content: "<p>We are looking for a senior engineer...</p>",
       postedAt: new Date("2025-11-14T00:46:58.989+00:00"),
       compensation: undefined,
+      countryCode: "US",
+      locationCategory: "US_BASED",
+      isUSEligible: true,
     });
   });
 

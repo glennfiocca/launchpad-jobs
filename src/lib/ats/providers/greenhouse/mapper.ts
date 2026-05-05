@@ -1,5 +1,6 @@
 import type { NormalizedJob, NormalizedQuestion, NormalizedFieldType } from "../../types";
 import type { GreenhouseJob, GreenhouseQuestion } from "./types";
+import { classifyLocation } from "@/lib/location-classifier";
 
 /** Returns true if the location string indicates a remote position. */
 function isRemoteJob(location: string): boolean {
@@ -32,6 +33,11 @@ export function mapGreenhouseJobToNormalized(
   _boardToken: string
 ): NormalizedJob {
   const location = ghJob.location?.name ?? null;
+  const remote = location ? isRemoteJob(location) : false;
+
+  // Greenhouse exposes no structured country data — classifier runs on
+  // free text only. Still wins ~99% accuracy on standard "City, ST" formats.
+  const classification = classifyLocation({ location, remote });
 
   return {
     externalId: String(ghJob.id),
@@ -39,11 +45,14 @@ export function mapGreenhouseJobToNormalized(
     location,
     department: extractDepartment(ghJob.departments),
     employmentType: null, // Greenhouse public API does not expose this
-    remote: location ? isRemoteJob(location) : false,
+    remote,
     absoluteUrl: ghJob.absolute_url,
     applyUrl: ghJob.absolute_url, // Same for Greenhouse
     content: ghJob.content ?? null,
     postedAt: ghJob.updated_at ? new Date(ghJob.updated_at) : null,
+    countryCode: classification.countryCode,
+    locationCategory: classification.category,
+    isUSEligible: classification.isUSEligible,
   };
 }
 

@@ -136,6 +136,9 @@ export interface AdminJob {
   department: string | null
   remote: boolean
   isActive: boolean
+  isUSEligible: boolean
+  locationCategory: string | null
+  countryCode: string | null
   postedAt: Date | null
   company: { id: string; name: string }
   _count: { applications: number }

@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobsQuerySchema, datePostedToCutoff } from "@/lib/validations/jobs";
 import { buildFacets } from "@/lib/job-facets";
+import { usEligibleWhere, usEligibleSqlCondition } from "@/lib/jobs/eligibility-filter";
 import {
   buildRelevanceOrder,
   buildBlendedRelevanceOrder,
@@ -103,9 +104,13 @@ export async function GET(request: Request) {
     ? { location: { contains: effectiveLocation, mode: "insensitive" as const } }
     : {};
 
-  // Structural where clause (shared by Prisma path and facets)
+  // Structural where clause (shared by Prisma path and facets).
+  // The US-eligibility filter is the platform's audience-curation gate; it
+  // only runs against the listing API + facets — sitemap and detail pages
+  // intentionally omit it so SEO + direct search-engine traffic stay intact.
   const structuralWhere: Prisma.JobWhereInput = {
     isActive: true,
+    ...usEligibleWhere(),
     ...(provider && { provider }),
     ...(remote === "true" && { remote: true }),
     ...(employmentType && { employmentType }),
@@ -127,6 +132,8 @@ export async function GET(request: Request) {
       Prisma.sql`j."isActive" = true`,
       Prisma.sql`j."searchVector" @@ plainto_tsquery('english', ${query})`,
     ];
+    const eligibility = usEligibleSqlCondition();
+    if (eligibility) conditions.push(eligibility);
 
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
@@ -227,6 +234,8 @@ export async function GET(request: Request) {
     const relevanceOrder = buildRelevanceOrder(relevanceProfile);
 
     const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];
+    const eligibility = usEligibleSqlCondition();
+    if (eligibility) conditions.push(eligibility);
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
     if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);

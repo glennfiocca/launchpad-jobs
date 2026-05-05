@@ -17,6 +17,14 @@ export interface NormalizedJob {
     max: number | null;
     currency: string | null;
   };
+  /**
+   * Location classification produced by src/lib/location-classifier. Mappers
+   * call the classifier with whatever signals their provider exposes (Ashby:
+   * structured addressCountry + secondaryLocations; Greenhouse: free text).
+   */
+  countryCode: string | null;
+  locationCategory: string;
+  isUSEligible: boolean;
 }
 
 /** Normalized application question */

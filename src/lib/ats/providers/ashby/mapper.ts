@@ -1,5 +1,6 @@
 import type { NormalizedJob } from "../../types";
 import type { AshbyApiJob } from "./types";
+import { classifyLocation } from "@/lib/location-classifier";
 
 /** Maps Ashby employmentType values to user-friendly strings. */
 function mapEmploymentType(ashbyType: string): string {
@@ -39,6 +40,13 @@ function extractCompensation(
 
 /** Converts a raw Ashby job to the normalized shape. */
 export function mapAshbyJobToNormalized(ashbyJob: AshbyApiJob): NormalizedJob {
+  const classification = classifyLocation({
+    location: ashbyJob.location || null,
+    remote: ashbyJob.isRemote ?? false,
+    ashbyAddressCountry: ashbyJob.address?.postalAddress?.addressCountry ?? null,
+    ashbySecondaryLocations: (ashbyJob.secondaryLocations ?? []).map((s) => s.location),
+  });
+
   return {
     externalId: ashbyJob.id,
     title: ashbyJob.title,
@@ -53,5 +61,8 @@ export function mapAshbyJobToNormalized(ashbyJob: AshbyApiJob): NormalizedJob {
     content: ashbyJob.descriptionHtml || null,
     postedAt: ashbyJob.publishedAt ? new Date(ashbyJob.publishedAt) : null,
     compensation: extractCompensation(ashbyJob),
+    countryCode: classification.countryCode,
+    locationCategory: classification.category,
+    isUSEligible: classification.isUSEligible,
   };
 }

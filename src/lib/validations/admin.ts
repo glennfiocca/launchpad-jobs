@@ -6,7 +6,10 @@ export const updateUserSchema = z.object({
 })
 
 export const updateJobSchema = z.object({
-  isActive: z.boolean(),
+  isActive: z.boolean().optional(),
+  isUSEligible: z.boolean().optional(),
+}).refine((data) => data.isActive !== undefined || data.isUSEligible !== undefined, {
+  message: "At least one of isActive or isUSEligible must be provided",
 })
 
 export const createCompanyBoardSchema = z.object({

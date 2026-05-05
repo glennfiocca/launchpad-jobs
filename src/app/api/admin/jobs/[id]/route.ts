@@ -20,10 +20,23 @@ export async function PATCH(
   const job = await db.job.findUnique({ where: { id } })
   if (!job) return notFound("Job not found")
 
+  // Build a partial update so admins can flip either flag independently —
+  // useful for fixing classifier misses without touching the active state.
+  const data: { isActive?: boolean; isUSEligible?: boolean } = {}
+  if (parsed.data.isActive !== undefined) data.isActive = parsed.data.isActive
+  if (parsed.data.isUSEligible !== undefined) data.isUSEligible = parsed.data.isUSEligible
+
   const updated = await db.job.update({
     where: { id },
-    data: { isActive: parsed.data.isActive },
-    select: { id: true, title: true, isActive: true },
+    data,
+    select: {
+      id: true,
+      title: true,
+      isActive: true,
+      isUSEligible: true,
+      countryCode: true,
+      locationCategory: true,
+    },
   })
 
   return NextResponse.json<ApiResponse<typeof updated>>({ success: true, data: updated })

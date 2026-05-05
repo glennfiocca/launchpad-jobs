@@ -346,6 +346,14 @@ model Job {
   salaryMax      Int?
   salaryCurrency String?
 
+  // Location classification (see src/lib/location-classifier).
+  // `isUSEligible` is the sole bit the listing API consumes; the other two
+  // fields are admin/debug surfaces. Default true so freshly-inserted rows
+  // are visible until the classifier (run during sync) refines them.
+  countryCode      String?
+  locationCategory String?
+  isUSEligible     Boolean @default(true)
+
   // Questions required for application (JSON array)
   // [{ "id": "123", "label": "...", "required": true, "type": "text" }]
   applicationQuestions Json?
@@ -375,6 +383,7 @@ model Job {
   @@index([department])
   @@index([postedAt])
   @@index([validThrough])
+  @@index([isUSEligible])
 }
 
 enum ApplicationStatus {

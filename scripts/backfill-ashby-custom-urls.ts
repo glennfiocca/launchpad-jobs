@@ -67,12 +67,9 @@ async function main(): Promise<void> {
     if (!map) continue; // not self-hosted, hosted board works
     selfHosters++;
 
-    if (map.byUuid.size === 0) {
-      console.log(`  [self-host] ${company.name} (${boardName}) — customJobsPageUrl=${map.org.customJobsPageUrl} but 0 slug→uuid matches`);
-      continue;
-    }
-
     // Pull the candidate jobs and figure out which ones we can rewrite.
+    // Even when byUuid is empty (no scrape-able slugs), we may still be
+    // able to rewrite via the ?ashby_jid={uuid} fallback.
     const jobs = await db.job.findMany({
       where: { companyId: company.id, isActive: true },
       select: { id: true, externalId: true, absoluteUrl: true, title: true },

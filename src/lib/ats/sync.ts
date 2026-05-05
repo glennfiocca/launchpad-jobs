@@ -279,12 +279,13 @@ export async function syncBoard(
         // Preserve original postedAt — don't overwrite with ATS updated_at
         const { postedAt: _ignored, ...updateData } = jobData;
 
-        // Don't downgrade a curated custom-domain absoluteUrl back to a
-        // generic URL. The Ashby client rewrites absoluteUrl to the
-        // ?ashby_jid={uuid} fallback for self-hosters, but per-slug
-        // backfills can write even cleaner URLs (e.g. cursor.com/careers/
-        // software-engineer-growth) — those should survive subsequent
-        // syncs unchanged.
+        // Belt-and-suspenders against URL downgrades. The Ashby client
+        // computes the cleanest URL it can on every sync (slug → fallback
+        // → null), so this guard usually no-ops. It exists for two cases:
+        //   - Transient discovery failure (careers page slow, network
+        //     hiccup) where sync would otherwise revert a clean slug URL
+        //     to the ?ashby_jid fallback for one cycle.
+        //   - Out-of-band edits (admin manually setting absoluteUrl).
         if (
           shouldPreserveAbsoluteUrl(existing.absoluteUrl, updateData.absoluteUrl)
         ) {

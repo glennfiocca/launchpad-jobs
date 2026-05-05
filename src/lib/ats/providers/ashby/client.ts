@@ -13,7 +13,7 @@ import type {
   AshbyGraphQLResponse,
 } from "./types";
 import { mapAshbyJobToNormalized } from "./mapper";
-import { fetchAshbyOrgInfo, buildAshbyJidFallback } from "@/lib/ashby-custom-jobs";
+import { discoverAshbyCustomJobMap } from "@/lib/ashby-custom-jobs";
 
 const ASHBY_BASE_URL = "https://api.ashbyhq.com/posting-api/job-board";
 const ASHBY_GRAPHQL_URL = "https://jobs.ashbyhq.com/api/non-user-graphql";
@@ -109,25 +109,33 @@ export class AshbyAtsClient implements AtsClient {
       .filter((job) => job.isListed)
       .map(mapAshbyJobToNormalized);
 
-    // Self-hoster URL rewrite. If the company has a `customJobsPageUrl`
-    // configured (Cursor, Deel, Skydio, ElevenLabs, etc.), the default
-    // `https://jobs.ashbyhq.com/{board}/{uuid}` URL we'd otherwise store
-    // lands on a dead SPA shell — the company has disabled the public
-    // Ashby board. Rewrite the listing URL to the `?ashby_jid={uuid}`
-    // fallback so users land on a working page.
+    // Self-hoster URL rewrite. Companies with `customJobsPageUrl` set
+    // (Cursor, Deel, Skydio, ElevenLabs, etc.) have disabled the public
+    // Ashby board, so the default `https://jobs.ashbyhq.com/{board}/{uuid}`
+    // URL lands on a dead SPA shell. We run the full discovery inline:
     //
-    // Cost: one extra GraphQL request per Ashby sync (~500ms). Acceptable.
-    // The slower per-slug scrape (Cursor → /careers/software-engineer-growth)
-    // happens out of band via `npm run backfill-ashby-custom-urls`. To stop
-    // sync from clobbering those cleaner URLs, sync.ts has a guard that
-    // refuses to overwrite a custom-domain absoluteUrl with a fresh sync
-    // value pointing back at jobs.ashbyhq.com.
-    const orgInfo = await fetchAshbyOrgInfo(this.boardName);
-    if (!orgInfo?.customJobsPageUrl) return jobs;
+    //   1. GraphQL → org info (~500ms)
+    //   2. Scrape careers index for /careers/{slug} links (~1s)
+    //   3. Fetch each per-slug page, extract embedded Ashby UUID (~1s
+    //      each, 4-concurrent)
+    //   4. Use the slug URL when matched, else `?ashby_jid={uuid}` fallback
+    //
+    // Cost per self-hoster:
+    //   - Slug-style (Cursor ~22s, Linear ~5s): pays for clean slug URLs
+    //     on every job, including new ones.
+    //   - Query-param-style (~17 others): scrape returns 0 slugs, skips
+    //     per-slug fetching, completes in ~1s.
+    //
+    // For non-self-hosters, returns null after the GraphQL check (~500ms)
+    // and the loop below short-circuits.
+    const customMap = await discoverAshbyCustomJobMap(this.boardName);
+    if (!customMap) return jobs;
 
     return jobs.map((job) => {
-      const fallback = buildAshbyJidFallback(orgInfo.customJobsPageUrl!, job.externalId);
-      return fallback ? { ...job, absoluteUrl: fallback } : job;
+      const slugUrl = customMap.byUuid.get(job.externalId);
+      const fallbackUrl = customMap.buildFallbackUrl(job.externalId);
+      const newUrl = slugUrl ?? fallbackUrl;
+      return newUrl ? { ...job, absoluteUrl: newUrl } : job;
     });
   }
 

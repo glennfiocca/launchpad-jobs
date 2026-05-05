@@ -1,9 +1,22 @@
 # Pipeline Hardening + Apply Workflow Spec
 
-**Status**: Draft / ready to implement
+**Status**: Decisions locked, ready to implement
 **Author**: produced from a single multi-hour session ending 2026-05-05
 **Scope**: every gap left by the company-name + logo + URL + sync work shipped this session
 **Goal**: zero remaining "we'll deal with that later" items
+
+---
+
+## Decisions locked in (resolved by user before context-clear)
+
+1. **Browser extension distribution** → installed manually from a zip; operator clicks "Refresh" in `chrome://extensions` to pull updates. **No Chrome Web Store review delay.** A.3 reduces to: edit `manifest.json` + `content.js`, the user refreshes the loaded extension.
+2. **Apply selector strategy (A.2)** → generic selectors first; add per-company `applySelector` overrides ONLY for self-hosters where the generic chain fails during testing.
+3. **Heartbeat service (C.3)** → Healthchecks.io free tier.
+4. **Override migration (B.4)** → DB is runtime source of truth; existing TS map becomes a deploy-time seed (`prisma/seed-overrides.ts`) so a fresh deploy bootstraps the same overrides without manual entry.
+5. **Daily digest recipients (C.4)** → query `users WHERE role = 'ADMIN'`, send to all.
+6. **Spaces prune cadence (C.1)** → weekly cron.
+7. **CAPTCHA strategy (A.2)** → unchanged. Self-hosters route to the operator queue with the existing error codes.
+8. **Greenhouse self-hoster audit (A.5)** → 10-board spot-check before closing the track.
 
 ---
 
@@ -106,10 +119,10 @@ If we land on a page that doesn't match any of the above selectors after a 3-sec
 **Recommendation: Option C**. The extension only acts when explicitly invoked via the JWT URL hash, so broad host permissions aren't a security expansion in practice. Operators won't see unwanted UI.
 
 **Tasks**
-- [ ] A.3.1 — Update `manifest.json` `host_permissions` to `["<all_urls>"]` (or `optional_host_permissions` if we want explicit consent)
+- [ ] A.3.1 — Update `manifest.json` `host_permissions` to `["<all_urls>"]`
 - [ ] A.3.2 — Update `content_scripts.matches` accordingly
 - [ ] A.3.3 — Audit `content.js` to ensure it short-circuits cleanly when no JWT hash is present
-- [ ] A.3.4 — Republish the extension (Chrome Web Store update; coordinate with whoever owns developer-account access)
+- [ ] A.3.4 — Bump the extension `version` field. Tell the user to click "Refresh" in `chrome://extensions` (manual install — no CWS publish needed)
 - [ ] A.3.5 — Document the install flow update in `docs/operator-assisted-apply.md`
 
 **Acceptance**: An operator can paste a JWT-snapshot URL targeting `cursor.com/careers/software-engineer-growth#pipelineFill=...` and the extension fills the form.
@@ -452,14 +465,7 @@ D.x ── all independent
 
 ## Open questions for human review
 
-1. **Browser extension distribution** — is the Pipeline Operator extension published in the Chrome Web Store, or installed manually by operators? Affects A.3 update flow (CWS review delay vs. immediate).
-2. **Apply selector strategy for self-hosters** — for A.2, do we attempt one-size-fits-all selectors, or build per-company `applySelector` overrides upfront for the 19 self-hosters? Recommendation: start with generic, add per-company as needed.
-3. **Healthchecks.io acceptable?** — alternative is Better Stack, Cronitor, or self-hosted. C.3 assumes Healthchecks.
-4. **Override migration strategy** — for B.4, do we cut over hard (DB only, delete TS map after migration) or keep TS map as immutable seed? Recommendation: keep TS map as `seed-overrides.ts`, run as a Prisma seed step on fresh deploys; DB is source of truth at runtime.
-5. **Daily digest recipients** — single hardcoded admin email, or query users with `role: ADMIN`?
-6. **Spaces prune cron interval** — weekly vs monthly? Cost is identical; weekly catches issues sooner.
-7. **CAPTCHA strategy for self-hosters** — keep current "route to operator queue" or attempt an automated retry?
-8. **Greenhouse self-hoster equivalent (A.5)** — the user's casual observation says GH self-hosters work. Do we trust that, or sample-verify before closing?
+All resolved — see "Decisions locked in" at the top of this document.
 
 ---
 

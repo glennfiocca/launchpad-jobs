@@ -62,6 +62,10 @@ const SHARED_OVERRIDES: Record<string, LogoOverride> = {
     website: "https://www.instructure.com",
     logoUrl: "https://img.logo.dev/instructure.com?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
   },
+  rain: {
+    website: "https://rain.xyz",
+    logoUrl: "https://img.logo.dev/rain.xyz?token=pk_OEBqO-UTREKseni15wZ-qg&retina=true",
+  },
   cohere: { website: "https://cohere.com" },
   perplexity: { website: "https://perplexity.ai" },
   openai: { website: "https://openai.com" },

@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "backfill-company-logos": "tsx scripts/backfill-company-logos.ts",
+    "discover-company-websites": "tsx scripts/discover-company-websites.ts",
     "backfill-company-names": "tsx scripts/backfill-company-names.ts",
     "backfill-job-eligibility": "tsx scripts/backfill-job-eligibility.ts",
     "db:promote-admin": "tsx prisma/promote-admin.ts",

@@ -19,20 +19,17 @@
  */
 
 import type { AtsProvider } from "@prisma/client";
-import type { LogoTheme } from "../logo-url";
 
 export interface LogoOverride {
   /** Canonical company website (used as input to the logo lookup). */
   website?: string;
-  /** Override the resolved logo URL directly, bypassing logo.dev. */
-  logoUrl?: string;
   /**
-   * Override the logo.dev `theme` for this brand. Omit to use the global
-   * default (currently "light"). Set to "dark" only when the light variant
-   * is empirically broken for this brand (e.g. a brand whose canonical mark
-   * gets obscured at theme=light). See ADR in src/lib/logo-url.ts.
+   * Direct logo URL to fetch + cache. Used when the default bare logo.dev
+   * URL still doesn't render well for this specific brand and an admin has
+   * curated a better variant manually (typically a hand-picked logo.dev
+   * URL with custom params, or a non-logo.dev hosted asset).
    */
-  theme?: LogoTheme;
+  logoUrl?: string;
 }
 
 /**

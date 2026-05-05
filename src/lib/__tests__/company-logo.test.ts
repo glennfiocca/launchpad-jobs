@@ -93,20 +93,4 @@ describe("resolveCompanyLogoSync", () => {
     expect(r.websiteSource).toBe("override");
   });
 
-  it("defaults theme to 'light' when no override specifies one", () => {
-    const r = resolveCompanyLogoSync({
-      provider: "GREENHOUSE",
-      slug: "astronomer",
-    });
-    expect(r.theme).toBe("light");
-  });
-
-  it("returns 'light' for a brand with no override at all", () => {
-    const r = resolveCompanyLogoSync({
-      provider: "GREENHOUSE",
-      slug: "completely-unknown-co",
-      atsWebsite: "https://newco.com",
-    });
-    expect(r.theme).toBe("light");
-  });
 });

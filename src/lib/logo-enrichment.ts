@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { getLogoUrl, type LogoTheme } from "./logo-url";
+import { getLogoUrl } from "./logo-url";
 import { uploadPublicBuffer } from "./spaces";
 
 interface EnrichInput {
@@ -11,12 +11,10 @@ interface EnrichInput {
 }
 
 interface EnrichOptions {
-  /** Pass the logo.dev variant when deriving the URL from website. */
-  theme?: LogoTheme;
   /**
    * Override the fetch source. When provided, this URL is fetched verbatim
-   * instead of building one from `company.website` + theme. The downloaded
-   * bytes are uploaded to Spaces under `logos/manual/{slug}.png` so manual
+   * instead of building one from `company.website`. The downloaded bytes
+   * are uploaded to Spaces under `logos/manual/{slug}.<ext>` so manual
    * overrides don't collide with hostname-keyed cache entries and are
    * stable across website changes.
    */
@@ -43,7 +41,7 @@ export async function enrichCompanyLogo(
 ): Promise<string | null> {
   const fetchUrl =
     options?.sourceUrl ??
-    (company.website ? getLogoUrl(company.website, options?.theme) : null);
+    (company.website ? getLogoUrl(company.website) : null);
   if (!fetchUrl) return null;
 
   try {

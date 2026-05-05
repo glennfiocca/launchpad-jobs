@@ -8,18 +8,17 @@ beforeAll(() => {
 });
 
 describe("getLogoUrl", () => {
-  it("defaults theme to 'light' (better baseline for our dark surface)", () => {
+  it("builds a bare logo.dev URL with token + retina only", () => {
     const url = getLogoUrl("https://okta.com");
     expect(url).not.toBeNull();
     const p = new URL(url!);
-    expect(p.searchParams.get("theme")).toBe("light");
+    expect(p.searchParams.get("token")).toBe(TOKEN);
     expect(p.searchParams.get("retina")).toBe("true");
-  });
-
-  it("respects an explicit theme override", () => {
-    const url = getLogoUrl("https://okta.com", "dark");
-    const p = new URL(url!);
-    expect(p.searchParams.get("theme")).toBe("dark");
+    // Stripped: format/theme/size are deliberately absent so logo.dev
+    // returns its default JPEG variant (white-plate).
+    expect(p.searchParams.get("format")).toBeNull();
+    expect(p.searchParams.get("theme")).toBeNull();
+    expect(p.searchParams.get("size")).toBeNull();
   });
 
   it("uses the hostname as the path", () => {
@@ -29,17 +28,10 @@ describe("getLogoUrl", () => {
     expect(p.pathname).toBe("/okta.com");
   });
 
-  it("strips path and query from the website URL", () => {
+  it("preserves the www-prefixed hostname verbatim", () => {
     const url = getLogoUrl("https://www.hellofresh.com/careers?ref=1");
     const p = new URL(url!);
     expect(p.pathname).toBe("/www.hellofresh.com");
-  });
-
-  it("sets format=png and size=200", () => {
-    const url = getLogoUrl("https://doordash.com");
-    const p = new URL(url!);
-    expect(p.searchParams.get("format")).toBe("png");
-    expect(p.searchParams.get("size")).toBe("200");
   });
 
   it("returns null for an invalid URL", () => {
@@ -49,25 +41,20 @@ describe("getLogoUrl", () => {
 });
 
 describe("normalizeLogoUrl", () => {
-  it("upgrades stored URLs to theme=light + retina=true (legacy theme=dark URLs auto-correct)", () => {
+  it("strips legacy theme/format/size params from stored logo.dev URLs", () => {
     const old = `https://img.logo.dev/okta.com?token=${TOKEN}&size=200&format=png&theme=dark`;
     const updated = normalizeLogoUrl(old);
     const p = new URL(updated);
-    expect(p.searchParams.get("theme")).toBe("light");
+    expect(p.searchParams.get("theme")).toBeNull();
+    expect(p.searchParams.get("format")).toBeNull();
+    expect(p.searchParams.get("size")).toBeNull();
     expect(p.searchParams.get("retina")).toBe("true");
   });
 
-  it("preserves existing params", () => {
+  it("preserves the token", () => {
     const old = `https://img.logo.dev/okta.com?token=${TOKEN}&size=200&format=png`;
     const p = new URL(normalizeLogoUrl(old));
     expect(p.searchParams.get("token")).toBe(TOKEN);
-    expect(p.searchParams.get("size")).toBe("200");
-    expect(p.searchParams.get("format")).toBe("png");
-  });
-
-  it("overwrites a conflicting theme=auto value", () => {
-    const url = `https://img.logo.dev/okta.com?token=${TOKEN}&theme=auto`;
-    expect(new URL(normalizeLogoUrl(url)).searchParams.get("theme")).toBe("light");
   });
 
   it("is idempotent", () => {
@@ -80,9 +67,9 @@ describe("normalizeLogoUrl", () => {
     expect(normalizeLogoUrl(greenhouse)).toBe(greenhouse);
   });
 
-  it("passes through an S3 URL unchanged", () => {
-    const s3 = "https://s3.amazonaws.com/logos/doordash.png";
-    expect(normalizeLogoUrl(s3)).toBe(s3);
+  it("passes through a Spaces CDN URL unchanged", () => {
+    const spaces = "https://pipeline-uploads.nyc3.digitaloceanspaces.com/logos/manual/okta.jpg";
+    expect(normalizeLogoUrl(spaces)).toBe(spaces);
   });
 
   it("passes through a data: URL unchanged", () => {

@@ -85,11 +85,10 @@ interface ProposedChange {
   effectiveWebsite: string | null;
   websiteSource: string;
   needsLogoRefresh: boolean;
-  theme: "light" | "dark" | "auto";
   /**
    * If the override resolver gave us an explicit logoUrl, treat it as a
    * fetch source instead of writing it as-is. The enrichment step will
-   * download + Spaces-cache it under logos/manual/{slug}.png.
+   * download + Spaces-cache it under logos/manual/{slug}.<ext>.
    */
   overrideLogoSourceUrl: string | null;
 }
@@ -206,7 +205,6 @@ async function main(): Promise<void> {
         effectiveWebsite,
         websiteSource: result.websiteSource,
         needsLogoRefresh: finalNeedsRefresh,
-        theme: result.theme,
         overrideLogoSourceUrl,
       });
     }
@@ -277,10 +275,11 @@ async function main(): Promise<void> {
           { sourceUrl: p.overrideLogoSourceUrl },
         );
       } else if (p.effectiveWebsite) {
-        cdnUrl = await enrichCompanyLogo(
-          { id: p.companyId, name: p.name, website: p.effectiveWebsite },
-          { theme: p.theme },
-        );
+        cdnUrl = await enrichCompanyLogo({
+          id: p.companyId,
+          name: p.name,
+          website: p.effectiveWebsite,
+        });
       }
 
       if (cdnUrl) logosEnriched++;

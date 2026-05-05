@@ -5,64 +5,29 @@
  * can be unit-tested directly by Vitest without pulling in the React component
  * tree or Next.js path aliases.
  *
- * ADR: logo.dev theme strategy
+ * URL strategy: bare logo.dev (token + retina). This is the JPEG default —
+ * logo.dev returns a white-plate variant for almost every brand which pops
+ * cleanly on our dark surface.
  *
- * Problem: our app's surface is dark (#0a0a0a). logo.dev returns a single
- * variant per request, governed by the `theme` query param (auto/dark/light).
- * The "right" variant for a given brand is unfortunately not always the one
- * the param name implies.
+ * Past experiments with `theme=dark/light` and `format=png` produced
+ * brand-dependent inconsistency: dark plates that blended with our bg,
+ * transparent marks that vanished, etc. The bare URL is the same output
+ * logo.dev shows on its own preview pages — what brand teams sign off on —
+ * and it's been the most reliable choice across the catalogue.
  *
- * Empirical findings against our catalogue:
- *   - `theme=dark` was our previous default. For some brands (Astronomer,
- *     Okta, others) logo.dev returns a dark-grey-PLATE version with the
- *     coloured mark. Looks ugly on our dark page — the plate blends in.
- *   - `theme=light` returns the white-plate / light-mark variant for most
- *     brands. White plates pop against #0a0a0a; transparent + light mark
- *     reads cleanly. This is the better baseline.
- *   - `theme=auto` is logo.dev's default; behaviour is brand-dependent and
- *     less predictable than picking explicitly.
- *
- * Decision: default to `theme=light` everywhere. For brands where the light
- * variant is wrong (e.g. a brand whose canonical mark is a light color that
- * gets obscured), set `theme: "dark"` per-brand via the LogoOverride map in
- * src/lib/company-logo/overrides.ts.
- *
- * Note that `theme=*` only affects images logo.dev publishes with
- * transparency. Coloured-plate logos (HelloFresh green, DoorDash red) are
- * unaffected — their plate colour is in the pixels — and they show their
- * brand colours intact.
- *
- * URL stability: cached logo.dev URLs in the DB get upgraded at render time
- * by `normalizeLogoUrl` so previously-cached `theme=dark` URLs become
- * `theme=light` automatically. Spaces-cached PNGs DON'T self-update (the
- * cached image is whatever logo.dev returned at fetch time) — those need a
- * `--force-logo` backfill pass to refresh.
+ * For brands where the default still doesn't look right, set an explicit
+ * `logoUrl` per-company in src/lib/company-logo/overrides.ts. The override
+ * URL is fetched verbatim and cached to Spaces, bypassing this function.
  */
-
-export type LogoTheme = "light" | "dark" | "auto";
-
-const DEFAULT_THEME: LogoTheme = "light";
 
 /**
- * Builds a logo.dev URL for a given website + theme.
- *
- * @param website  Company website (only the hostname is used)
- * @param theme    Override the default theme. Omit for "light" (default).
+ * Builds a logo.dev URL for a given website.
  */
-export function getLogoUrl(
-  website: string,
-  theme: LogoTheme = DEFAULT_THEME,
-): string | null {
+export function getLogoUrl(website: string): string | null {
   try {
     const hostname = new URL(website).hostname;
     const token = process.env.NEXT_PUBLIC_LOGO_DEV_KEY ?? "";
-    const params = new URLSearchParams({
-      token,
-      size: "200",
-      format: "png",
-      theme,
-      retina: "true",
-    });
+    const params = new URLSearchParams({ token, retina: "true" });
     return `https://img.logo.dev/${hostname}?${params.toString()}`;
   } catch {
     return null;
@@ -70,21 +35,22 @@ export function getLogoUrl(
 }
 
 /**
- * Render-time upgrade for stored logo.dev URLs:
- *   - Always sets `theme` to the default (currently "light") so legacy
- *     URLs stored under the old `theme=dark` regime auto-correct without a
- *     DB rewrite. If you need a non-default theme for a specific brand,
- *     use the override map → enrichment path so the cached PNG matches.
- *   - Always sets `retina=true`.
+ * Render-time normalizer for stored logo.dev URLs:
+ *   - Strips legacy params we no longer want (theme, format, size). Older
+ *     rows in the DB were written with these; this function lets us migrate
+ *     without touching the database.
+ *   - Always sets retina=true.
  *
- * Non-logo.dev URLs (Greenhouse CDN, S3, data: URIs, our Spaces CDN) pass
- * through unchanged. Idempotent.
+ * Non-logo.dev URLs (Spaces CDN, S3, data: URIs, etc.) pass through
+ * unchanged. Idempotent.
  */
 export function normalizeLogoUrl(url: string): string {
   if (!url.startsWith("https://img.logo.dev/")) return url;
   try {
     const parsed = new URL(url);
-    parsed.searchParams.set("theme", DEFAULT_THEME);
+    parsed.searchParams.delete("theme");
+    parsed.searchParams.delete("format");
+    parsed.searchParams.delete("size");
     parsed.searchParams.set("retina", "true");
     return parsed.toString();
   } catch {

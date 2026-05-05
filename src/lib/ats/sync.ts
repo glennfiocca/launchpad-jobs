@@ -157,10 +157,11 @@ export async function syncBoard(
       })
       .catch(() => undefined);
   } else if (!company.logoUrl) {
-    enrichCompanyLogo(
-      { id: company.id, website: company.website, name: company.name },
-      { theme: logo.theme },
-    )
+    enrichCompanyLogo({
+      id: company.id,
+      website: company.website,
+      name: company.name,
+    })
       .then((url) => {
         if (!url) {
           console.warn(`[logo-enrichment] No logo found for company: ${company.name}`);

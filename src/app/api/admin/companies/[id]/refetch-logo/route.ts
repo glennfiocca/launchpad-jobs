@@ -89,14 +89,11 @@ export async function POST(
       { sourceUrl: resolved.logoUrl },
     );
   } else {
-    await enrichCompanyLogo(
-      {
-        id: company.id,
-        name: company.name,
-        website: resolved.website ?? company.website,
-      },
-      { theme: resolved.theme },
-    );
+    await enrichCompanyLogo({
+      id: company.id,
+      name: company.name,
+      website: resolved.website ?? company.website,
+    });
   }
 
   const updated = await db.company.findUnique({

@@ -142,9 +142,6 @@ export function Footer() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-white/8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <p className="text-xs text-zinc-600">
-            © {new Date().getFullYear()} Pipeline. All rights reserved.
-          </p>
           <div className="flex items-center gap-4">
             <p className="text-xs text-zinc-600">Built for job seekers who move fast.</p>
             <a
@@ -154,6 +151,9 @@ export function Footer() {
               Logos provided by Logo.dev
             </a>
           </div>
+          <p className="text-xs text-zinc-600">
+            © {new Date().getFullYear()} Pipeline. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>
@@ -220,13 +220,13 @@ export function CompactSiteFooter() {
           </nav>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 text-xs text-zinc-600">
-          <p>© {new Date().getFullYear()} Pipeline. All rights reserved.</p>
           <a
             href="https://logo.dev"
             className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"
           >
             Logos provided by Logo.dev
           </a>
+          <p>© {new Date().getFullYear()} Pipeline. All rights reserved.</p>
         </div>
       </div>
     </footer>

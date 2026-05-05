@@ -4,6 +4,20 @@
 // Stale RUNNING reconciliation is centralized in acquireSyncLock().
 // Execute with: npx tsx scripts/sync-cron.ts
 
+// Sentry: Next.js auto-instrumentation does NOT apply to standalone tsx
+// scripts, so we explicitly init here. No-op when SENTRY_DSN is unset
+// (e.g. local dev), mirroring sentry.server.config.ts.
+import * as Sentry from "@sentry/nextjs"
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV,
+    tracesSampleRate: 0.1,
+    release: process.env.GIT_SHA,
+  })
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.error("[sync-cron] ERROR: DATABASE_URL not set")

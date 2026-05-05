@@ -1,4 +1,5 @@
 import type { AtsProvider } from "@prisma/client"
+import * as Sentry from "@sentry/nextjs"
 import { db } from "@/lib/db"
 import { getActiveBoards } from "@/lib/greenhouse/sync"
 import { initializeAtsProviders } from "@/lib/ats/init"
@@ -253,6 +254,17 @@ export async function executeSyncWork(
         totalDeactivated += result.jobsDeactivated
         totalApplicationsUpdated += result.applicationsUpdated
       } catch (err) {
+        // Surface board-level failures in Sentry — additive to existing
+        // SyncBoardResult row + console.error path. SDK swallows internal
+        // errors, so this never throws.
+        Sentry.captureException(err, {
+          tags: {
+            component: "sync",
+            boardToken: board.token,
+            provider: board.provider,
+          },
+          extra: { syncLogId, boardName: board.name },
+        })
         const boardEnd = new Date()
         const errMsg = err instanceof Error ? err.message : String(err)
         await db.syncBoardResult.create({
@@ -321,6 +333,12 @@ export async function executeSyncWork(
       status,
     }
   } catch (err) {
+    // Top-level fatal — capture before falling through to existing SyncLog
+    // FAILURE update + rethrow path.
+    Sentry.captureException(err, {
+      tags: { component: "sync", scope: "top-level" },
+      extra: { syncLogId },
+    })
     const completedAt = new Date()
     const errMsg = err instanceof Error ? err.message : String(err)
     console.error(

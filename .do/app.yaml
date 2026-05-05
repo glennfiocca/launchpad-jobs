@@ -107,6 +107,11 @@ jobs:
         scope: RUN_TIME
         type: SECRET
 
+  # NOTE: when running `doctl apps update` against this spec, every SECRET
+  # env var below must have its `value:` field set to the real plaintext
+  # secret (DO encrypts at rest). Leaving `value:` unset will silently
+  # blank out the existing encrypted value. Source of truth for the
+  # plaintext values: /Users/glennfiocca/launchpad/.env (not committed).
   - name: sync-jobs
     github:
       repo: glennfiocca/launchpad-jobs
@@ -131,3 +136,13 @@ jobs:
       - key: DIRECT_URL
         scope: RUN_TIME
         type: SECRET
+      # SENTRY_DSN: copy the same DSN already configured on the `web`
+      # service. Track C.2 — without this, scripts/sync-cron.ts skips
+      # Sentry.init() and board failures never reach Sentry. Replace
+      # `${SENTRY_DSN}` below with the literal plaintext DSN before
+      # running `doctl apps update`, OR define SENTRY_DSN as a
+      # project-level env so the substitution resolves at deploy time.
+      - key: SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: ${SENTRY_DSN}

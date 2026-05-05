@@ -78,21 +78,33 @@ async function main(): Promise<void> {
       select: { id: true, externalId: true, absoluteUrl: true, title: true },
     });
 
-    const updates: Array<{ id: string; before: string | null; after: string; title: string }> = [];
-    let unmatched = 0;
+    const updates: Array<{ id: string; before: string | null; after: string; title: string; via: "slug" | "ashby_jid" }> = [];
+    let usedSlug = 0;
+    let usedFallback = 0;
+    let stillBroken = 0;
     for (const j of jobs) {
-      const newUrl = map.byUuid.get(j.externalId);
-      if (!newUrl) {
-        unmatched++;
+      const slugUrl = map.byUuid.get(j.externalId);
+      if (slugUrl) {
+        if (j.absoluteUrl !== slugUrl) {
+          updates.push({ id: j.id, before: j.absoluteUrl, after: slugUrl, title: j.title, via: "slug" });
+        }
+        usedSlug++;
         continue;
       }
-      if (j.absoluteUrl === newUrl) continue; // already correct
-      updates.push({ id: j.id, before: j.absoluteUrl, after: newUrl, title: j.title });
+      const fallback = map.buildFallbackUrl(j.externalId);
+      if (fallback) {
+        if (j.absoluteUrl !== fallback) {
+          updates.push({ id: j.id, before: j.absoluteUrl, after: fallback, title: j.title, via: "ashby_jid" });
+        }
+        usedFallback++;
+        continue;
+      }
+      stillBroken++;
     }
 
     console.log(
       `  [self-host] ${company.name} (${boardName}) — ${map.org.customJobsPageUrl}\n` +
-      `              slugs=${map.byUuid.size} jobs=${jobs.length} updates=${updates.length} unmatched=${unmatched}`,
+      `              slugs=${usedSlug} ashby_jid_fallback=${usedFallback} stillBroken=${stillBroken} updates=${updates.length}`,
     );
 
     if (updates.length === 0) continue;
@@ -100,7 +112,7 @@ async function main(): Promise<void> {
 
     // Show a small sample for sanity-check
     for (const u of updates.slice(0, 3)) {
-      console.log(`              ${u.title.slice(0, 50)}`);
+      console.log(`              [${u.via}] ${u.title.slice(0, 50)}`);
       console.log(`                ${u.before ?? "(null)"}`);
       console.log(`                → ${u.after}`);
     }

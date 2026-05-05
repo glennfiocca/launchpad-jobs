@@ -84,6 +84,54 @@ describe("discoverAshbyCustomJobMap", () => {
     );
   });
 
+  it("buildFallbackUrl returns a clean ?ashby_jid= URL for self-hosters", async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          organizationFromHostedJobsPageName: {
+            name: "FullStory",
+            publicWebsite: "https://www.fullstory.com",
+            customJobsPageUrl: "https://www.fullstory.com/careers?ashby_jid=stale-id&utm_source=x",
+            hostedJobsPageSlug: "fullstory",
+          },
+        },
+      }),
+    } as Response);
+    fetchMock.mockResolvedValueOnce({ ok: true, text: async () => "<html>no slug links</html>" } as Response);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await discoverAshbyCustomJobMap("fullstory");
+    expect(result).not.toBeNull();
+    const url = result?.buildFallbackUrl("baf1fc23-ffe2-43bb-b53d-fb7070740010");
+    expect(url).toBe(
+      "https://www.fullstory.com/careers?ashby_jid=baf1fc23-ffe2-43bb-b53d-fb7070740010",
+    );
+  });
+
+  it("buildFallbackUrl refuses self-hosters whose customJobsPageUrl loops back to ashbyhq.com", async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          organizationFromHostedJobsPageName: {
+            name: "Rev",
+            publicWebsite: null,
+            customJobsPageUrl: "https://jobs.ashbyhq.com/Rev",
+            hostedJobsPageSlug: "rev",
+          },
+        },
+      }),
+    } as Response);
+    fetchMock.mockResolvedValueOnce({ ok: true, text: async () => "" } as Response);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await discoverAshbyCustomJobMap("rev");
+    expect(result?.buildFallbackUrl("00000000-0000-0000-0000-000000000000")).toBeNull();
+  });
+
   it("returns an empty map when the careers index has no slugs", async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce({

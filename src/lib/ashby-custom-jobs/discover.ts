@@ -14,6 +14,15 @@ export interface CustomJobMap {
   byUuid: Map<string, string>;
   /** Echo of the org metadata that produced this map. */
   org: AshbyOrgInfo;
+  /**
+   * Build a "good-enough" fallback URL for any UUID we couldn't match via
+   * scraping. Most Ashby self-hosters embed the apply widget at their
+   * careers root and read `?ashby_jid={uuid}` to deeplink — empirically
+   * this works for FullStory-class boards (renders the specific job) and
+   * lands on the careers index for the few that ignore the param. Either
+   * way, it's strictly better than the dead jobs.ashbyhq.com URL.
+   */
+  buildFallbackUrl(uuid: string): string | null;
 }
 
 export async function discoverAshbyCustomJobMap(
@@ -24,13 +33,15 @@ export async function discoverAshbyCustomJobMap(
   if (!org) return null;
   if (!org.customJobsPageUrl) return null; // hosted board fine — no work needed
 
+  const buildFallbackUrl = makeFallbackBuilder(org.customJobsPageUrl);
+  const byUuid = new Map<string, string>();
+
   const indexEntries = await fetchCareersIndex(org.customJobsPageUrl);
   if (indexEntries.length === 0) {
-    return { byUuid: new Map(), org };
+    return { byUuid, org, buildFallbackUrl };
   }
 
   const concurrency = options?.concurrency ?? 4;
-  const byUuid = new Map<string, string>();
 
   for (let i = 0; i < indexEntries.length; i += concurrency) {
     const batch = indexEntries.slice(i, i + concurrency);
@@ -49,5 +60,28 @@ export async function discoverAshbyCustomJobMap(
     options?.onProgress?.(Math.min(i + concurrency, indexEntries.length), indexEntries.length);
   }
 
-  return { byUuid, org };
+  return { byUuid, org, buildFallbackUrl };
+}
+
+/**
+ * Build a `?ashby_jid={uuid}` URL on the org's customJobsPageUrl base.
+ * Strips any preset ashby_jid + tracking params from the base so we don't
+ * leak the org's example UUID or stale UTM tags.
+ */
+function makeFallbackBuilder(customJobsPageUrl: string): (uuid: string) => string | null {
+  return (uuid: string) => {
+    try {
+      const u = new URL(customJobsPageUrl);
+      // Refuse to build for URLs that point back to the broken Ashby
+      // hosted board — those don't render any job content client-side.
+      if (u.hostname.endsWith("ashbyhq.com")) return null;
+      for (const k of ["ashby_jid", "utm_source", "utm_medium", "utm_campaign"]) {
+        u.searchParams.delete(k);
+      }
+      u.searchParams.set("ashby_jid", uuid);
+      return u.toString();
+    } catch {
+      return null;
+    }
+  };
 }

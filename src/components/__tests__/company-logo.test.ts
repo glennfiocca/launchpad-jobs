@@ -8,12 +8,18 @@ beforeAll(() => {
 });
 
 describe("getLogoUrl", () => {
-  it("includes theme=dark and retina=true", () => {
+  it("defaults theme to 'light' (better baseline for our dark surface)", () => {
     const url = getLogoUrl("https://okta.com");
     expect(url).not.toBeNull();
     const p = new URL(url!);
-    expect(p.searchParams.get("theme")).toBe("dark");
+    expect(p.searchParams.get("theme")).toBe("light");
     expect(p.searchParams.get("retina")).toBe("true");
+  });
+
+  it("respects an explicit theme override", () => {
+    const url = getLogoUrl("https://okta.com", "dark");
+    const p = new URL(url!);
+    expect(p.searchParams.get("theme")).toBe("dark");
   });
 
   it("uses the hostname as the path", () => {
@@ -43,11 +49,11 @@ describe("getLogoUrl", () => {
 });
 
 describe("normalizeLogoUrl", () => {
-  it("adds theme=dark and retina=true to an existing logo.dev URL", () => {
-    const old = `https://img.logo.dev/okta.com?token=${TOKEN}&size=200&format=png`;
+  it("upgrades stored URLs to theme=light + retina=true (legacy theme=dark URLs auto-correct)", () => {
+    const old = `https://img.logo.dev/okta.com?token=${TOKEN}&size=200&format=png&theme=dark`;
     const updated = normalizeLogoUrl(old);
     const p = new URL(updated);
-    expect(p.searchParams.get("theme")).toBe("dark");
+    expect(p.searchParams.get("theme")).toBe("light");
     expect(p.searchParams.get("retina")).toBe("true");
   });
 
@@ -59,9 +65,9 @@ describe("normalizeLogoUrl", () => {
     expect(p.searchParams.get("format")).toBe("png");
   });
 
-  it("overwrites a conflicting theme=light value", () => {
-    const url = `https://img.logo.dev/okta.com?token=${TOKEN}&theme=light`;
-    expect(new URL(normalizeLogoUrl(url)).searchParams.get("theme")).toBe("dark");
+  it("overwrites a conflicting theme=auto value", () => {
+    const url = `https://img.logo.dev/okta.com?token=${TOKEN}&theme=auto`;
+    expect(new URL(normalizeLogoUrl(url)).searchParams.get("theme")).toBe("light");
   });
 
   it("is idempotent", () => {

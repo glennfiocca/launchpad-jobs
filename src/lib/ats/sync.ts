@@ -129,9 +129,13 @@ export async function syncBoard(
     },
   });
 
-  // Enrich logo in background if missing
+  // Enrich logo in background if missing — pass the resolved theme so the
+  // cached PNG matches the per-brand override (or the global default).
   if (!company.logoUrl) {
-    enrichCompanyLogo({ id: company.id, website: company.website, name: company.name })
+    enrichCompanyLogo(
+      { id: company.id, website: company.website, name: company.name },
+      logo.theme,
+    )
       .then((url) => {
         if (!url) {
           console.warn(`[logo-enrichment] No logo found for company: ${company.name}`);

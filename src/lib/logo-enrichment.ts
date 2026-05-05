@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { getLogoUrl } from "./logo-url";
+import { getLogoUrl, type LogoTheme } from "./logo-url";
 import { uploadPublicBuffer } from "./spaces";
 
 /**
@@ -10,13 +10,18 @@ import { uploadPublicBuffer } from "./spaces";
  * The Spaces step is what makes this expensive but is also what avoids
  * hitting logo.dev on every render — once cached, all readers serve from
  * our CDN. Backfill scripts re-run this when they want a refresh.
+ *
+ * The optional `theme` argument lets callers (sync, backfill, admin
+ * refetch endpoint) request the variant logo.dev should return. Defaults
+ * to "light" via getLogoUrl. See ADR in src/lib/logo-url.ts for why.
  */
 export async function enrichCompanyLogo(
-  company: { id: string; website: string | null; name: string }
+  company: { id: string; website: string | null; name: string },
+  theme?: LogoTheme,
 ): Promise<string | null> {
   if (!company.website) return null;
 
-  const fetchUrl = getLogoUrl(company.website);
+  const fetchUrl = theme ? getLogoUrl(company.website, theme) : getLogoUrl(company.website);
   if (!fetchUrl) return null;
 
   try {

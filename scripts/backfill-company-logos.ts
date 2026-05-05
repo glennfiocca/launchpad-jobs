@@ -30,8 +30,27 @@
 
 import "dotenv/config";
 import { db } from "../src/lib/db";
-import { resolveCompanyLogoFull } from "../src/lib/company-logo";
+import {
+  resolveCompanyLogoSync,
+  resolveCompanyLogoFull,
+} from "../src/lib/company-logo";
 import { enrichCompanyLogo } from "../src/lib/logo-enrichment";
+
+/**
+ * Normalize a URL down to a comparable host token: strip protocol, strip
+ * leading "www.", lowercase. "https://www.MongoDB.com/" → "mongodb.com".
+ * Used so cosmetic differences (www vs apex, trailing slashes, scheme) don't
+ * register as "this needs to change."
+ */
+function normalizeHost(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
 
 interface CliFlags {
   apply: boolean;
@@ -63,6 +82,7 @@ interface ProposedChange {
   afterWebsite: string | null;
   websiteSource: string;
   needsLogoRefresh: boolean;
+  theme: "light" | "dark" | "auto";
 }
 
 async function main(): Promise<void> {
@@ -111,19 +131,36 @@ async function main(): Promise<void> {
       c.provider === "GREENHOUSE" ? c.slug : c.slug.replace(/^ashby-/, "");
     const board = boardMap.get(`${c.provider}:${boardToken}`);
 
-    const result = await resolveCompanyLogoFull({
-      provider: c.provider,
-      slug: c.slug,
-      boardOverrideWebsite: board?.website ?? null,
-      boardOverrideLogoUrl: board?.logoUrl ?? null,
-      // No ATS metadata available here — we'd have to re-fetch each board to
-      // get it. The resolver still produces a useful answer from the
-      // override map + heuristic + CompanyBoard fields.
-    });
+    // Two-tier strategy:
+    //   - If Company.website is already set, only run the SYNC resolver
+    //     (overrides + ATS layer). Don't ask the heuristic to second-guess
+    //     an existing value — it produces wrong answers on generic tokens
+    //     ("chime", "block", "angi") whose every TLD happens to 200.
+    //   - If Company.website is null, run the FULL resolver (heuristic
+    //     included) since we have nothing to lose.
+    const result = c.website
+      ? resolveCompanyLogoSync({
+          provider: c.provider,
+          slug: c.slug,
+          boardOverrideWebsite: board?.website ?? null,
+          boardOverrideLogoUrl: board?.logoUrl ?? null,
+        })
+      : await resolveCompanyLogoFull({
+          provider: c.provider,
+          slug: c.slug,
+          boardOverrideWebsite: board?.website ?? null,
+          boardOverrideLogoUrl: board?.logoUrl ?? null,
+        });
 
     sourceTally.set(result.websiteSource, (sourceTally.get(result.websiteSource) ?? 0) + 1);
 
-    const websiteChanged = result.website !== c.website && result.website !== null;
+    // Compare on the normalized host so "https://www.mongodb.com" and
+    // "https://mongodb.com" don't register as a change worth applying.
+    const beforeHost = normalizeHost(c.website);
+    const afterHost = normalizeHost(result.website);
+    const websiteChanged =
+      result.website !== null && beforeHost !== afterHost;
+
     const needsLogoRefresh =
       websiteChanged ||
       flags.forceLogo ||
@@ -139,6 +176,7 @@ async function main(): Promise<void> {
         afterWebsite: result.website,
         websiteSource: result.websiteSource,
         needsLogoRefresh,
+        theme: result.theme,
       });
     }
   }
@@ -200,11 +238,14 @@ async function main(): Promise<void> {
         });
       }
 
-      const cdnUrl = await enrichCompanyLogo({
-        id: p.companyId,
-        name: p.name,
-        website: p.afterWebsite,
-      });
+      const cdnUrl = await enrichCompanyLogo(
+        {
+          id: p.companyId,
+          name: p.name,
+          website: p.afterWebsite,
+        },
+        p.theme,
+      );
 
       if (cdnUrl) logosEnriched++;
       else logosFailed++;

@@ -81,11 +81,14 @@ export async function POST(
       where: { id: company.id },
       data: { logoUrl: null },
     });
-    await enrichCompanyLogo({
-      id: company.id,
-      name: company.name,
-      website: resolved.website ?? company.website,
-    });
+    await enrichCompanyLogo(
+      {
+        id: company.id,
+        name: company.name,
+        website: resolved.website ?? company.website,
+      },
+      resolved.theme,
+    );
   }
 
   const updated = await db.company.findUnique({

@@ -18,6 +18,7 @@
  */
 
 import type { AtsProvider } from "@prisma/client";
+import type { LogoTheme } from "../logo-url";
 import { lookupLogoOverride } from "./overrides";
 import { guessWebsiteFromSlug } from "./heuristic";
 
@@ -41,6 +42,11 @@ export interface ResolveLogoResult {
   websiteSource: "board" | "override" | "ats" | "heuristic" | "none";
   /** Where the logoUrl value came from. */
   logoSource: "board" | "override" | "ats" | "none";
+  /**
+   * The `theme` to pass to logo.dev for this brand. Pulled from the override
+   * map; falls back to the global default ("light") when no override is set.
+   */
+  theme: LogoTheme;
 }
 
 /**
@@ -84,7 +90,10 @@ export function resolveCompanyLogoSync(
     logoSource = "ats";
   }
 
-  return { website, logoUrl, websiteSource, logoSource };
+  // Theme resolution: per-brand override > global default ("light").
+  const theme: LogoTheme = override?.theme ?? "light";
+
+  return { website, logoUrl, websiteSource, logoSource, theme };
 }
 
 /**
@@ -103,3 +112,9 @@ export async function resolveCompanyLogoFull(
   }
   return sync;
 }
+
+/**
+ * Re-export the LogoTheme type so callers don't have to reach into
+ * logo-url.ts directly.
+ */
+export type { LogoTheme } from "../logo-url";

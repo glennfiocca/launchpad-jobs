@@ -108,6 +108,14 @@ export function Footer() {
                 </li>
                 <li>
                   <Link
+                    href="/cookies"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Cookie Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/privacy/do-not-sell"
                     className="text-sm text-zinc-400 hover:text-white transition-colors"
                   >
@@ -187,6 +195,9 @@ export function CompactSiteFooter() {
             </Link>
             <Link href="/privacy" className={compactLinkClass}>
               Privacy
+            </Link>
+            <Link href="/cookies" className={compactLinkClass}>
+              Cookies
             </Link>
           </nav>
         </div>

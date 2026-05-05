@@ -20,13 +20,8 @@
 //   # Override the prefix (useful for testing against a sub-prefix):
 //   npx tsx scripts/prune-orphan-logos.ts --prefix=logos/manual/
 //
-// TODO(orchestrator): Run weekly via DO scheduled job. Add to .do/app.yaml jobs[]:
-//   - name: prune-orphan-logos
-//     schedule: "0 4 * * 0"   # 04:00 UTC every Sunday
-//     run_command: npx tsx scripts/prune-orphan-logos.ts --apply
-//     instance_size_slug: basic-xxs
-//     environment_slug: node-js
-//     envs: <inherit DATABASE_URL + DO_SPACES_*>
+// Scheduled via DO at "0 4 * * 0" (04:00 UTC every Sunday) — see .do/app.yaml
+// `prune-orphan-logos` job. ~30s typical runtime.
 
 import { db } from "@/lib/db";
 import {

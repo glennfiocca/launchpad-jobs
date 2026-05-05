@@ -138,27 +138,23 @@ jobs:
         type: SECRET
       # SENTRY_DSN: copy the same DSN already configured on the `web`
       # service. Track C.2 — without this, scripts/sync-cron.ts skips
-      # Sentry.init() and board failures never reach Sentry. Replace
-      # `${SENTRY_DSN}` below with the literal plaintext DSN before
-      # running `doctl apps update`, OR define SENTRY_DSN as a
-      # project-level env so the substitution resolves at deploy time.
+      # Sentry.init() and board failures never reach Sentry. Plaintext
+      # value lives in /tmp/full-spec.yaml at deploy time (per the same
+      # pattern as DATABASE_URL above).
       - key: SENTRY_DSN
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-        value: ${SENTRY_DSN}
       # HEALTHCHECKS_URL: Healthchecks.io ping URL for the 6h sync cadence
       # cron. Track C.3. Without this, sync-cron.ts skips heartbeat pings.
-      # Set to the literal URL — Healthchecks URLs are not secrets, they're
-      # write-only. scope: RUN_AND_BUILD_TIME is correct.
+      # Not a SECRET — Healthchecks URLs are write-only tokens. Plaintext
+      # filled in at deploy time via /tmp/full-spec.yaml.
       - key: HEALTHCHECKS_URL
         scope: RUN_AND_BUILD_TIME
-        value: ${HEALTHCHECKS_URL}
 
   # sync-digest — Track C.4. Daily admin digest of yesterday's syncs.
   # Queries SyncLog for the last 24h, aggregates totals + failures, emails
-  # all users WHERE role = 'ADMIN' via Resend. Same DO secret rule applies:
-  # every type: SECRET below MUST have a `value:` field set before
-  # `doctl apps update`.
+  # all users WHERE role = 'ADMIN' via Resend. Plaintext SECRETs filled in
+  # at deploy time via /tmp/full-spec.yaml (per the rule at top of file).
   - name: sync-digest
     github:
       repo: glennfiocca/launchpad-jobs
@@ -178,15 +174,12 @@ jobs:
       - key: DATABASE_URL
         scope: RUN_TIME
         type: SECRET
-        value: ${DATABASE_URL}
       - key: DIRECT_URL
         scope: RUN_TIME
         type: SECRET
-        value: ${DIRECT_URL}
       - key: RESEND_API_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-        value: ${RESEND_API_KEY}
       - key: RESEND_FROM_EMAIL
         scope: RUN_AND_BUILD_TIME
         value: noreply@trypipeline.ai
@@ -196,4 +189,43 @@ jobs:
       - key: SENTRY_DSN
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-        value: ${SENTRY_DSN}
+
+  # prune-orphan-logos — Track C.1. Weekly purge of Spaces objects under
+  # logos/ that no Company.logoUrl row references. Reads list of objects,
+  # diffs against the DB, deletes orphans in 1k-key batches. Idempotent.
+  - name: prune-orphan-logos
+    github:
+      repo: glennfiocca/launchpad-jobs
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    kind: SCHEDULED
+    schedule:
+      # 04:00 UTC every Sunday. Off-peak window; ~30s typical runtime.
+      cron: "0 4 * * 0"
+    run_command: npx tsx scripts/prune-orphan-logos.ts --apply
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    timeout_seconds: 600
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DO_SPACES_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: DO_SPACES_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: DO_SPACES_BUCKET
+        scope: RUN_AND_BUILD_TIME
+        value: pipeline-uploads
+      - key: DO_SPACES_REGION
+        scope: RUN_AND_BUILD_TIME
+        value: nyc3
+      - key: SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET

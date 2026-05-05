@@ -146,3 +146,54 @@ jobs:
         scope: RUN_AND_BUILD_TIME
         type: SECRET
         value: ${SENTRY_DSN}
+      # HEALTHCHECKS_URL: Healthchecks.io ping URL for the 6h sync cadence
+      # cron. Track C.3. Without this, sync-cron.ts skips heartbeat pings.
+      # Set to the literal URL — Healthchecks URLs are not secrets, they're
+      # write-only. scope: RUN_AND_BUILD_TIME is correct.
+      - key: HEALTHCHECKS_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${HEALTHCHECKS_URL}
+
+  # sync-digest — Track C.4. Daily admin digest of yesterday's syncs.
+  # Queries SyncLog for the last 24h, aggregates totals + failures, emails
+  # all users WHERE role = 'ADMIN' via Resend. Same DO secret rule applies:
+  # every type: SECRET below MUST have a `value:` field set before
+  # `doctl apps update`.
+  - name: sync-digest
+    github:
+      repo: glennfiocca/launchpad-jobs
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    kind: SCHEDULED
+    schedule:
+      # 09:00 UTC daily. Hits inboxes around start-of-day for east-coast US
+      # admins (04:00 EST / 05:00 EDT). DO cron is pure UTC — no DST shift.
+      cron: "0 9 * * *"
+    run_command: npx tsx scripts/sync-digest.ts
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    timeout_seconds: 300
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${DATABASE_URL}
+      - key: DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${DIRECT_URL}
+      - key: RESEND_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: ${RESEND_API_KEY}
+      - key: RESEND_FROM_EMAIL
+        scope: RUN_AND_BUILD_TIME
+        value: noreply@trypipeline.ai
+      - key: NEXT_PUBLIC_APP_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${APP_URL}
+      - key: SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: ${SENTRY_DSN}

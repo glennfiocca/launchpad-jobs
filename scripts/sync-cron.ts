@@ -18,6 +18,26 @@ if (process.env.SENTRY_DSN) {
   })
 }
 
+// Healthchecks.io heartbeat. Track C.3. The URL is write-only — leakage only
+// allows ping-spoofing, not data access — so it's a plain env var, not a
+// SECRET. Pings are best-effort: failures must NOT break the sync run.
+const HEALTHCHECKS_URL = process.env.HEALTHCHECKS_URL
+
+type HeartbeatSuffix = "" | "/start" | "/fail"
+
+async function ping(suffix: HeartbeatSuffix = ""): Promise<void> {
+  if (!HEALTHCHECKS_URL) return
+  try {
+    await fetch(`${HEALTHCHECKS_URL}${suffix}`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch (err) {
+    // Heartbeat is observability — never let it propagate.
+    console.warn("[heartbeat] ping failed:", err)
+  }
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.error("[sync-cron] ERROR: DATABASE_URL not set")
@@ -33,7 +53,11 @@ async function main() {
 
   console.log("[sync-cron] Import successful, running sync directly (no HTTP)")
 
+  await ping("/start")
   const result = await runSync("cron")
+  // Treat full FAILURE as /fail; SUCCESS and PARTIAL_FAILURE both count as a
+  // completed run from the heartbeat's perspective (some boards ran).
+  await ping(result.status === "FAILURE" ? "/fail" : "")
 
   console.log(`[sync-cron] SyncLog ID: ${result.syncLogId}`)
   console.log(`[sync-cron] Boards: ${result.boardsSynced}/${result.totalBoards} synced, ${result.boardsFailed} failed`)
@@ -50,12 +74,18 @@ async function main() {
   process.exit(0)
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   if (err && typeof err === "object" && "name" in err && err.name === "SyncAlreadyRunningError") {
     const runningSyncLogId = "runningSyncLogId" in err ? err.runningSyncLogId : "unknown"
     console.log(`[sync-cron] Skipped: another sync is already running (syncLogId: ${runningSyncLogId})`)
+    // Lock contention is not an outage — emit a normal heartbeat so
+    // Healthchecks doesn't fire a false alert.
+    await ping("")
     process.exit(0)
   }
+  // Top-level crash before runSync produced a result — signal /fail so
+  // Healthchecks alerts even if runSync itself never returned.
+  await ping("/fail")
   console.error(`[sync-cron] FATAL: ${err instanceof Error ? err.stack ?? err.message : String(err)}`)
   process.exit(1)
 })

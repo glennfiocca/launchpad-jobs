@@ -601,3 +601,200 @@ export function statusUpdateEmail(
     }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Sync digest (C.4) — daily 09:00 UTC summary of the prior 24h of syncs.
+// Recipients: every User WHERE role = 'ADMIN'. Built on the same Resend
+// transport as other transactional admin mail (see scripts/sync-digest.ts).
+// ---------------------------------------------------------------------------
+
+export interface SyncDigestFailureRow {
+  boardToken: string;
+  boardName: string;
+  errors: ReadonlyArray<string>;
+  startedAt: Date;
+}
+
+export interface SyncDigestData {
+  /** ISO date (YYYY-MM-DD) of the digest "for" date — the day being reported on. */
+  reportDate: string;
+  windowStart: Date;
+  windowEnd: Date;
+  totalRuns: number;
+  successes: number;
+  partialFailures: number;
+  failures: number;
+  totalAdded: number;
+  totalUpdated: number;
+  totalDeactivated: number;
+  averageDurationMs: number | null;
+  /** Up to N most recent board-level failures (boardToken + first error). */
+  failureSamples: ReadonlyArray<SyncDigestFailureRow>;
+  adminDashboardUrl: string;
+}
+
+export interface SyncDigestEmailResult extends EmailResult {
+  text: string;
+}
+
+function formatDuration(ms: number | null): string {
+  if (ms === null) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remSeconds}s`;
+}
+
+export function syncDigestEmail(
+  data: SyncDigestData,
+): SyncDigestEmailResult {
+  const {
+    reportDate,
+    windowStart,
+    windowEnd,
+    totalRuns,
+    successes,
+    partialFailures,
+    failures,
+    totalAdded,
+    totalUpdated,
+    totalDeactivated,
+    averageDurationMs,
+    failureSamples,
+    adminDashboardUrl,
+  } = data;
+
+  const noSyncs = totalRuns === 0;
+
+  // Banner shown ONLY when zero sync runs landed in the 24h window — that's
+  // a silent-failure signal worth flagging at the top of the email.
+  const noSyncsBannerHtml = noSyncs
+    ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 24px 0;">
+      <tr>
+        <td style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 16px 20px;">
+          <p style="margin: 0; font-size: 14px; font-weight: 700; color: #991b1b;">
+            NO SYNCS RAN in the last 24 hours
+          </p>
+          <p style="margin: 6px 0 0 0; font-size: 13px; color: #b91c1c; line-height: 1.5;">
+            Expected at least 4 runs at the 6h cadence. Check DO scheduled job logs and the Healthchecks.io heartbeat.
+          </p>
+        </td>
+      </tr>
+    </table>`
+    : "";
+
+  const failuresBlockHtml =
+    failures > 0 || partialFailures > 0
+      ? `
+    <h2 style="margin: 24px 0 12px 0; font-size: 16px; font-weight: 700; color: #0f172a;">
+      Recent failures
+    </h2>
+    <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px;">
+      ${
+        failureSamples.length === 0
+          ? `<p style="margin: 0; font-size: 13px; color: #64748b;">Failures aggregated but no per-board error samples available.</p>`
+          : failureSamples
+              .map((row) => {
+                const firstError = row.errors[0] ?? "(no error message)";
+                return `
+        <p style="margin: 0 0 8px 0; font-size: 13px; color: #0f172a; line-height: 1.5;">
+          <strong>${escapeHtml(row.boardName)}</strong>
+          <span style="color: #64748b;">(${escapeHtml(row.boardToken)})</span>
+          <span style="color: #94a3b8;"> — ${escapeHtml(row.startedAt.toISOString())}</span>
+          <br />
+          <span style="color: #b91c1c; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; font-size: 12px;">${escapeHtml(firstError)}</span>
+        </p>`;
+              })
+              .join("")
+      }
+    </div>`
+      : "";
+
+  const summaryCellStyle =
+    "padding: 14px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;";
+
+  const content = `
+    <h1 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+      Daily sync digest
+    </h1>
+    <p style="margin: 0 0 24px 0; color: #475569; font-size: 14px;">
+      Window: ${escapeHtml(windowStart.toISOString())} → ${escapeHtml(windowEnd.toISOString())}
+    </p>
+
+    ${noSyncsBannerHtml}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px;">
+      <tr>
+        <td style="${summaryCellStyle} font-size: 13px; color: #64748b; border-bottom: 1px solid #e2e8f0;">Runs</td>
+        <td style="${summaryCellStyle} font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0; text-align: right;">
+          <strong>${totalRuns}</strong>
+          <span style="color: #16a34a;"> ${successes} ok</span>
+          ${partialFailures > 0 ? ` <span style="color: #d97706;">/ ${partialFailures} partial</span>` : ""}
+          ${failures > 0 ? ` <span style="color: #dc2626;">/ ${failures} failed</span>` : ""}
+        </td>
+      </tr>
+      <tr>
+        <td style="${summaryCellStyle} font-size: 13px; color: #64748b; border-bottom: 1px solid #e2e8f0;">Jobs added</td>
+        <td style="${summaryCellStyle} font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0; text-align: right;"><strong>+${totalAdded}</strong></td>
+      </tr>
+      <tr>
+        <td style="${summaryCellStyle} font-size: 13px; color: #64748b; border-bottom: 1px solid #e2e8f0;">Jobs updated</td>
+        <td style="${summaryCellStyle} font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0; text-align: right;">~${totalUpdated}</td>
+      </tr>
+      <tr>
+        <td style="${summaryCellStyle} font-size: 13px; color: #64748b; border-bottom: 1px solid #e2e8f0;">Jobs deactivated</td>
+        <td style="${summaryCellStyle} font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0; text-align: right;">-${totalDeactivated}</td>
+      </tr>
+      <tr>
+        <td style="${summaryCellStyle} font-size: 13px; color: #64748b;">Avg duration</td>
+        <td style="${summaryCellStyle} font-size: 13px; color: #0f172a; text-align: right;">${escapeHtml(formatDuration(averageDurationMs))}</td>
+      </tr>
+    </table>
+
+    ${failuresBlockHtml}
+
+    <div style="margin-top: 28px;">
+      ${ctaButton(adminDashboardUrl, "Open admin sync dashboard")}
+    </div>`;
+
+  // Plaintext fallback — keep it short, no HTML tags. Used by clients that
+  // prefer text/plain (rare, but free reliability win).
+  const textLines: string[] = [
+    `Daily sync digest — ${reportDate}`,
+    `Window: ${windowStart.toISOString()} → ${windowEnd.toISOString()}`,
+    "",
+  ];
+  if (noSyncs) {
+    textLines.push("WARNING: NO SYNCS RAN in the last 24 hours.");
+    textLines.push("");
+  }
+  textLines.push(
+    `Runs: ${totalRuns} (${successes} ok, ${partialFailures} partial, ${failures} failed)`,
+    `Jobs added:       +${totalAdded}`,
+    `Jobs updated:     ~${totalUpdated}`,
+    `Jobs deactivated: -${totalDeactivated}`,
+    `Avg duration:     ${formatDuration(averageDurationMs)}`,
+  );
+  if (failureSamples.length > 0) {
+    textLines.push("", "Recent failures:");
+    for (const row of failureSamples) {
+      const firstError = row.errors[0] ?? "(no error message)";
+      textLines.push(
+        `  - ${row.boardName} (${row.boardToken}) @ ${row.startedAt.toISOString()}`,
+        `      ${firstError}`,
+      );
+    }
+  }
+  textLines.push("", `Dashboard: ${adminDashboardUrl}`);
+
+  return {
+    subject: `[Pipeline] Daily sync digest — ${reportDate}`,
+    html: baseLayout(content, {
+      settingsUrl: `${APP_URL}/admin/sync`,
+    }),
+    text: textLines.join("\n"),
+  };
+}

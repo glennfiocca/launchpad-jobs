@@ -7,6 +7,8 @@ import {
   instantNotificationEmail,
   notificationDigestEmail,
   statusUpdateEmail,
+  syncDigestEmail,
+  type SyncDigestData,
 } from "@/lib/email-templates";
 import {
   buildListUnsubscribeHeaders,
@@ -226,6 +228,52 @@ export async function sendEmailChangeNotice({
     subject,
     html,
   });
+}
+
+// Sync digest (C.4) — daily admin email summarising the prior 24h of syncs.
+// Sends to every admin in one Resend call (BCC-equivalent via the `to` array).
+// Caller is `scripts/sync-digest.ts`. Returns `{ ok, error? }` so the script
+// can capture send failures without throwing.
+export interface SendSyncDigestResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function sendSyncDigest({
+  to,
+  data,
+}: {
+  to: ReadonlyArray<string>;
+  data: SyncDigestData;
+}): Promise<SendSyncDigestResult> {
+  if (to.length === 0) {
+    return { ok: false, error: "no recipients" };
+  }
+
+  const { subject, html, text } = syncDigestEmail(data);
+
+  try {
+    // Resend supports up to 50 recipients per `to`. We never have that many
+    // admins, so a single call is fine.
+    const result = await getResend().emails.send({
+      from: FROM_ADDRESS,
+      to: [...to],
+      subject,
+      html,
+      text,
+    });
+
+    const sdkError = (result as { error?: { message?: string } | null }).error;
+    if (sdkError) {
+      return { ok: false, error: sdkError.message ?? "send failed" };
+    }
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "send threw",
+    };
+  }
 }
 
 // Send status update notification

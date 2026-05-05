@@ -60,6 +60,7 @@ const SHARED_OVERRIDES: Record<string, string> = {
   motherduck: "MotherDuck",
   fullstory: "FullStory",
   posthog: "PostHog",
+  deepl: "DeepL",
   lancedb: "LanceDB",
   webai: "WebAI",
   gigaml: "GigaML",

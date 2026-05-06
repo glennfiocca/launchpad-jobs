@@ -896,9 +896,54 @@ async function tryFormNavigation(token, snap) {
  * @returns {'greenhouse' | 'ashby' | null}
  */
 function detectAtsProvider() {
+  // 1. Hostname (hosted boards)
   if (window.location.hostname === 'job-boards.greenhouse.io') return 'greenhouse'
   if (window.location.hostname === 'jobs.ashbyhq.com') return 'ashby'
+
+  // 2. URL params (self-hosters embed a query param identifying the source ATS).
+  // ashby_jid / gh_jid are the canonical query params Ashby + Greenhouse self-
+  // hosters use to deeplink into a specific job — they're stable, well-known,
+  // and present on every job listing URL.
+  const url = window.location.href
+  if (/[?&]ashby_jid=/.test(url) || /[?&]ashby_embed=/.test(url)) return 'ashby'
+  if (/[?&]gh_jid=/.test(url) || /[?&]gh_src=/.test(url)) return 'greenhouse'
+
+  // 3. DOM signal — script / iframe / link to the ATS host
+  if (document.querySelector('script[src*="jobs.ashbyhq.com"], iframe[src*="ashbyhq.com"], link[href*="ashbyhq.com"]')) return 'ashby'
+  if (document.querySelector('script[src*="boards.greenhouse.io"], iframe[src*="greenhouse.io"], a[href*="greenhouse.io"]')) return 'greenhouse'
+
   return null
+}
+
+/**
+ * Self-hoster apply forms often live inside a modal with multiple tabs
+ * (e.g. Deel: Overview | Application). The form fields are only mounted
+ * on the Application tab. If the active tab isn't the application one,
+ * click it and wait for tab content to render.
+ *
+ * Defensive — no-op when there are no role=tab elements (Cursor, etc.)
+ * @returns {Promise<boolean>} true if a tab switch was performed
+ */
+async function tryActivateApplicationTab() {
+  const tabs = document.querySelectorAll('[role="tab"]')
+  if (tabs.length === 0) return false
+
+  for (const tab of tabs) {
+    const text = (tab.textContent ?? '').trim().toLowerCase()
+    // Match "Application", "Apply", or "Application form" — common labels
+    if (!/^(application|apply|application form)$/i.test(text) && !text.includes('application')) continue
+    const isActive = tab.getAttribute('aria-selected') === 'true'
+    if (isActive) {
+      console.log('[pipeline-operator] Application tab already active')
+      return false
+    }
+    console.log('[pipeline-operator] Clicking Application tab:', text)
+    tab.click()
+    // Allow tab content to mount (fade-in animations + React hydration)
+    await new Promise((r) => setTimeout(r, 600))
+    return true
+  }
+  return false
 }
 
 /**
@@ -1114,9 +1159,22 @@ async function fillAshbyForm(snap, token) {
         })
         el.click()
         await new Promise((r) => setTimeout(r, 2000))
+        // Self-hosters like Deel render the apply form inside a tabbed modal
+        // (Overview | Application). Force the Application tab before the
+        // form-detection re-check so the fields actually mount in DOM.
+        await tryActivateApplicationTab()
         formEl = await waitForElement(ASHBY_FORM_SELECTORS, 8000)
         break
       }
+    }
+  }
+
+  // Last-ditch: if the form opened directly into a tabbed modal (no CTA needed),
+  // try activating the Application tab and re-check.
+  if (!formEl) {
+    const switched = await tryActivateApplicationTab()
+    if (switched) {
+      formEl = await waitForElement(ASHBY_FORM_SELECTORS, 5000)
     }
   }
 

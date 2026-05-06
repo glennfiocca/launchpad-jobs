@@ -42,3 +42,33 @@ export function usEligibleSqlCondition(): Prisma.Sql | null {
   if (!isUSEligibleFilterEnabled()) return null;
   return Prisma.sql`j."isUSEligible" = true`;
 }
+
+/**
+ * Toggleable Full-time-only filter, applied alongside US-eligibility on the
+ * listing surface. Audience-curation rationale matches: the platform targets
+ * full-time job seekers, so part-time / contract / internship / temporary
+ * postings (~1.7% of the catalog) are hidden from listing + facets. Sitemap
+ * + detail pages stay unfiltered so direct deeplinks still resolve.
+ *
+ * Set JOBS_FULL_TIME_ONLY=false to roll back without a code deploy.
+ */
+export function isFullTimeOnlyFilterEnabled(): boolean {
+  const raw = process.env.JOBS_FULL_TIME_ONLY;
+  if (raw === undefined) return true;
+  return raw !== "false" && raw !== "0";
+}
+
+// Mirrors EMPLOYMENT_TYPE_FILTER_VARIANTS["full_time"] in src/lib/employment-type.ts
+// — duplicated locally to avoid an import cycle (this module is imported by
+// the listing API + facets, which are perf-sensitive paths).
+const FULL_TIME_VARIANTS = ["Full-time", "Full Time", "Full-Time", "FullTime", "FULL_TIME", "full_time"] as const;
+
+export function fullTimeOnlyWhere(): Prisma.JobWhereInput {
+  if (!isFullTimeOnlyFilterEnabled()) return {};
+  return { employmentType: { in: [...FULL_TIME_VARIANTS] } };
+}
+
+export function fullTimeOnlySqlCondition(): Prisma.Sql | null {
+  if (!isFullTimeOnlyFilterEnabled()) return null;
+  return Prisma.sql`j."employmentType" = ANY(${[...FULL_TIME_VARIANTS]})`;
+}

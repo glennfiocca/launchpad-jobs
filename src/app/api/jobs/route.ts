@@ -4,9 +4,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobsQuerySchema, datePostedToCutoff } from "@/lib/validations/jobs";
-import { resolveEmploymentTypeFilter } from "@/lib/employment-type";
 import { buildFacets } from "@/lib/job-facets";
-import { usEligibleWhere, usEligibleSqlCondition } from "@/lib/jobs/eligibility-filter";
+import {
+  usEligibleWhere,
+  usEligibleSqlCondition,
+  fullTimeOnlyWhere,
+  fullTimeOnlySqlCondition,
+} from "@/lib/jobs/eligibility-filter";
 import {
   buildRelevanceOrder,
   buildBlendedRelevanceOrder,
@@ -34,7 +38,6 @@ export async function GET(request: Request) {
     department,
     company,
     remote,
-    employmentType,
     datePosted,
     salaryMin,
     salaryMax,
@@ -128,13 +131,16 @@ export async function GET(request: Request) {
   // The US-eligibility filter is the platform's audience-curation gate; it
   // only runs against the listing API + facets — sitemap and detail pages
   // intentionally omit it so SEO + direct search-engine traffic stay intact.
+  // employmentType is intentionally NOT spread in here. The Type filter
+  // is removed from the UI; fullTimeOnlyWhere() is the only employmentType
+  // gate. If a stale URL or external link includes ?type=..., it's ignored.
   const structuralWhere: Prisma.JobWhereInput = {
     isActive: true,
     ...usEligibleWhere(),
+    ...fullTimeOnlyWhere(),
     ...(wantSaved && userId && { savedJobs: { some: { userId } } }),
     ...(provider && { provider }),
     ...(remote === "true" && { remote: true }),
-    ...(employmentType && { employmentType: { in: resolveEmploymentTypeFilter(employmentType) ?? [employmentType] } }),
     ...(dateCutoff && { createdAt: { gte: dateCutoff } }),
     ...(salaryMin !== undefined && { salaryMin: { gte: salaryMin } }),
     ...(salaryMax !== undefined && { salaryMax: { lte: salaryMax } }),
@@ -159,12 +165,11 @@ export async function GET(request: Request) {
     ];
     const eligibility = usEligibleSqlCondition();
     if (eligibility) savedConditions.push(eligibility);
+    const fullTime = fullTimeOnlySqlCondition();
+    if (fullTime) savedConditions.push(fullTime);
     if (provider) savedConditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") savedConditions.push(Prisma.sql`j."remote" = true`);
-    if (employmentType) {
-      const variants = resolveEmploymentTypeFilter(employmentType) ?? [employmentType];
-      savedConditions.push(Prisma.sql`j."employmentType" = ANY(${variants})`);
-    }
+    // employmentType filter intentionally omitted — see structuralWhere comment.
     if (dateCutoff) savedConditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) savedConditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) savedConditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
@@ -236,6 +241,8 @@ export async function GET(request: Request) {
     ];
     const eligibility = usEligibleSqlCondition();
     if (eligibility) conditions.push(eligibility);
+    const fullTime = fullTimeOnlySqlCondition();
+    if (fullTime) conditions.push(fullTime);
     if (wantSaved && userId) {
       conditions.push(
         Prisma.sql`j.id IN (SELECT "jobId" FROM "SavedJob" WHERE "userId" = ${userId})`,
@@ -244,10 +251,7 @@ export async function GET(request: Request) {
 
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
-    if (employmentType) {
-      const variants = resolveEmploymentTypeFilter(employmentType) ?? [employmentType];
-      conditions.push(Prisma.sql`j."employmentType" = ANY(${variants})`);
-    }
+    // employmentType filter intentionally omitted — see structuralWhere comment.
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
@@ -346,6 +350,8 @@ export async function GET(request: Request) {
     const conditions: Prisma.Sql[] = [Prisma.sql`j."isActive" = true`];
     const eligibility = usEligibleSqlCondition();
     if (eligibility) conditions.push(eligibility);
+    const fullTime = fullTimeOnlySqlCondition();
+    if (fullTime) conditions.push(fullTime);
     if (wantSaved && userId) {
       conditions.push(
         Prisma.sql`j.id IN (SELECT "jobId" FROM "SavedJob" WHERE "userId" = ${userId})`,
@@ -353,10 +359,7 @@ export async function GET(request: Request) {
     }
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
-    if (employmentType) {
-      const variants = resolveEmploymentTypeFilter(employmentType) ?? [employmentType];
-      conditions.push(Prisma.sql`j."employmentType" = ANY(${variants})`);
-    }
+    // employmentType filter intentionally omitted — see structuralWhere comment.
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);

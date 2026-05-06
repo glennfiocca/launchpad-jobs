@@ -3,8 +3,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Search, Building2, X, ArrowUpDown } from "lucide-react";
 import { DatePostedChips } from "./filters/date-posted-chips";
-import { EmploymentTypeChips } from "./filters/employment-type-chips";
-import { DepartmentCombobox } from "./filters/department-combobox";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
@@ -25,8 +23,6 @@ const SORT_CLASS =
   "w-[150px] pl-9 pr-3 py-2 text-sm rounded-xl border border-white/10 bg-black text-white " +
   "focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 " +
   "appearance-none cursor-pointer";
-
-const VERTICAL_DIVIDER = "w-px h-5 bg-white/10";
 
 interface RemoteToggleProps {
   active: boolean;
@@ -134,23 +130,12 @@ export function JobFilters({ facets }: JobFiltersProps) {
     [updateFilters]
   );
 
-  const handleEmploymentType = useCallback(
-    (value: string | undefined) => updateFilters({ employmentType: value }),
-    [updateFilters]
-  );
-
   const handleSort = useCallback(
     (value: SortOption) => updateFilters({ sort: value }),
     [updateFilters]
   );
 
-  const handleDepartment = useCallback(
-    (value: string | undefined) => updateFilters({ department: value }),
-    [updateFilters]
-  );
-
   const remoteActive = !!filters.remote;
-  const departments = facets?.departments ?? [];
   const sortValue = filters.sort ?? "newest";
 
   return (
@@ -205,34 +190,13 @@ export function JobFilters({ facets }: JobFiltersProps) {
         </div>
       </div>
 
-      {/* Row 2 — desktop: inline strip */}
+      {/* Row 2 — desktop: posted chips on the left, controls on the right */}
       <div className="hidden md:flex items-center gap-3 flex-wrap">
         <DatePostedChips
           value={filters.datePosted}
           onChange={handleDatePosted}
           inlineLabel="Posted:"
         />
-
-        <span className={VERTICAL_DIVIDER} aria-hidden />
-
-        <EmploymentTypeChips
-          value={filters.employmentType}
-          onChange={handleEmploymentType}
-          facets={facets?.employmentTypes}
-          inlineLabel="Type:"
-        />
-
-        {departments.length > 0 && (
-          <>
-            <span className={VERTICAL_DIVIDER} aria-hidden />
-            <DepartmentCombobox
-              value={filters.department}
-              onChange={handleDepartment}
-              options={departments}
-              className="w-[260px]"
-            />
-          </>
-        )}
 
         <div className="ml-auto flex items-center gap-3">
           <RemoteToggle
@@ -245,30 +209,13 @@ export function JobFilters({ facets }: JobFiltersProps) {
         </div>
       </div>
 
-      {/* Row 2 — mobile: vertical stack, chip rows scroll horizontally */}
+      {/* Row 2 — mobile: posted chips scroll horizontally, controls below */}
       <div className="md:hidden space-y-3">
-        {departments.length > 0 && (
-          <DepartmentCombobox
-            value={filters.department}
-            onChange={handleDepartment}
-            options={departments}
-            className="w-full"
-          />
-        )}
         <div className="-mx-1 px-1 overflow-x-auto">
           <DatePostedChips
             value={filters.datePosted}
             onChange={handleDatePosted}
             inlineLabel="Posted:"
-            nowrap
-          />
-        </div>
-        <div className="-mx-1 px-1 overflow-x-auto">
-          <EmploymentTypeChips
-            value={filters.employmentType}
-            onChange={handleEmploymentType}
-            facets={facets?.employmentTypes}
-            inlineLabel="Type:"
             nowrap
           />
         </div>

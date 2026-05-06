@@ -37,9 +37,8 @@ export async function GET(request: Request) {
     locationState,
     department,
     company,
-    remote,
     experienceLevel,
-    workMode: workModeRaw,
+    workMode,
     datePosted,
     salaryMin,
     salaryMax,
@@ -50,11 +49,12 @@ export async function GET(request: Request) {
     limit,
   } = parsed.data;
 
-  // Back-compat: legacy `?remote=true` URLs map to `?mode=remote` so old
-  // bookmarks + external links keep working. The new workMode filter takes
-  // precedence when both are present.
-  const workMode =
-    workModeRaw ?? (remote === "true" ? ("remote" as const) : undefined);
+  // Note: legacy `?remote=true` URL param is parsed by the schema but
+  // intentionally NOT applied as a filter. The `remote` toggle was removed
+  // in favor of the 3-way workMode segment, and silently translating
+  // `?remote=true` → `workMode=remote` was surprising users who landed on
+  // those URLs from stale bookmarks expecting all jobs. If a user wants
+  // remote-only, they click the Remote chip.
 
   const wantSaved = saved === "true";
 

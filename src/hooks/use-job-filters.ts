@@ -7,12 +7,10 @@ import type { DatePostedOption, JobFilters, SortOption } from "@/types";
 function parseFilters(params: URLSearchParams): JobFilters {
   const salMinRaw = params.get("salMin");
   const salMaxRaw = params.get("salMax");
-  // Back-compat: legacy `?remote=true` URLs map to workMode="remote". The new
-  // `?mode=` param wins when both are present. The hook stops emitting
-  // `?remote=` going forward — it's a one-way migration.
-  const modeParam = params.get("mode");
-  const legacyRemote = params.get("remote") === "true";
-  const workMode = modeParam ?? (legacyRemote ? "remote" : undefined);
+  // Legacy `?remote=true` is intentionally NOT mapped to workMode here.
+  // It silently filtered users to remote-only on stale bookmarks; the new
+  // workMode segment is the only way to opt into a mode filter.
+  const workMode = params.get("mode") ?? undefined;
   return {
     query: params.get("q") ?? undefined,
     location: params.get("location") ?? undefined,

@@ -1259,6 +1259,29 @@ async function fillAshbyForm(snap, token) {
     }
   }
 
+  // Last-ditch: navigate to the canonical Ashby HOSTED form URL. Some
+  // self-hosters (ElevenLabs) use a careers-page URL pattern that doesn't
+  // deeplink to a specific job (e.g. /careers?ashby_jid=X just shows the
+  // listing index). The hosted Ashby URL ALWAYS renders the application
+  // form because that's what Ashby's own product does. We persist the JWT
+  // in chrome.storage.session, navigate, and the resumed content script on
+  // jobs.ashbyhq.com picks the token up and fills.
+  if (!formEl && snap.boardToken && snap.externalId && window.location.hostname !== 'jobs.ashbyhq.com') {
+    const hostedUrl = `https://jobs.ashbyhq.com/${encodeURIComponent(snap.boardToken)}/${encodeURIComponent(snap.externalId)}`
+    console.log('[pipeline-operator] No form on self-hoster page — falling back to hosted Ashby URL:', hostedUrl)
+    try {
+      await chrome.storage.session.set({
+        pipelineFillToken: token,
+        pipelineFillExpiry: Date.now() + 120_000,
+      })
+      showBanner('Pre-filling Ashby form (via hosted URL)…', 'info')
+      window.location.href = hostedUrl
+      return  // Full navigation — new content script instance will resume
+    } catch (err) {
+      console.warn('[pipeline-operator] Hosted URL fallback navigation failed:', err)
+    }
+  }
+
   if (!formEl) {
     // Last resort: look for ANY visible input on the page — but skip obvious
     // non-form-field inputs (newsletter signup, search, cookie banner, etc.)

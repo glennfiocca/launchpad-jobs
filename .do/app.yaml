@@ -88,6 +88,9 @@ services:
       - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET
+      - key: EMAIL_UNSUBSCRIBE_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
 
 jobs:
   - name: migrate

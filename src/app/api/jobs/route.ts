@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobsQuerySchema, datePostedToCutoff } from "@/lib/validations/jobs";
+import { resolveEmploymentTypeFilter } from "@/lib/employment-type";
 import { buildFacets } from "@/lib/job-facets";
 import { usEligibleWhere, usEligibleSqlCondition } from "@/lib/jobs/eligibility-filter";
 import {
@@ -133,7 +134,7 @@ export async function GET(request: Request) {
     ...(wantSaved && userId && { savedJobs: { some: { userId } } }),
     ...(provider && { provider }),
     ...(remote === "true" && { remote: true }),
-    ...(employmentType && { employmentType }),
+    ...(employmentType && { employmentType: { in: resolveEmploymentTypeFilter(employmentType) ?? [employmentType] } }),
     ...(dateCutoff && { createdAt: { gte: dateCutoff } }),
     ...(salaryMin !== undefined && { salaryMin: { gte: salaryMin } }),
     ...(salaryMax !== undefined && { salaryMax: { lte: salaryMax } }),
@@ -160,7 +161,10 @@ export async function GET(request: Request) {
     if (eligibility) savedConditions.push(eligibility);
     if (provider) savedConditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") savedConditions.push(Prisma.sql`j."remote" = true`);
-    if (employmentType) savedConditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
+    if (employmentType) {
+      const variants = resolveEmploymentTypeFilter(employmentType) ?? [employmentType];
+      savedConditions.push(Prisma.sql`j."employmentType" = ANY(${variants})`);
+    }
     if (dateCutoff) savedConditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) savedConditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) savedConditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
@@ -240,7 +244,10 @@ export async function GET(request: Request) {
 
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
-    if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
+    if (employmentType) {
+      const variants = resolveEmploymentTypeFilter(employmentType) ?? [employmentType];
+      conditions.push(Prisma.sql`j."employmentType" = ANY(${variants})`);
+    }
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);
@@ -346,7 +353,10 @@ export async function GET(request: Request) {
     }
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
     if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
-    if (employmentType) conditions.push(Prisma.sql`j."employmentType" = ${employmentType}`);
+    if (employmentType) {
+      const variants = resolveEmploymentTypeFilter(employmentType) ?? [employmentType];
+      conditions.push(Prisma.sql`j."employmentType" = ANY(${variants})`);
+    }
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
     if (salaryMax !== undefined) conditions.push(Prisma.sql`j."salaryMax" <= ${salaryMax}`);

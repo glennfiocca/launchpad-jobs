@@ -5,6 +5,7 @@ import { createGreenhouseClient, isRemoteJob, extractDepartment } from "./client
 import { createNotification } from "@/lib/notifications";
 import { enrichCompanyLogo } from "../logo-enrichment";
 import { decode } from "html-entities";
+import { inferEmploymentTypeFromTitle } from "@/lib/employment-type";
 
 interface SyncResult {
   companyName: string;
@@ -97,6 +98,11 @@ export async function syncGreenhouseBoard(
       remote,
       boardToken,
       absoluteUrl: ghJob.absolute_url,
+      // Greenhouse Board API doesn't expose employment type as a structured
+      // field — infer from title (intern/co-op → Internship, contract* →
+      // Contract, etc., default Full-time). Acceptable mis-classification
+      // rate at the margin in exchange for ~99% filter coverage.
+      employmentType: inferEmploymentTypeFromTitle(ghJob.title),
       content: ghJob.content ? decode(ghJob.content) : null,
       isActive: true,
       postedAt: ghJob.updated_at ? new Date(ghJob.updated_at) : null,

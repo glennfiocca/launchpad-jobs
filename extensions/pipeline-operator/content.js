@@ -1155,11 +1155,18 @@ async function fillAshbyLocationField(field, locationText) {
  * @param {string} token - The raw JWT
  * @returns {Promise<boolean>} true if iframe handoff was performed
  */
-async function tryFillViaAshbyIframe(token) {
+async function tryFillViaAshbyIframe(token, waitMs = 0) {
   // We're already inside the iframe — let the existing fill flow run there.
   if (window.self !== window.top) return false
 
-  const iframe = document.querySelector('iframe[src*="jobs.ashbyhq.com"]')
+  // Some self-hosters (Deel) lazy-inject the Ashby iframe AFTER the user
+  // clicks "Apply for this job". Poll for up to waitMs before giving up.
+  const start = Date.now()
+  let iframe = document.querySelector('iframe[src*="jobs.ashbyhq.com"]')
+  while (!iframe && Date.now() - start < waitMs) {
+    await new Promise((r) => setTimeout(r, 250))
+    iframe = document.querySelector('iframe[src*="jobs.ashbyhq.com"]')
+  }
   if (!iframe) return false
 
   console.log("[pipeline-operator] Found Ashby iframe — passing token via session storage:", iframe.src)
@@ -1175,7 +1182,9 @@ async function tryFillViaAshbyIframe(token) {
 
   // Reload the iframe to re-fire its content script. Reassigning .src is the
   // most reliable cross-browser trigger; .contentWindow.location.reload()
-  // is blocked cross-origin.
+  // is blocked cross-origin. (If the iframe was just injected, its content
+  // script may also need this kick to run — without it, the iframe loads
+  // before our token write reaches storage.)
   // eslint-disable-next-line no-self-assign
   iframe.src = iframe.src
   showBanner("Pre-filling Ashby form (via embedded iframe)…", "info")
@@ -1227,9 +1236,13 @@ async function fillAshbyForm(snap, token) {
         // falls through to el.click() if the debugger API isn't available.
         await cdpClick(el)
         await new Promise((r) => setTimeout(r, 2000))
-        // Self-hosters like Deel render the apply form inside a tabbed modal
-        // (Overview | Application). Force the Application tab before the
-        // form-detection re-check so the fields actually mount in DOM.
+        // Self-hosters like Deel lazy-inject the Ashby iframe AFTER the
+        // CTA click. Re-check for the iframe (poll up to 5s) before
+        // looking for inline form fields. If the iframe appears, hand off
+        // to it via session storage and stop here — the iframe's own
+        // content script picks up the token and fills.
+        if (await tryFillViaAshbyIframe(token, 5000)) return
+        // Some sites use a tabbed modal instead — try to switch tabs.
         await tryActivateApplicationTab()
         formEl = await waitForElement(ASHBY_FORM_SELECTORS, 8000)
         break

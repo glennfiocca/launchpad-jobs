@@ -1138,7 +1138,58 @@ async function fillAshbyLocationField(field, locationText) {
  * @param {object} snap - The decoded JWT snapshot
  * @param {string} token - The raw JWT string (for navigation fallback)
  */
+/**
+ * Some Ashby self-hosters (Deel, others) embed the Ashby application form
+ * inside an iframe pointing at jobs.ashbyhq.com/{board}/{uuid}/application.
+ * The form fields live INSIDE that iframe, not in the parent document.
+ * Content scripts can't reach across origin boundaries — but with
+ * all_frames:true (manifest), our script also loads inside the iframe.
+ *
+ * Strategy: write the token to chrome.storage.session (shared across the
+ * extension) and reload the iframe. The iframe's content script picks up
+ * the pending token, detects Ashby via hostname, and fills the form
+ * directly. No CTA cascade, no tab switching, no modal.
+ *
+ * Only fires when we're in the top frame and an Ashby iframe exists.
+ *
+ * @param {string} token - The raw JWT
+ * @returns {Promise<boolean>} true if iframe handoff was performed
+ */
+async function tryFillViaAshbyIframe(token) {
+  // We're already inside the iframe — let the existing fill flow run there.
+  if (window.self !== window.top) return false
+
+  const iframe = document.querySelector('iframe[src*="jobs.ashbyhq.com"]')
+  if (!iframe) return false
+
+  console.log("[pipeline-operator] Found Ashby iframe — passing token via session storage:", iframe.src)
+  try {
+    await chrome.storage.session.set({
+      pipelineFillToken: token,
+      pipelineFillExpiry: Date.now() + 120_000,
+    })
+  } catch (err) {
+    console.warn("[pipeline-operator] Failed to stash token for iframe:", err)
+    return false
+  }
+
+  // Reload the iframe to re-fire its content script. Reassigning .src is the
+  // most reliable cross-browser trigger; .contentWindow.location.reload()
+  // is blocked cross-origin.
+  // eslint-disable-next-line no-self-assign
+  iframe.src = iframe.src
+  showBanner("Pre-filling Ashby form (via embedded iframe)…", "info")
+  return true
+}
+
 async function fillAshbyForm(snap, token) {
+  // Before doing anything heavy, check for an Ashby iframe (Deel pattern).
+  // If found, hand off to the iframe and exit — the iframe's content script
+  // will pick up the token from chrome.storage.session and fill from there.
+  if (await tryFillViaAshbyIframe(token)) {
+    return
+  }
+
   showBanner("Pre-filling Ashby form…", "info")
   console.log("[pipeline-operator] fillAshbyForm started, snapshot keys:", Object.keys(snap))
 

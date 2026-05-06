@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+import type { Page } from "playwright";
 import type {
   AtsApplyStrategy,
   AtsApplyOptions,
@@ -261,46 +262,7 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
       if (questionAnswers) {
         for (const [fieldName, value] of Object.entries(questionAnswers)) {
           const strValue = String(value);
-
-          // Try input
-          const input = await page.$(
-            `input[name="${fieldName}"], input[id="${fieldName}"]`
-          );
-          if (input) {
-            await input.fill(strValue);
-            continue;
-          }
-
-          // Try textarea
-          const textarea = await page.$(
-            `textarea[name="${fieldName}"], textarea[id="${fieldName}"]`
-          );
-          if (textarea) {
-            await textarea.fill(strValue);
-            continue;
-          }
-
-          // Try native select
-          const select = await page.$(
-            `select[name="${fieldName}"], select[id="${fieldName}"]`
-          );
-          if (select) {
-            await page
-              .selectOption(
-                `select[name="${fieldName}"], select[id="${fieldName}"]`,
-                strValue
-              )
-              .catch(() => {
-                console.log(
-                  `[ashby-apply] Could not select "${strValue}" for ${fieldName}`
-                );
-              });
-            continue;
-          }
-
-          console.log(
-            `[ashby-apply] No matching field found for question: ${fieldName}`
-          );
+          await fillQuestionField(page, fieldName, strValue);
         }
       }
 
@@ -385,4 +347,80 @@ export class AshbyApplyStrategy implements AtsApplyStrategy {
       if (browser) await browser.close();
     }
   }
+}
+
+const TRUTHY_STRINGS = new Set(["true", "1", "yes", "on"]);
+
+/**
+ * Type-aware fill for Ashby custom-question fields. The legacy implementation
+ * unconditionally called `.fill()` on whatever `input[name=X]` matched first,
+ * which Playwright rejects on radios + checkboxes. Real-world Ashby self-
+ * hoster forms (Cursor, Deel) include yes/no questions implemented as radio
+ * pairs and consent toggles implemented as checkboxes — both must dispatch
+ * to `.check()` / `.setChecked()`, not `.fill()`.
+ */
+export async function fillQuestionField(
+  page: Page,
+  fieldName: string,
+  strValue: string,
+): Promise<boolean> {
+  const escaped = fieldName.replace(/"/g, '\\"');
+  const inputSelector = `input[name="${escaped}"], input[id="${escaped}"]`;
+  const textareaSelector = `textarea[name="${escaped}"], textarea[id="${escaped}"]`;
+  const selectSelector = `select[name="${escaped}"], select[id="${escaped}"]`;
+
+  const input = await page.$(inputSelector);
+  if (input) {
+    const type = ((await input.getAttribute("type")) ?? "text").toLowerCase();
+    if (type === "radio") {
+      const radio = await page.$(
+        `input[type="radio"][name="${escaped}"][value="${strValue.replace(/"/g, '\\"')}"], ` +
+          `input[type="radio"][id="${escaped}"][value="${strValue.replace(/"/g, '\\"')}"]`,
+      );
+      if (radio) {
+        await radio.check();
+        return true;
+      }
+      console.log(
+        `[ashby-apply] No radio with value="${strValue}" for ${fieldName}`,
+      );
+      return false;
+    }
+    if (type === "checkbox") {
+      const isTrue = TRUTHY_STRINGS.has(strValue.toLowerCase());
+      await input.setChecked(isTrue);
+      return true;
+    }
+    if (type === "file") {
+      // Resume / file uploads are handled by the explicit setInputFiles
+      // path earlier in the apply flow, not by question-answer fill.
+      return false;
+    }
+    await input.fill(strValue);
+    return true;
+  }
+
+  const textarea = await page.$(textareaSelector);
+  if (textarea) {
+    await textarea.fill(strValue);
+    return true;
+  }
+
+  const select = await page.$(selectSelector);
+  if (select) {
+    try {
+      await page.selectOption(selectSelector, strValue);
+      return true;
+    } catch {
+      console.log(
+        `[ashby-apply] Could not select "${strValue}" for ${fieldName}`,
+      );
+      return false;
+    }
+  }
+
+  console.log(
+    `[ashby-apply] No matching field found for question: ${fieldName}`,
+  );
+  return false;
 }

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ashby question type test fixture</title>
+  </head>
+  <body>
+    <form id="application">
+      <!-- Text input -->
+      <label for="firstName">First name</label>
+      <input type="text" name="firstName" id="firstName" />
+
+      <!-- Textarea -->
+      <label for="coverLetter">Cover letter</label>
+      <textarea name="coverLetter" id="coverLetter"></textarea>
+
+      <!-- Radio pair (the case that broke prod) -->
+      <fieldset>
+        <legend>Are you authorized to work in the US?</legend>
+        <label><input type="radio" name="usAuth" value="true" /> Yes</label>
+        <label><input type="radio" name="usAuth" value="false" /> No</label>
+      </fieldset>
+
+      <!-- Checkbox -->
+      <label>
+        <input type="checkbox" name="newsletter" />
+        Subscribe to the careers newsletter
+      </label>
+
+      <!-- Native select -->
+      <label for="referralSource">How did you hear about us?</label>
+      <select name="referralSource" id="referralSource">
+        <option value="">Select...</option>
+        <option value="linkedin">LinkedIn</option>
+        <option value="referral">Employee referral</option>
+        <option value="other">Other</option>
+      </select>
+
+      <!-- File input — must NOT be filled via the question-answer path -->
+      <label for="portfolio">Portfolio</label>
+      <input type="file" name="portfolio" id="portfolio" />
+    </form>
+  </body>
+</html>

@@ -242,14 +242,12 @@ export const SEED_BOARDS: Array<{ token: string; name: string; logoUrl?: string;
   // Original
   { token: "anthropic", name: "Anthropic" },
   { token: "stripe", name: "Stripe" },
-  { token: "linear", name: "Linear" },
+  // Linear, Notion, OpenAI: migrated to Ashby; tracked via Ashby provider.
   { token: "vercel", name: "Vercel" },
   { token: "figma", name: "Figma" },
-  { token: "notion", name: "Notion" },
-  { token: "openai", name: "OpenAI" },
   { token: "databricks", name: "Databricks" },
-  { token: "hashicorp", name: "HashiCorp" },
-  { token: "shopify", name: "Shopify" },
+  // HashiCorp: acquired by IBM, careers consolidated into IBM Careers Portal (no GH).
+  // Shopify: switched to in-house careers system; no third-party ATS.
   // Tech & software
   { token: "okta", name: "Okta" },
   { token: "twilio", name: "Twilio" },
@@ -280,8 +278,7 @@ export const SEED_BOARDS: Array<{ token: string; name: string; logoUrl?: string;
   { token: "vianttechnology", name: "Viant Technology" },
   { token: "backblaze", name: "Backblaze" },
   { token: "airship", name: "Airship" },
-  { token: "alchemy", name: "Alchemy" },
-  { token: "check", name: "Check" },
+  // Alchemy: migrated to Ashby (not yet tracked). Check: dropped Greenhouse.
   { token: "chime", name: "Chime" },
   { token: "community", name: "Community" },
   { token: "corescientific", name: "Core Scientific" },
@@ -295,7 +292,7 @@ export const SEED_BOARDS: Array<{ token: string; name: string; logoUrl?: string;
   { token: "duolingo", name: "Duolingo" },
   { token: "agoda", name: "Agoda" },
   { token: "buzzfeed", name: "BuzzFeed" },
-  { token: "angi", name: "Angi" },
+  // Angi: GH board returns 404; no clear new ATS home found.
   { token: "allbirds", name: "Allbirds" },
   { token: "hellofresh", name: "HelloFresh" },
   { token: "riotgames", name: "Riot Games" },
@@ -309,7 +306,7 @@ export const SEED_BOARDS: Array<{ token: string; name: string; logoUrl?: string;
   { token: "proshares", name: "ProShares" },
   { token: "pathward", name: "Pathward" },
   { token: "bitcoindepot", name: "Bitcoin Depot" },
-  { token: "bitfarms", name: "Bitfarms" },
+  { token: "keelinfrastructure", name: "Keel Infrastructure" }, // formerly Bitfarms — rebranded
   // Enterprise & infrastructure
   { token: "costar", name: "CoStar" },
   { token: "godaddy", name: "GoDaddy" },

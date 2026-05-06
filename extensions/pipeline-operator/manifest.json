@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pipeline Operator",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Pre-fills Greenhouse, Ashby, and self-hosted careers application forms for operator-assisted submissions.",
   "permissions": ["scripting", "tabs", "storage", "debugger"],
   "host_permissions": ["<all_urls>"],

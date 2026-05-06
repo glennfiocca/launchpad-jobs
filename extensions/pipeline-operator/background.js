@@ -10,6 +10,29 @@
  */
 
 // ---------------------------------------------------------------------------
+// chrome.storage.session access for content scripts
+// ---------------------------------------------------------------------------
+// Default access is TRUSTED_CONTEXTS — extension pages only. Content scripts
+// throw "Access to storage is not allowed from this context" on read/write.
+// We use session storage to persist a fill token across same-tab navigations
+// (e.g. Apply CTA opens the embedded application form). Open access on
+// startup AND install so the API works on both fresh installs and extension
+// reloads.
+function openSessionStorage() {
+  if (!chrome?.storage?.session?.setAccessLevel) return
+  chrome.storage.session
+    .setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" })
+    .catch((err) => {
+      console.warn("[Pipeline] setAccessLevel failed:", err?.message ?? err)
+    })
+}
+chrome.runtime.onInstalled.addListener(openSessionStorage)
+chrome.runtime.onStartup.addListener(openSessionStorage)
+// Service-worker cold-start: also call once at module load so an extension
+// reload during dev opens access immediately.
+openSessionStorage()
+
+// ---------------------------------------------------------------------------
 // Debugger lifecycle
 // ---------------------------------------------------------------------------
 

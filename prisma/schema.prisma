@@ -351,11 +351,16 @@ model Job {
   company    Company     @relation(fields: [companyId], references: [id])
   provider   AtsProvider @default(GREENHOUSE)
 
-  title          String
-  location       String?
-  department     String?
-  employmentType String?
-  remote         Boolean @default(false)
+  title           String
+  location        String?
+  department      String?
+  employmentType  String?
+  /// Experience-level slug inferred from `title` at sync time. One of:
+  /// entry | mid | senior | staff | management. See src/lib/experience-level.ts
+  /// for the heuristic. Stored as the canonical slug (no display variants) so
+  /// the listing API can match the URL param directly.
+  experienceLevel String?
+  remote          Boolean @default(false)
 
   // Greenhouse identifiers
   boardToken  String

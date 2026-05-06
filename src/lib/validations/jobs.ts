@@ -1,5 +1,9 @@
 import { z } from "zod";
 import type { DatePostedOption } from "@/types";
+import {
+  EXPERIENCE_LEVEL_OPTIONS,
+  EXPERIENCE_LEVEL_LABELS,
+} from "@/lib/experience-level";
 
 export const DATE_POSTED_OPTIONS = [
   "today",
@@ -25,6 +29,10 @@ export const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   internship: "Internship",
 };
 
+// Re-exported from src/lib/experience-level.ts so client components can pull
+// these from a single barrel without crossing the server-only env-flag check.
+export { EXPERIENCE_LEVEL_OPTIONS, EXPERIENCE_LEVEL_LABELS };
+
 export const jobsQuerySchema = z.object({
   query: z.string().max(200).optional(),
   location: z.string().max(200).optional(),      // legacy plain-text
@@ -34,6 +42,7 @@ export const jobsQuerySchema = z.object({
   company: z.string().max(200).optional(),
   remote: z.enum(["true", "false"]).optional(),
   employmentType: z.string().max(50).optional(),
+  experienceLevel: z.enum(EXPERIENCE_LEVEL_OPTIONS).optional(),
   datePosted: z.enum(DATE_POSTED_OPTIONS).default("any"),
   salaryMin: z.coerce.number().int().min(0).max(10_000_000).optional(),
   salaryMax: z.coerce.number().int().min(0).max(10_000_000).optional(),

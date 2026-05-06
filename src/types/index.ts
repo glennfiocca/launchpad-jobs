@@ -102,6 +102,8 @@ export interface JobFilters {
   company?: string;
   remote?: boolean;
   employmentType?: string;
+  /** Experience-level slug (entry|mid|senior|staff|management). */
+  experienceLevel?: string;
   datePosted?: DatePostedOption;
   salaryMin?: number;
   salaryMax?: number;
@@ -116,6 +118,8 @@ export interface JobFilters {
 export interface JobFacets {
   departments: Array<{ value: string; count: number }>;
   employmentTypes: Array<{ value: string; count: number }>;
+  /** Experience-level slug counts (entry|mid|senior|staff|management). */
+  experienceLevels: Array<{ value: string; count: number }>;
   companies: Array<{ id: string; name: string; count: number }>;
   totalRemote: number;
   salaryRange: { min: number | null; max: number | null };

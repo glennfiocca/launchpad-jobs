@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect } from "react";
 import { Search, Building2, X, ArrowUpDown } from "lucide-react";
 import { DatePostedChips } from "./filters/date-posted-chips";
 import { DepartmentCombobox } from "./filters/department-combobox";
+import { ExperienceLevelChips } from "./filters/experience-level-chips";
+import { isExperienceFilterEnabledClient } from "@/lib/experience-level";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
@@ -143,9 +145,16 @@ export function JobFilters({ facets }: JobFiltersProps) {
     [updateFilters]
   );
 
+  const handleExperienceLevel = useCallback(
+    (value: string | undefined) => updateFilters({ experienceLevel: value }),
+    [updateFilters]
+  );
+
   const remoteActive = !!filters.remote;
   const departments = facets?.departments ?? [];
+  const experienceLevels = facets?.experienceLevels ?? [];
   const sortValue = filters.sort ?? "newest";
+  const showExperienceFilter = isExperienceFilterEnabledClient();
 
   return (
     <div className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 mb-4 space-y-3">
@@ -219,6 +228,18 @@ export function JobFilters({ facets }: JobFiltersProps) {
           </>
         )}
 
+        {showExperienceFilter && (
+          <>
+            <span className={VERTICAL_DIVIDER} aria-hidden />
+            <ExperienceLevelChips
+              value={filters.experienceLevel}
+              onChange={handleExperienceLevel}
+              inlineLabel="Level:"
+              facets={experienceLevels}
+            />
+          </>
+        )}
+
         <div className="ml-auto flex items-center gap-3">
           <RemoteToggle
             active={remoteActive}
@@ -248,6 +269,17 @@ export function JobFilters({ facets }: JobFiltersProps) {
             nowrap
           />
         </div>
+        {showExperienceFilter && (
+          <div className="-mx-1 px-1 overflow-x-auto">
+            <ExperienceLevelChips
+              value={filters.experienceLevel}
+              onChange={handleExperienceLevel}
+              inlineLabel="Level:"
+              facets={experienceLevels}
+              nowrap
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3">
           <RemoteToggle
             active={remoteActive}

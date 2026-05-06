@@ -34,6 +34,7 @@ function makeJob(overrides: {
     location: "San Francisco, CA",
     department: null,
     employmentType: "Full-time",
+    experienceLevel: "mid",
     remote: false,
     boardToken: "acme",
     absoluteUrl: null,

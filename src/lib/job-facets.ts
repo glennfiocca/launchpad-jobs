@@ -5,39 +5,52 @@ import type { Prisma } from "@prisma/client";
 export async function buildFacets(
   where: Prisma.JobWhereInput
 ): Promise<JobFacets> {
-  const [departments, employmentTypes, companies, remoteCount, salaryAgg] =
-    await Promise.all([
-      db.job.groupBy({
-        by: ["department"],
-        where: { ...where, department: { not: null } },
-        _count: { department: true },
-        orderBy: { _count: { department: "desc" } },
-        take: 20,
-      }),
+  const [
+    departments,
+    employmentTypes,
+    experienceLevels,
+    companies,
+    remoteCount,
+    salaryAgg,
+  ] = await Promise.all([
+    db.job.groupBy({
+      by: ["department"],
+      where: { ...where, department: { not: null } },
+      _count: { department: true },
+      orderBy: { _count: { department: "desc" } },
+      take: 20,
+    }),
 
-      db.job.groupBy({
-        by: ["employmentType"],
-        where: { ...where, employmentType: { not: null } },
-        _count: { employmentType: true },
-        orderBy: { _count: { employmentType: "desc" } },
-      }),
+    db.job.groupBy({
+      by: ["employmentType"],
+      where: { ...where, employmentType: { not: null } },
+      _count: { employmentType: true },
+      orderBy: { _count: { employmentType: "desc" } },
+    }),
 
-      db.job.groupBy({
-        by: ["companyId"],
-        where,
-        _count: { companyId: true },
-        orderBy: { _count: { companyId: "desc" } },
-        take: 20,
-      }),
+    db.job.groupBy({
+      by: ["experienceLevel"],
+      where: { ...where, experienceLevel: { not: null } },
+      _count: { experienceLevel: true },
+      orderBy: { _count: { experienceLevel: "desc" } },
+    }),
 
-      db.job.count({ where: { ...where, remote: true } }),
+    db.job.groupBy({
+      by: ["companyId"],
+      where,
+      _count: { companyId: true },
+      orderBy: { _count: { companyId: "desc" } },
+      take: 20,
+    }),
 
-      db.job.aggregate({
-        where: { ...where, salaryMin: { not: null } },
-        _min: { salaryMin: true },
-        _max: { salaryMax: true },
-      }),
-    ]);
+    db.job.count({ where: { ...where, remote: true } }),
+
+    db.job.aggregate({
+      where: { ...where, salaryMin: { not: null } },
+      _min: { salaryMin: true },
+      _max: { salaryMax: true },
+    }),
+  ]);
 
   // Resolve company names
   const companyIds = companies
@@ -65,6 +78,12 @@ export async function buildFacets(
       .map((e) => ({
         value: e.employmentType!,
         count: e._count.employmentType,
+      })),
+    experienceLevels: experienceLevels
+      .filter((e) => e.experienceLevel)
+      .map((e) => ({
+        value: e.experienceLevel!,
+        count: e._count.experienceLevel,
       })),
     companies: companies
       .filter((c) => c.companyId && companyMap.has(c.companyId))

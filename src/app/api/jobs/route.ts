@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     department,
     company,
     remote,
+    experienceLevel,
     datePosted,
     salaryMin,
     salaryMax,
@@ -151,6 +152,8 @@ export async function GET(request: Request) {
     ...(company && {
       company: { name: { contains: company, mode: "insensitive" as const } },
     }),
+    // Slug-stored, slug-compared — no variant translation needed.
+    ...(experienceLevel && { experienceLevel }),
   };
 
   // Dedicated path: Saved tab + "recently saved" sort. We need to order by
@@ -187,6 +190,7 @@ export async function GET(request: Request) {
         Prisma.sql`j."companyId" IN (SELECT id FROM "Company" WHERE LOWER(name) LIKE LOWER(${"%" + company + "%"}))`,
       );
     }
+    if (experienceLevel) savedConditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
     if (query) {
       savedConditions.push(Prisma.sql`j."searchVector" @@ plainto_tsquery('english', ${query})`);
     }
@@ -271,6 +275,7 @@ export async function GET(request: Request) {
         Prisma.sql`j."companyId" IN (SELECT id FROM "Company" WHERE LOWER(name) LIKE LOWER(${"%" + company + "%"}))`
       );
     }
+    if (experienceLevel) conditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
 
     const whereClause = Prisma.join(conditions, " AND ");
     const orderClause =
@@ -379,6 +384,7 @@ export async function GET(request: Request) {
         Prisma.sql`j."companyId" IN (SELECT id FROM "Company" WHERE LOWER(name) LIKE LOWER(${"%" + company + "%"}))`
       );
     }
+    if (experienceLevel) conditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
 
     const whereClause = Prisma.join(conditions, " AND ");
 

@@ -1,6 +1,7 @@
 import type { NormalizedJob, NormalizedQuestion, NormalizedFieldType } from "../../types";
 import type { GreenhouseJob, GreenhouseQuestion } from "./types";
 import { classifyLocation } from "@/lib/location-classifier";
+import { inferExperienceLevelFromTitle } from "@/lib/experience-level";
 
 /** Returns true if the location string indicates a remote position. */
 function isRemoteJob(location: string): boolean {
@@ -45,6 +46,9 @@ export function mapGreenhouseJobToNormalized(
     location,
     department: extractDepartment(ghJob.departments),
     employmentType: null, // Greenhouse public API does not expose this
+    // Seniority isn't exposed either — infer from title. Always populated
+    // (heuristic returns "mid" by default).
+    experienceLevel: inferExperienceLevelFromTitle(ghJob.title),
     remote,
     absoluteUrl: ghJob.absolute_url,
     applyUrl: ghJob.absolute_url, // Same for Greenhouse

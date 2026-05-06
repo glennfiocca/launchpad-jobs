@@ -16,6 +16,7 @@ function parseFilters(params: URLSearchParams): JobFilters {
     company: params.get("company") ?? undefined,
     remote: params.get("remote") === "true" ? true : undefined,
     employmentType: params.get("type") ?? undefined,
+    experienceLevel: params.get("level") ?? undefined,
     datePosted: (params.get("date") as DatePostedOption) ?? undefined,
     salaryMin: salMinRaw ? Number(salMinRaw) : undefined,
     salaryMax: salMaxRaw ? Number(salMaxRaw) : undefined,
@@ -34,6 +35,7 @@ function filtersToParams(filters: JobFilters): URLSearchParams {
   if (filters.company) p.set("company", filters.company);
   if (filters.remote) p.set("remote", "true");
   if (filters.employmentType) p.set("type", filters.employmentType);
+  if (filters.experienceLevel) p.set("level", filters.experienceLevel);
   if (filters.datePosted && filters.datePosted !== "any")
     p.set("date", filters.datePosted);
   if (filters.salaryMin !== undefined) p.set("salMin", String(filters.salaryMin));
@@ -104,6 +106,7 @@ export function useJobFilters() {
     filters.company ||
     filters.remote ||
     filters.employmentType ||
+    filters.experienceLevel ||
     (filters.datePosted && filters.datePosted !== "any") ||
     filters.salaryMin !== undefined ||
     filters.salaryMax !== undefined

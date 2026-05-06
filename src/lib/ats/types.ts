@@ -7,6 +7,12 @@ export interface NormalizedJob {
   location: string | null;
   department: string | null;
   employmentType: string | null;
+  /**
+   * Experience-level slug inferred from `title` (entry | mid | senior | staff
+   * | management). See src/lib/experience-level.ts. Always populated — the
+   * heuristic returns "mid" by default rather than null.
+   */
+  experienceLevel: string;
   remote: boolean;
   absoluteUrl: string | null;
   applyUrl: string | null;

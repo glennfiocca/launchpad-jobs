@@ -36,6 +36,7 @@ function makeJob(overrides: {
     location: "San Francisco, CA",
     department: "Engineering",
     employmentType: "Full-time",
+    experienceLevel: "senior",
     remote: false,
     boardToken: "acme",
     absoluteUrl: "https://boards.greenhouse.io/acme/jobs/999001",

@@ -1,0 +1,14 @@
+-- Add `experienceLevel` column to Job. Populated by the title heuristic at
+-- sync time (src/lib/experience-level.ts) for both Greenhouse and Ashby —
+-- neither ATS exposes seniority as a structured field, so we infer it from
+-- the title and store the canonical slug (entry | mid | senior | staff |
+-- management).
+--
+-- The listing API and chip filter both compare against this column directly;
+-- because the UI sends slug values and the DB stores slugs, no slug → variant
+-- mapping is needed (avoids the case-mismatch bug that bit employmentType).
+--
+-- Nullable + no default → metadata-only ALTER, safe under load. The backfill
+-- script (scripts/_experience-backfill.ts) classifies existing rows after the
+-- migration applies; subsequent syncs keep the column current.
+ALTER TABLE "Job" ADD COLUMN "experienceLevel" TEXT;

@@ -99,8 +99,9 @@ export function JobBoard() {
       if (!f.locationCity && f.location) params.set("location", f.location);
       if (f.department) params.set("department", f.department);
       if (f.company) params.set("company", f.company);
-      if (f.remote) params.set("remote", "true");
       if (f.employmentType) params.set("employmentType", f.employmentType);
+      if (f.experienceLevel) params.set("experienceLevel", f.experienceLevel);
+      if (f.workMode) params.set("workMode", f.workMode);
       if (f.datePosted && f.datePosted !== "any")
         params.set("datePosted", f.datePosted);
       if (f.salaryMin !== undefined) params.set("salaryMin", String(f.salaryMin));

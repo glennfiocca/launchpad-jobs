@@ -37,6 +37,7 @@ function makeJob(overrides: {
     department: "Engineering",
     employmentType: "Full-time",
     experienceLevel: "senior",
+    workMode: "onsite",
     remote: false,
     boardToken: "acme",
     absoluteUrl: "https://boards.greenhouse.io/acme/jobs/999001",

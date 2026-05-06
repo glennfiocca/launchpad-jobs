@@ -100,10 +100,11 @@ export interface JobFilters {
   locationState?: string;  // structured state abbrev from Google Places
   department?: string;
   company?: string;
-  remote?: boolean;
   employmentType?: string;
   /** Experience-level slug (entry|mid|senior|staff|management). */
   experienceLevel?: string;
+  /** Work-mode slug (remote|hybrid|onsite). Supersedes the legacy `remote` boolean for listing filtering. */
+  workMode?: string;
   datePosted?: DatePostedOption;
   salaryMin?: number;
   salaryMax?: number;
@@ -120,6 +121,8 @@ export interface JobFacets {
   employmentTypes: Array<{ value: string; count: number }>;
   /** Experience-level slug counts (entry|mid|senior|staff|management). */
   experienceLevels: Array<{ value: string; count: number }>;
+  /** Work-mode slug counts (remote|hybrid|onsite). */
+  workModes: Array<{ value: string; count: number }>;
   companies: Array<{ id: string; name: string; count: number }>;
   totalRemote: number;
   salaryRange: { min: number | null; max: number | null };

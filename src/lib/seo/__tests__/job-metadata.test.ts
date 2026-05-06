@@ -35,6 +35,7 @@ function makeJob(overrides: {
     department: null,
     employmentType: "Full-time",
     experienceLevel: "mid",
+    workMode: "onsite",
     remote: false,
     boardToken: "acme",
     absoluteUrl: null,

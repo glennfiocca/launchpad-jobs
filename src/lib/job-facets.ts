@@ -9,6 +9,7 @@ export async function buildFacets(
     departments,
     employmentTypes,
     experienceLevels,
+    workModes,
     companies,
     remoteCount,
     salaryAgg,
@@ -33,6 +34,13 @@ export async function buildFacets(
       where: { ...where, experienceLevel: { not: null } },
       _count: { experienceLevel: true },
       orderBy: { _count: { experienceLevel: "desc" } },
+    }),
+
+    db.job.groupBy({
+      by: ["workMode"],
+      where: { ...where, workMode: { not: null } },
+      _count: { workMode: true },
+      orderBy: { _count: { workMode: "desc" } },
     }),
 
     db.job.groupBy({
@@ -84,6 +92,12 @@ export async function buildFacets(
       .map((e) => ({
         value: e.experienceLevel!,
         count: e._count.experienceLevel,
+      })),
+    workModes: workModes
+      .filter((w) => w.workMode)
+      .map((w) => ({
+        value: w.workMode!,
+        count: w._count.workMode,
       })),
     companies: companies
       .filter((c) => c.companyId && companyMap.has(c.companyId))

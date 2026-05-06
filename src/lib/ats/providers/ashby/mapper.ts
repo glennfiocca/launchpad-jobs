@@ -2,6 +2,7 @@ import type { NormalizedJob } from "../../types";
 import type { AshbyApiJob } from "./types";
 import { classifyLocation } from "@/lib/location-classifier";
 import { inferExperienceLevelFromTitle } from "@/lib/experience-level";
+import { inferWorkModeFromJob } from "@/lib/work-mode";
 
 /** Maps Ashby employmentType values to user-friendly strings. */
 function mapEmploymentType(ashbyType: string): string {
@@ -59,6 +60,15 @@ export function mapAshbyJobToNormalized(ashbyJob: AshbyApiJob): NormalizedJob {
     // Seniority isn't exposed by the Ashby Posting API — infer from title.
     // Always populated (heuristic returns "mid" as default).
     experienceLevel: inferExperienceLevelFromTitle(ashbyJob.title),
+    // Work-mode (remote/hybrid/onsite) — Ashby has `isRemote` for fully-remote
+    // but no hybrid signal, so we still run the heuristic over title +
+    // location + description text. Always populated (default "onsite").
+    workMode: inferWorkModeFromJob({
+      title: ashbyJob.title,
+      location: ashbyJob.location || null,
+      content: ashbyJob.descriptionHtml || null,
+      remote: ashbyJob.isRemote ?? false,
+    }),
     remote: ashbyJob.isRemote ?? false,
     absoluteUrl: ashbyJob.jobUrl || null,
     // applyUrl is intentionally left null here. The Ashby Posting API returns

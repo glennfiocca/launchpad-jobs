@@ -276,6 +276,7 @@ export async function syncBoard(
       department: normalizedJob.department,
       employmentType: normalizedJob.employmentType,
       experienceLevel: normalizedJob.experienceLevel,
+      workMode: normalizedJob.workMode,
       remote: normalizedJob.remote ?? false,
       boardToken,
       provider,

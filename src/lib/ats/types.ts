@@ -13,6 +13,12 @@ export interface NormalizedJob {
    * heuristic returns "mid" by default rather than null.
    */
   experienceLevel: string;
+  /**
+   * Work-mode slug inferred from title/location/content/remote
+   * (remote | hybrid | onsite). See src/lib/work-mode.ts. Always populated —
+   * the heuristic returns "onsite" by default rather than null.
+   */
+  workMode: string;
   remote: boolean;
   absoluteUrl: string | null;
   applyUrl: string | null;

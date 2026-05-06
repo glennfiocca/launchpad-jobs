@@ -74,6 +74,7 @@ describe("mapGreenhouseJobToNormalized", () => {
       department: "Engineering",
       employmentType: null,
       experienceLevel: "mid",
+      workMode: "onsite",
       remote: false,
       absoluteUrl: "https://boards.greenhouse.io/acme/jobs/12345",
       applyUrl: "https://boards.greenhouse.io/acme/jobs/12345",

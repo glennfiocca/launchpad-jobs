@@ -5,7 +5,9 @@ import { Search, Building2, X, ArrowUpDown } from "lucide-react";
 import { DatePostedChips } from "./filters/date-posted-chips";
 import { DepartmentCombobox } from "./filters/department-combobox";
 import { ExperienceLevelChips } from "./filters/experience-level-chips";
+import { WorkModeSegment } from "./filters/work-mode-segment";
 import { isExperienceFilterEnabledClient } from "@/lib/experience-level";
+import { isWorkModeFilterEnabledClient } from "@/lib/work-mode";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
@@ -28,41 +30,6 @@ const SORT_CLASS =
   "appearance-none cursor-pointer";
 
 const VERTICAL_DIVIDER = "w-px h-5 bg-white/10";
-
-interface RemoteToggleProps {
-  active: boolean;
-  onToggle: () => void;
-  count?: number;
-}
-
-function RemoteToggle({ active, onToggle, count }: RemoteToggleProps) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onToggle}
-      className={
-        "inline-flex items-center gap-2 px-3 h-8 rounded-full border text-sm transition-colors " +
-        "focus:outline-none focus:ring-2 focus:ring-indigo-500/40 " +
-        (active
-          ? "border-indigo-500/40 bg-indigo-500/10 text-white"
-          : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200")
-      }
-    >
-      <span
-        className={
-          "w-1.5 h-1.5 rounded-full " +
-          (active ? "bg-indigo-500" : "bg-zinc-600")
-        }
-        aria-hidden
-      />
-      Remote only
-      {typeof count === "number" && (
-        <span className="text-zinc-500">({count.toLocaleString()})</span>
-      )}
-    </button>
-  );
-}
 
 interface SortSelectProps {
   value: SortOption;
@@ -130,11 +97,6 @@ export function JobFilters({ facets }: JobFiltersProps) {
     [updateFilters]
   );
 
-  const handleRemote = useCallback(
-    (checked: boolean) => updateFilters({ remote: checked || undefined }),
-    [updateFilters]
-  );
-
   const handleSort = useCallback(
     (value: SortOption) => updateFilters({ sort: value }),
     [updateFilters]
@@ -150,11 +112,17 @@ export function JobFilters({ facets }: JobFiltersProps) {
     [updateFilters]
   );
 
-  const remoteActive = !!filters.remote;
+  const handleWorkMode = useCallback(
+    (value: string | undefined) => updateFilters({ workMode: value }),
+    [updateFilters]
+  );
+
   const departments = facets?.departments ?? [];
   const experienceLevels = facets?.experienceLevels ?? [];
+  const workModes = facets?.workModes ?? [];
   const sortValue = filters.sort ?? "newest";
   const showExperienceFilter = isExperienceFilterEnabledClient();
+  const showWorkModeFilter = isWorkModeFilterEnabledClient();
 
   return (
     <div className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 mb-4 space-y-3">
@@ -241,11 +209,14 @@ export function JobFilters({ facets }: JobFiltersProps) {
         )}
 
         <div className="ml-auto flex items-center gap-3">
-          <RemoteToggle
-            active={remoteActive}
-            onToggle={() => handleRemote(!remoteActive)}
-            count={facets?.totalRemote}
-          />
+          {showWorkModeFilter && (
+            <WorkModeSegment
+              value={filters.workMode}
+              onChange={handleWorkMode}
+              inlineLabel="Mode:"
+              facets={workModes}
+            />
+          )}
           <SortSelect value={sortValue} onChange={handleSort} />
           {hasFilters && <ClearAllButton onClick={clearFilters} />}
         </div>
@@ -280,12 +251,18 @@ export function JobFilters({ facets }: JobFiltersProps) {
             />
           </div>
         )}
-        <div className="flex items-center justify-between gap-3">
-          <RemoteToggle
-            active={remoteActive}
-            onToggle={() => handleRemote(!remoteActive)}
-            count={facets?.totalRemote}
-          />
+        {showWorkModeFilter && (
+          <div className="-mx-1 px-1 overflow-x-auto">
+            <WorkModeSegment
+              value={filters.workMode}
+              onChange={handleWorkMode}
+              inlineLabel="Mode:"
+              facets={workModes}
+              nowrap
+            />
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-3">
           <SortSelect value={sortValue} onChange={handleSort} />
         </div>
         {hasFilters && (

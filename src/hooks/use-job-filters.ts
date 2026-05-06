@@ -7,6 +7,12 @@ import type { DatePostedOption, JobFilters, SortOption } from "@/types";
 function parseFilters(params: URLSearchParams): JobFilters {
   const salMinRaw = params.get("salMin");
   const salMaxRaw = params.get("salMax");
+  // Back-compat: legacy `?remote=true` URLs map to workMode="remote". The new
+  // `?mode=` param wins when both are present. The hook stops emitting
+  // `?remote=` going forward — it's a one-way migration.
+  const modeParam = params.get("mode");
+  const legacyRemote = params.get("remote") === "true";
+  const workMode = modeParam ?? (legacyRemote ? "remote" : undefined);
   return {
     query: params.get("q") ?? undefined,
     location: params.get("location") ?? undefined,
@@ -14,9 +20,9 @@ function parseFilters(params: URLSearchParams): JobFilters {
     locationState: params.get("state") ?? undefined,
     department: params.get("dept") ?? undefined,
     company: params.get("company") ?? undefined,
-    remote: params.get("remote") === "true" ? true : undefined,
     employmentType: params.get("type") ?? undefined,
     experienceLevel: params.get("level") ?? undefined,
+    workMode,
     datePosted: (params.get("date") as DatePostedOption) ?? undefined,
     salaryMin: salMinRaw ? Number(salMinRaw) : undefined,
     salaryMax: salMaxRaw ? Number(salMaxRaw) : undefined,
@@ -33,9 +39,11 @@ function filtersToParams(filters: JobFilters): URLSearchParams {
   if (filters.locationState) p.set("state", filters.locationState);
   if (filters.department) p.set("dept", filters.department);
   if (filters.company) p.set("company", filters.company);
-  if (filters.remote) p.set("remote", "true");
+  // `remote` legacy boolean is no longer serialized — workMode covers it.
+  // Old `?remote=true` URLs are read on parse and rewritten as `?mode=remote`.
   if (filters.employmentType) p.set("type", filters.employmentType);
   if (filters.experienceLevel) p.set("level", filters.experienceLevel);
+  if (filters.workMode) p.set("mode", filters.workMode);
   if (filters.datePosted && filters.datePosted !== "any")
     p.set("date", filters.datePosted);
   if (filters.salaryMin !== undefined) p.set("salMin", String(filters.salaryMin));
@@ -104,9 +112,9 @@ export function useJobFilters() {
     filters.locationState ||
     filters.department ||
     filters.company ||
-    filters.remote ||
     filters.employmentType ||
     filters.experienceLevel ||
+    filters.workMode ||
     (filters.datePosted && filters.datePosted !== "any") ||
     filters.salaryMin !== undefined ||
     filters.salaryMax !== undefined

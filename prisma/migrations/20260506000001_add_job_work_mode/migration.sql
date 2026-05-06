@@ -1,0 +1,14 @@
+-- Add `workMode` column to Job. Populated by the title/location/content
+-- heuristic at sync time (src/lib/work-mode.ts) for both Greenhouse and
+-- Ashby — neither ATS exposes a structured Remote/Hybrid/On-site field, so
+-- we infer it and store the canonical slug (remote | hybrid | onsite).
+--
+-- The listing API and segment filter both compare against this column
+-- directly. The legacy `remote` boolean stays in place: the listing surface
+-- stops using it as a filter (this column supersedes it), but the sitemap
+-- + JSON-LD structured-data path still reads it for jobLocationType.
+--
+-- Nullable + no default → metadata-only ALTER, safe under load. The backfill
+-- script (scripts/_work-mode-backfill.ts) classifies existing rows after the
+-- migration applies; subsequent syncs keep the column current.
+ALTER TABLE "Job" ADD COLUMN "workMode" TEXT;

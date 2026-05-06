@@ -7,6 +7,7 @@ import { enrichCompanyLogo } from "../logo-enrichment";
 import { decode } from "html-entities";
 import { inferEmploymentTypeFromTitle } from "@/lib/employment-type";
 import { inferExperienceLevelFromTitle } from "@/lib/experience-level";
+import { inferWorkModeFromJob } from "@/lib/work-mode";
 
 interface SyncResult {
   companyName: string;
@@ -107,6 +108,14 @@ export async function syncGreenhouseBoard(
       // Same story for seniority — not exposed by Greenhouse, inferred from
       // the title. Stored as a slug (entry|mid|senior|staff|management).
       experienceLevel: inferExperienceLevelFromTitle(ghJob.title),
+      // Work-mode (remote|hybrid|onsite) — see src/lib/work-mode.ts. Default
+      // "onsite" when no remote/hybrid signal is found.
+      workMode: inferWorkModeFromJob({
+        title: ghJob.title,
+        location,
+        content: ghJob.content ?? null,
+        remote,
+      }),
       content: ghJob.content ? decode(ghJob.content) : null,
       isActive: true,
       postedAt: ghJob.updated_at ? new Date(ghJob.updated_at) : null,

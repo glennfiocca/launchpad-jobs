@@ -360,6 +360,13 @@ model Job {
   /// for the heuristic. Stored as the canonical slug (no display variants) so
   /// the listing API can match the URL param directly.
   experienceLevel String?
+  /// Work-mode slug inferred from `title`/`location`/`content`/`remote` at sync
+  /// time. One of: remote | hybrid | onsite. See src/lib/work-mode.ts for the
+  /// heuristic. Stored as the canonical slug; the listing API and segment UI
+  /// match against it directly. Supersedes the legacy `remote` boolean for
+  /// listing filtering (the boolean stays for back-compat with sitemap +
+  /// JSON-LD structured data, which still consume it).
+  workMode        String?
   remote          Boolean @default(false)
 
   // Greenhouse identifiers

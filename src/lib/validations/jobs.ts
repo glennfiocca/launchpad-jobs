@@ -4,6 +4,7 @@ import {
   EXPERIENCE_LEVEL_OPTIONS,
   EXPERIENCE_LEVEL_LABELS,
 } from "@/lib/experience-level";
+import { WORK_MODE_OPTIONS, WORK_MODE_LABELS } from "@/lib/work-mode";
 
 export const DATE_POSTED_OPTIONS = [
   "today",
@@ -32,6 +33,8 @@ export const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
 // Re-exported from src/lib/experience-level.ts so client components can pull
 // these from a single barrel without crossing the server-only env-flag check.
 export { EXPERIENCE_LEVEL_OPTIONS, EXPERIENCE_LEVEL_LABELS };
+// Same pattern for work-mode (remote|hybrid|onsite).
+export { WORK_MODE_OPTIONS, WORK_MODE_LABELS };
 
 export const jobsQuerySchema = z.object({
   query: z.string().max(200).optional(),
@@ -43,6 +46,7 @@ export const jobsQuerySchema = z.object({
   remote: z.enum(["true", "false"]).optional(),
   employmentType: z.string().max(50).optional(),
   experienceLevel: z.enum(EXPERIENCE_LEVEL_OPTIONS).optional(),
+  workMode: z.enum(WORK_MODE_OPTIONS).optional(),
   datePosted: z.enum(DATE_POSTED_OPTIONS).default("any"),
   salaryMin: z.coerce.number().int().min(0).max(10_000_000).optional(),
   salaryMax: z.coerce.number().int().min(0).max(10_000_000).optional(),

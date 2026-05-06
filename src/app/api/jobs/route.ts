@@ -39,6 +39,7 @@ export async function GET(request: Request) {
     company,
     remote,
     experienceLevel,
+    workMode: workModeRaw,
     datePosted,
     salaryMin,
     salaryMax,
@@ -48,6 +49,12 @@ export async function GET(request: Request) {
     page,
     limit,
   } = parsed.data;
+
+  // Back-compat: legacy `?remote=true` URLs map to `?mode=remote` so old
+  // bookmarks + external links keep working. The new workMode filter takes
+  // precedence when both are present.
+  const workMode =
+    workModeRaw ?? (remote === "true" ? ("remote" as const) : undefined);
 
   const wantSaved = saved === "true";
 
@@ -141,7 +148,8 @@ export async function GET(request: Request) {
     ...fullTimeOnlyWhere(),
     ...(wantSaved && userId && { savedJobs: { some: { userId } } }),
     ...(provider && { provider }),
-    ...(remote === "true" && { remote: true }),
+    // Legacy `remote: true` filter intentionally removed — workMode supersedes
+    // it. Old `?remote=true` URLs are mapped to workMode="remote" above.
     ...(dateCutoff && { createdAt: { gte: dateCutoff } }),
     ...(salaryMin !== undefined && { salaryMin: { gte: salaryMin } }),
     ...(salaryMax !== undefined && { salaryMax: { lte: salaryMax } }),
@@ -154,6 +162,7 @@ export async function GET(request: Request) {
     }),
     // Slug-stored, slug-compared — no variant translation needed.
     ...(experienceLevel && { experienceLevel }),
+    ...(workMode && { workMode }),
   };
 
   // Dedicated path: Saved tab + "recently saved" sort. We need to order by
@@ -171,7 +180,7 @@ export async function GET(request: Request) {
     const fullTime = fullTimeOnlySqlCondition();
     if (fullTime) savedConditions.push(fullTime);
     if (provider) savedConditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
-    if (remote === "true") savedConditions.push(Prisma.sql`j."remote" = true`);
+    // Legacy remote=true filter dropped — workMode covers it.
     // employmentType filter intentionally omitted — see structuralWhere comment.
     if (dateCutoff) savedConditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) savedConditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
@@ -191,6 +200,7 @@ export async function GET(request: Request) {
       );
     }
     if (experienceLevel) savedConditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
+    if (workMode) savedConditions.push(Prisma.sql`j."workMode" = ${workMode}`);
     if (query) {
       savedConditions.push(Prisma.sql`j."searchVector" @@ plainto_tsquery('english', ${query})`);
     }
@@ -254,7 +264,7 @@ export async function GET(request: Request) {
     }
 
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
-    if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
+    // Legacy remote=true filter dropped — workMode covers it.
     // employmentType filter intentionally omitted — see structuralWhere comment.
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
@@ -276,6 +286,7 @@ export async function GET(request: Request) {
       );
     }
     if (experienceLevel) conditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
+    if (workMode) conditions.push(Prisma.sql`j."workMode" = ${workMode}`);
 
     const whereClause = Prisma.join(conditions, " AND ");
     const orderClause =
@@ -363,7 +374,7 @@ export async function GET(request: Request) {
       );
     }
     if (provider) conditions.push(Prisma.sql`j."provider" = ${provider}::"AtsProvider"`);
-    if (remote === "true") conditions.push(Prisma.sql`j."remote" = true`);
+    // Legacy remote=true filter dropped — workMode covers it.
     // employmentType filter intentionally omitted — see structuralWhere comment.
     if (dateCutoff) conditions.push(Prisma.sql`j."createdAt" >= ${dateCutoff}`);
     if (salaryMin !== undefined) conditions.push(Prisma.sql`j."salaryMin" >= ${salaryMin}`);
@@ -385,6 +396,7 @@ export async function GET(request: Request) {
       );
     }
     if (experienceLevel) conditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
+    if (workMode) conditions.push(Prisma.sql`j."workMode" = ${workMode}`);
 
     const whereClause = Prisma.join(conditions, " AND ");
 

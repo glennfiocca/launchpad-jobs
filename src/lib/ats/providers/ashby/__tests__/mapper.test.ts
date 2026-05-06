@@ -46,6 +46,7 @@ describe("mapAshbyJobToNormalized", () => {
       department: "Engineering",
       employmentType: "Full-time",
       experienceLevel: "senior",
+      workMode: "onsite",
       remote: false,
       absoluteUrl: "https://jobs.ashbyhq.com/testco/145ff46b",
       // applyUrl is intentionally null — the client.getJobs() pass re-derives

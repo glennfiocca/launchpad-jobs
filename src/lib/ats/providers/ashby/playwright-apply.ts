@@ -378,7 +378,12 @@ export async function fillQuestionField(
           `input[type="radio"][id="${escaped}"][value="${strValue.replace(/"/g, '\\"')}"]`,
       );
       if (radio) {
-        await radio.check();
+        // Ashby self-hosters (Cursor, Deel, etc.) wrap radio inputs in styled
+        // <label> elements that visually replace the native radio and
+        // intercept pointer events. Playwright's strict actionability check
+        // refuses to click the input directly. force:true skips the intercept
+        // check — the click still propagates to the wrapped radio.
+        await radio.check({ force: true });
         return true;
       }
       console.log(
@@ -388,7 +393,9 @@ export async function fillQuestionField(
     }
     if (type === "checkbox") {
       const isTrue = TRUTHY_STRINGS.has(strValue.toLowerCase());
-      await input.setChecked(isTrue);
+      // Same wrapper-label pattern applies to checkboxes (consent toggles,
+      // newsletter opt-ins). force:true for the same reason as radios.
+      await input.setChecked(isTrue, { force: true });
       return true;
     }
     if (type === "file") {

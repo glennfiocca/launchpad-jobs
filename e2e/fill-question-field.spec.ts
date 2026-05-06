@@ -39,6 +39,14 @@ test.describe("fillQuestionField — type-aware Ashby form fill", () => {
     expect(await page.isChecked('input[name=usAuth][value="true"]')).toBe(false);
   });
 
+  test("checks a label-wrapped radio when the input is intercepted (Cursor pattern)", async ({ page }) => {
+    await page.setContent(FIXTURE_HTML);
+    const ok = await fillQuestionField(page, "visaSponsorship", "false");
+    expect(ok).toBe(true);
+    expect(await page.isChecked('input[name=visaSponsorship][value="false"]')).toBe(true);
+    expect(await page.isChecked('input[name=visaSponsorship][value="true"]')).toBe(false);
+  });
+
   test("returns false when no radio matches the requested value", async ({ page }) => {
     await page.setContent(FIXTURE_HTML);
     const ok = await fillQuestionField(page, "usAuth", "maybe");

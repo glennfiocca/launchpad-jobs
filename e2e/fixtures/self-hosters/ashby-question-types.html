@@ -27,6 +27,22 @@
         Subscribe to the careers newsletter
       </label>
 
+      <!-- Radio pair with wrapper labels that intercept clicks (Cursor /
+           Deel pattern). The native input is hidden via CSS; the label
+           is the visible target. Playwright's strict actionability check
+           rejects clicks on the input — fix forces past the intercept. -->
+      <fieldset>
+        <legend>Do you require visa sponsorship?</legend>
+        <style>
+          .wrapped-radio input { position: absolute; opacity: 0; pointer-events: none; }
+          .wrapped-radio label { display: inline-block; padding: 8px 16px; cursor: pointer; }
+        </style>
+        <div class="wrapped-radio">
+          <label><input type="radio" name="visaSponsorship" value="true" /> Yes</label>
+          <label><input type="radio" name="visaSponsorship" value="false" /> No</label>
+        </div>
+      </fieldset>
+
       <!-- Native select -->
       <label for="referralSource">How did you hear about us?</label>
       <select name="referralSource" id="referralSource">

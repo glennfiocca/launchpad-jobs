@@ -925,21 +925,35 @@ function detectAtsProvider() {
  * @returns {Promise<boolean>} true if a tab switch was performed
  */
 async function tryActivateApplicationTab() {
-  const tabs = document.querySelectorAll('[role="tab"]')
-  if (tabs.length === 0) return false
+  // Try ARIA role=tab first (the canonical pattern), then fall back to <button>
+  // elements with matching text (Deel's modal uses <button> not [role=tab]).
+  const candidates = [
+    ...document.querySelectorAll('[role="tab"]'),
+    ...document.querySelectorAll('[role="dialog"] button, [aria-modal="true"] button'),
+    ...document.querySelectorAll('button'),
+  ]
+  if (candidates.length === 0) return false
 
-  for (const tab of tabs) {
-    const text = (tab.textContent ?? '').trim().toLowerCase()
-    // Match "Application", "Apply", or "Application form" — common labels
-    if (!/^(application|apply|application form)$/i.test(text) && !text.includes('application')) continue
-    const isActive = tab.getAttribute('aria-selected') === 'true'
+  const seen = new Set()
+  for (const el of candidates) {
+    if (seen.has(el)) continue
+    seen.add(el)
+    const text = (el.textContent ?? '').trim().toLowerCase()
+    // Match "Application", "Apply", "Application form" — case-insensitive
+    if (!/^(application|apply|application form)$/i.test(text)) continue
+    const isActive = el.getAttribute('aria-selected') === 'true'
     if (isActive) {
       console.log('[pipeline-operator] Application tab already active')
       return false
     }
     console.log('[pipeline-operator] Clicking Application tab:', text)
-    tab.click()
-    // Allow tab content to mount (fade-in animations + React hydration)
+    // Try CDP click (real mouse event) first — some sites only respond to
+    // trusted events. Fall back to DOM click if cdpClick is unavailable.
+    if (typeof cdpClick === 'function') {
+      await cdpClick(el)
+    } else {
+      el.click()
+    }
     await new Promise((r) => setTimeout(r, 600))
     return true
   }
@@ -1157,7 +1171,10 @@ async function fillAshbyForm(snap, token) {
           pipelineFillToken: token,
           pipelineFillExpiry: Date.now() + 120_000,
         })
-        el.click()
+        // Use CDP (real mouse event) — some sites (Deel) reject synthetic
+        // clicks via isTrusted checks, so the modal never opens. cdpClick
+        // falls through to el.click() if the debugger API isn't available.
+        await cdpClick(el)
         await new Promise((r) => setTimeout(r, 2000))
         // Self-hosters like Deel render the apply form inside a tabbed modal
         // (Overview | Application). Force the Application tab before the
@@ -1179,11 +1196,19 @@ async function fillAshbyForm(snap, token) {
   }
 
   if (!formEl) {
-    // Last resort: look for ANY visible input on the page
-    const anyInput = document.querySelector("input:not([type='hidden']):not([type='submit'])")
-    if (anyInput) {
-      console.log("[pipeline-operator] Found generic input as fallback:", anyInput.name, anyInput.id)
-      formEl = anyInput
+    // Last resort: look for ANY visible input on the page — but skip obvious
+    // non-form-field inputs (newsletter signup, search, cookie banner, etc.)
+    // Otherwise we end up "filling" the page footer subscribe-email field.
+    const NON_FORM_PATTERNS = /(subscribe|newsletter|search|footer|cookie|signup|hubspot|gdpr)/i
+    const candidates = document.querySelectorAll("input:not([type='hidden']):not([type='submit'])")
+    for (const cand of candidates) {
+      const id = (cand.id || '').toLowerCase()
+      const name = (cand.name || '').toLowerCase()
+      const placeholder = (cand.placeholder || '').toLowerCase()
+      if (NON_FORM_PATTERNS.test(id) || NON_FORM_PATTERNS.test(name) || NON_FORM_PATTERNS.test(placeholder)) continue
+      console.log("[pipeline-operator] Found generic input as fallback:", cand.name, cand.id)
+      formEl = cand
+      break
     }
   }
 

@@ -119,36 +119,56 @@ export class AshbyAtsClient implements AtsClient {
       .filter((job) => job.isListed)
       .map(mapAshbyJobToNormalized);
 
-    // Self-hoster URL rewrite. Companies with `customJobsPageUrl` set
-    // (Cursor, Deel, Skydio, ElevenLabs, etc.) have disabled the public
-    // Ashby board, so the default `https://jobs.ashbyhq.com/{board}/{uuid}`
-    // URL lands on a dead SPA shell. We run the full discovery inline:
+    // URL strategy for Ashby self-hosters
+    // ----------------------------------------------------------------
+    // Probe across all 22 self-hosters (scripts/_ashby-hosted-probe.ts)
+    // showed 19/20 render a working application form at the canonical
+    // hosted URL `https://jobs.ashbyhq.com/{board}/{uuid}`. Cursor is
+    // the lone exception — its hosted URL serves a 6KB empty SPA
+    // shell, while cursor.com/careers/{slug} renders the form inline.
     //
+    // Default = use the hosted URL for both `absoluteUrl` (the listing
+    // link users click on Pipeline) and `applyUrl` (the operator-
+    // assisted apply target). This is:
+    //   - Compliance-cleaner: users see Ashby's canonical listing,
+    //     not the company's branded variant with custom EEOC text /
+    //     consent flows / regional injections.
+    //   - More reliable: no flash-redirect UX from
+    //     elevenlabs.io/careers (listing index, no form) → the hosted
+    //     URL.
+    //   - Simpler: skips the discoverAshbyCustomJobMap GraphQL +
+    //     careers-page scrape entirely for default-mode boards.
+    //
+    // Override list = boards where the hosted URL is dead/empty and we
+    // must fall back to the company's own careers page URL. Add a
+    // board here only after confirming the hosted URL doesn't render.
+    const SELF_HOSTER_URL_OVERRIDES = new Set<string>([
+      "cursor", // empty hosted shell; cursor.com/careers/{slug} works
+    ]);
+
+    if (!isApplyCustomUrlsEnabled()) return jobs;
+
+    if (!SELF_HOSTER_URL_OVERRIDES.has(this.boardName)) {
+      // Default path: hosted Ashby URL for both fields. The mapper
+      // already set absoluteUrl from Ashby's `jobUrl` field (which is
+      // `jobs.ashbyhq.com/{board}/{uuid}`). Mirror it onto applyUrl.
+      return jobs.map((job) =>
+        job.absoluteUrl ? { ...job, applyUrl: job.absoluteUrl } : job,
+      );
+    }
+
+    // Override path: discover the self-hoster careers URL inline.
     //   1. GraphQL → org info (~500ms)
     //   2. Scrape careers index for /careers/{slug} links (~1s)
-    //   3. Fetch each per-slug page, extract embedded Ashby UUID (~1s
-    //      each, 4-concurrent)
+    //   3. Fetch each per-slug page, extract embedded Ashby UUID
+    //      (~1s each, 4-concurrent)
     //   4. Use the slug URL when matched, else `?ashby_jid={uuid}` fallback
-    //
-    // Cost per self-hoster:
-    //   - Slug-style (Cursor ~22s, Linear ~5s): pays for clean slug URLs
-    //     on every job, including new ones.
-    //   - Query-param-style (~17 others): scrape returns 0 slugs, skips
-    //     per-slug fetching, completes in ~1s.
-    //
-    // For non-self-hosters, returns null after the GraphQL check (~500ms)
-    // and the loop below short-circuits.
-    if (!isApplyCustomUrlsEnabled()) return jobs;
     const customMap = await discoverAshbyCustomJobMap(this.boardName);
     if (!customMap) return jobs;
-
     return jobs.map((job) => {
       const slugUrl = customMap.byUuid.get(job.externalId);
       const fallbackUrl = customMap.buildFallbackUrl(job.externalId);
       const newUrl = slugUrl ?? fallbackUrl;
-      // Self-hosters serve the apply form on the same page as the listing.
-      // Setting applyUrl alongside absoluteUrl keeps the Playwright apply
-      // path + JWT-snapshot manualApplyUrl pointed at the live page.
       return newUrl
         ? { ...job, absoluteUrl: newUrl, applyUrl: newUrl }
         : job;

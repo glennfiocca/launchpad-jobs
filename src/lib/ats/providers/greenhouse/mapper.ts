@@ -1,6 +1,7 @@
 import type { NormalizedJob, NormalizedQuestion, NormalizedFieldType } from "../../types";
 import type { GreenhouseJob, GreenhouseQuestion } from "./types";
 import { classifyLocation } from "@/lib/location-classifier";
+import { inferEmploymentTypeFromTitle } from "@/lib/employment-type";
 import { inferExperienceLevelFromTitle } from "@/lib/experience-level";
 import { inferWorkModeFromJob } from "@/lib/work-mode";
 
@@ -46,7 +47,11 @@ export function mapGreenhouseJobToNormalized(
     title: ghJob.title,
     location,
     department: extractDepartment(ghJob.departments),
-    employmentType: null, // Greenhouse public API does not expose this
+    // Greenhouse public API doesn't expose employment type as a structured
+    // field — infer from title (intern/co-op → Internship, contract* →
+    // Contract, etc., default Full-time). Mirrors the legacy sync at
+    // src/lib/greenhouse/sync.ts.
+    employmentType: inferEmploymentTypeFromTitle(ghJob.title),
     // Seniority isn't exposed either — infer from title. Always populated
     // (heuristic returns "mid" by default).
     experienceLevel: inferExperienceLevelFromTitle(ghJob.title),

@@ -18,7 +18,13 @@ interface ProfessionalFormState {
   currentTitle: string;
   currentCompany: string;
   yearsExperience: string;
+  // Application templates — referenced by the autofill engine when populating
+  // optional cover-letter and "why are you looking" fields on ATS forms.
+  coverLetterIntro: string;
+  whyImLookingTemplate: string;
 }
+
+const TEMPLATE_MAX = 4000;
 
 function initState(data: UserProfile | null): ProfessionalFormState {
   return {
@@ -30,6 +36,8 @@ function initState(data: UserProfile | null): ProfessionalFormState {
     currentTitle: data?.currentTitle ?? "",
     currentCompany: data?.currentCompany ?? "",
     yearsExperience: data?.yearsExperience?.toString() ?? "",
+    coverLetterIntro: data?.coverLetterIntro ?? "",
+    whyImLookingTemplate: data?.whyImLookingTemplate ?? "",
   };
 }
 
@@ -58,6 +66,9 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
       currentTitle: form.currentTitle || undefined,
       currentCompany: form.currentCompany || undefined,
       yearsExperience: form.yearsExperience ? Number(form.yearsExperience) : undefined,
+      // Empty string → null on the server so we don't store blank templates.
+      coverLetterIntro: form.coverLetterIntro || null,
+      whyImLookingTemplate: form.whyImLookingTemplate || null,
     };
 
     const payload = buildPayload(getIdentityBase(initialData), slice);
@@ -157,6 +168,46 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
             value={form.portfolioUrl}
             onChange={(e) => set("portfolioUrl", e.target.value)}
             placeholder="https://yoursite.com"
+          />
+        </div>
+      </div>
+
+      <div className={sectionClass}>
+        <h2 className={sectionTitleClass}>Application Templates</h2>
+        <p className="text-xs text-zinc-500 -mt-2">
+          These are referenced by the autofill engine when populating optional
+          cover-letter and &ldquo;why are you looking&rdquo; fields on application forms.
+        </p>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className={`${labelClass} mb-0`}>Cover Letter Intro</label>
+            <span className="text-xs text-zinc-600">
+              {form.coverLetterIntro.length} / {TEMPLATE_MAX}
+            </span>
+          </div>
+          <textarea
+            className={`${inputClass} resize-y`}
+            rows={5}
+            maxLength={TEMPLATE_MAX}
+            value={form.coverLetterIntro}
+            onChange={(e) => set("coverLetterIntro", e.target.value)}
+            placeholder="Hi — I'm a software engineer with 5 years of experience..."
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className={`${labelClass} mb-0`}>Why I&apos;m Looking</label>
+            <span className="text-xs text-zinc-600">
+              {form.whyImLookingTemplate.length} / {TEMPLATE_MAX}
+            </span>
+          </div>
+          <textarea
+            className={`${inputClass} resize-y`}
+            rows={5}
+            maxLength={TEMPLATE_MAX}
+            value={form.whyImLookingTemplate}
+            onChange={(e) => set("whyImLookingTemplate", e.target.value)}
+            placeholder="I'm exploring roles where..."
           />
         </div>
       </div>

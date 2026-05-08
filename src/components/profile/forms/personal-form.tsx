@@ -41,7 +41,73 @@ interface PersonalFormState {
   locationPostalCode: string;
   locationLat: string;
   locationLng: string;
+  // Social / professional URLs (10 new + 3 existing). Stored on the personal
+  // tab because they're identity-attached profile metadata, not job-search prefs.
+  linkedinUrl: string;
+  githubUrl: string;
+  portfolioUrl: string;
+  twitterUrl: string;
+  stackOverflowUrl: string;
+  kaggleUrl: string;
+  huggingFaceUrl: string;
+  mediumUrl: string;
+  devToUrl: string;
+  dribbbleUrl: string;
+  behanceUrl: string;
+  googleScholarUrl: string;
+  youtubeUrl: string;
 }
+
+// URL field groups for the Social Links collapsible section. Order within each
+// group is the rendered order; group-name is the subheader label.
+type UrlField = Exclude<keyof PersonalFormState,
+  | "firstName" | "lastName" | "preferredFirstName" | "email" | "phone"
+  | "location" | "locationPlaceId" | "locationFormatted" | "locationStreet"
+  | "locationCity" | "locationState" | "locationPostalCode" | "locationLat" | "locationLng">;
+
+const SOCIAL_GROUPS: ReadonlyArray<{
+  title: string;
+  fields: ReadonlyArray<{ key: UrlField; label: string; placeholder: string }>;
+}> = [
+  {
+    title: "Code",
+    fields: [
+      { key: "githubUrl", label: "GitHub", placeholder: "https://github.com/yourname" },
+      { key: "stackOverflowUrl", label: "Stack Overflow", placeholder: "https://stackoverflow.com/users/123/yourname" },
+      { key: "kaggleUrl", label: "Kaggle", placeholder: "https://kaggle.com/yourname" },
+      { key: "huggingFaceUrl", label: "Hugging Face", placeholder: "https://huggingface.co/yourname" },
+    ],
+  },
+  {
+    title: "Writing",
+    fields: [
+      { key: "mediumUrl", label: "Medium", placeholder: "https://medium.com/@yourname" },
+      { key: "devToUrl", label: "Dev.to", placeholder: "https://dev.to/yourname" },
+    ],
+  },
+  {
+    title: "Design",
+    fields: [
+      { key: "dribbbleUrl", label: "Dribbble", placeholder: "https://dribbble.com/yourname" },
+      { key: "behanceUrl", label: "Behance", placeholder: "https://behance.net/yourname" },
+    ],
+  },
+  {
+    title: "Research",
+    fields: [
+      { key: "googleScholarUrl", label: "Google Scholar", placeholder: "https://scholar.google.com/citations?user=..." },
+    ],
+  },
+  {
+    title: "Social",
+    fields: [
+      { key: "linkedinUrl", label: "LinkedIn", placeholder: "https://linkedin.com/in/yourname" },
+      { key: "twitterUrl", label: "Twitter / X", placeholder: "https://twitter.com/yourname" },
+      { key: "youtubeUrl", label: "YouTube", placeholder: "https://youtube.com/@yourname" },
+      { key: "portfolioUrl", label: "Portfolio / Website", placeholder: "https://yoursite.com" },
+    ],
+  },
+];
 
 function initState(data: ProfileWithStructured): PersonalFormState {
   return {
@@ -59,6 +125,19 @@ function initState(data: ProfileWithStructured): PersonalFormState {
     locationPostalCode: data?.locationPostalCode ?? "",
     locationLat: data?.locationLat?.toString() ?? "",
     locationLng: data?.locationLng?.toString() ?? "",
+    linkedinUrl: data?.linkedinUrl ?? "",
+    githubUrl: data?.githubUrl ?? "",
+    portfolioUrl: data?.portfolioUrl ?? "",
+    twitterUrl: data?.twitterUrl ?? "",
+    stackOverflowUrl: data?.stackOverflowUrl ?? "",
+    kaggleUrl: data?.kaggleUrl ?? "",
+    huggingFaceUrl: data?.huggingFaceUrl ?? "",
+    mediumUrl: data?.mediumUrl ?? "",
+    devToUrl: data?.devToUrl ?? "",
+    dribbbleUrl: data?.dribbbleUrl ?? "",
+    behanceUrl: data?.behanceUrl ?? "",
+    googleScholarUrl: data?.googleScholarUrl ?? "",
+    youtubeUrl: data?.youtubeUrl ?? "",
   };
 }
 
@@ -70,6 +149,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<PersonalFormState>(initState(initialData));
   const [saving, setSaving] = useState(false);
+  const [socialLinksOpen, setSocialLinksOpen] = useState(false);
 
   const set = (field: keyof PersonalFormState, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -78,7 +158,9 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
     e.preventDefault();
     setSaving(true);
 
-    // Personal tab IS the source of truth for identity fields.
+    // Personal tab IS the source of truth for identity fields. Social URLs are
+    // sent as "" rather than undefined so the API's "" → null normalizer can
+    // clear them on the server when the user empties an input.
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
@@ -94,6 +176,19 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
       locationPostalCode: form.locationPostalCode || undefined,
       locationLat: form.locationLat ? Number(form.locationLat) : undefined,
       locationLng: form.locationLng ? Number(form.locationLng) : undefined,
+      linkedinUrl: form.linkedinUrl,
+      githubUrl: form.githubUrl,
+      portfolioUrl: form.portfolioUrl,
+      twitterUrl: form.twitterUrl,
+      stackOverflowUrl: form.stackOverflowUrl,
+      kaggleUrl: form.kaggleUrl,
+      huggingFaceUrl: form.huggingFaceUrl,
+      mediumUrl: form.mediumUrl,
+      devToUrl: form.devToUrl,
+      dribbbleUrl: form.dribbbleUrl,
+      behanceUrl: form.behanceUrl,
+      googleScholarUrl: form.googleScholarUrl,
+      youtubeUrl: form.youtubeUrl,
     };
 
     const result = await submitProfilePatch(payload);
@@ -192,6 +287,43 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
           />
         </div>
       </div>
+
+      <details className={sectionClass} open={socialLinksOpen}>
+        <summary
+          className="cursor-pointer list-none flex items-center justify-between"
+          onClick={(e) => {
+            e.preventDefault();
+            setSocialLinksOpen((v) => !v);
+          }}
+        >
+          <h2 className={`${sectionTitleClass} mb-0`}>Social Links</h2>
+          <span className="text-xs text-zinc-500">{socialLinksOpen ? "Hide" : "Show"}</span>
+        </summary>
+        <p className="text-xs text-zinc-500 -mt-1">
+          Optional — used to autofill applications and link from your public profile.
+        </p>
+        {SOCIAL_GROUPS.map((group) => (
+          <div key={group.title} className="space-y-3 pt-2">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">
+              {group.title}
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              {group.fields.map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className={labelClass}>{label}</label>
+                  <input
+                    className={inputClass}
+                    type="url"
+                    value={form[key]}
+                    onChange={(e) => set(key, e.target.value)}
+                    placeholder={placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </details>
 
       <SaveButton saving={saving} />
     </form>

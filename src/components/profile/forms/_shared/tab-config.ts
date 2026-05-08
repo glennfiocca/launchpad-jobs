@@ -2,6 +2,18 @@
 // The list is exported as a const tuple so the union type can be derived
 // from it (no risk of drift between runtime and types).
 
+import {
+  Briefcase,
+  FileText,
+  FolderGit2,
+  GraduationCap,
+  History,
+  type LucideIcon,
+  SlidersHorizontal,
+  Sparkles,
+  User,
+} from "lucide-react";
+
 export const TAB_KEYS = [
   "personal",
   "professional",
@@ -26,6 +38,17 @@ export const TAB_LABELS: Record<TabKey, string> = {
   "projects-certs": "Projects & Certs",
   resume: "Resume",
   preferences: "Preferences",
+};
+
+export const TAB_ICONS: Record<TabKey, LucideIcon> = {
+  personal: User,
+  professional: Briefcase,
+  "work-history": History,
+  education: GraduationCap,
+  "skills-languages": Sparkles,
+  "projects-certs": FolderGit2,
+  resume: FileText,
+  preferences: SlidersHorizontal,
 };
 
 export function isTabKey(value: string | null | undefined): value is TabKey {

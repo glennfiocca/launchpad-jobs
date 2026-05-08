@@ -12,3 +12,10 @@ export const sectionTitleClass = "text-white font-semibold text-sm uppercase tra
 
 export const submitButtonClass =
   "bg-white text-black font-semibold rounded-xl px-6 py-3 hover:bg-zinc-100 transition-colors disabled:opacity-50 text-sm";
+
+export const gridTwoCol = "grid grid-cols-1 md:grid-cols-2 gap-4";
+export const gridThreeCol = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+export const formStackClass = "space-y-6";
+export const subsectionLabelClass = "text-xs uppercase tracking-wide text-zinc-500";
+export const pageHeaderTitleClass = "text-2xl font-semibold text-white";
+export const pageHeaderSubtitleClass = "text-zinc-400 mt-1 text-sm";

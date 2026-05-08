@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ProfileTabs } from "@/components/profile/profile-tabs";
+import { ProfilePageHeader } from "@/components/profile/profile-page-header";
+import { computeCompletionScore } from "@/lib/profile/completeness";
 
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
@@ -12,15 +14,24 @@ export default async function ProfilePage() {
     where: { userId: session.user.id },
   });
 
+  // Compute completion score client-side from related counts so the header
+  // meter matches the score returned by GET /api/profile.
+  let completionPercent: number | null = null;
+  if (profile) {
+    const [workCount, skillCount] = await Promise.all([
+      db.workExperience.count({ where: { profileId: profile.id } }),
+      db.skill.count({ where: { profileId: profile.id } }),
+    ]);
+    completionPercent = computeCompletionScore(profile, {
+      workExperiences: workCount,
+      skills: skillCount,
+    });
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-black">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-white">Your Profile</h1>
-          <p className="text-zinc-400 mt-1">
-            Fill this out once. We&apos;ll use it to automatically apply to jobs for you.
-          </p>
-        </div>
+      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+        <ProfilePageHeader completionPercent={completionPercent} />
         <ProfileTabs profile={profile} />
       </div>
     </div>

@@ -16,6 +16,8 @@ const EMPTY_PROFILE: RelevanceProfile = {
   fieldOfStudy: null,
   desiredSalaryMin: null,
   desiredSalaryMax: null,
+  targetRoles: [],
+  desiredEmploymentTypes: [],
 };
 
 // Helper that overrides only the fields under test.

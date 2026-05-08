@@ -101,6 +101,8 @@ export async function GET(request: Request) {
           fieldOfStudy: true,
           desiredSalaryMin: true,
           desiredSalaryMax: true,
+          targetRoles: true,
+          desiredEmploymentTypes: true,
         },
       });
       if (profile) {

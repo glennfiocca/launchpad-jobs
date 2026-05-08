@@ -33,4 +33,4 @@ export const DATA_EXPORT_RATE_PER_HOUR = 1;
 export const DATA_EXPORT_WINDOW_HOUR_MS = 60 * 60 * 1000;
 // Schema version stamped into every export. Bump when shape changes so
 // downstream consumers can branch.
-export const DATA_EXPORT_SCHEMA_VERSION = 1 as const;
+export const DATA_EXPORT_SCHEMA_VERSION = 2 as const;

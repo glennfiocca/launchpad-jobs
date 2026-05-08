@@ -88,6 +88,84 @@ export interface ExportLoginEvent {
   provider: string | null;
 }
 
+export interface ExportSkill {
+  id: string;
+  name: string;
+  category: string;
+  proficiency: number;
+  yearsUsed: number | null;
+  order: number;
+}
+
+export interface ExportWorkExperience {
+  id: string;
+  title: string;
+  company: string;
+  companyUrl: string | null;
+  startDate: string;
+  endDate: string | null;
+  isCurrent: boolean;
+  location: string | null;
+  employmentType: string;
+  description: string | null;
+  order: number;
+}
+
+export interface ExportEducationEntry {
+  id: string;
+  universityId: string | null;
+  schoolName: string | null;
+  degree: string;
+  fieldOfStudy: string;
+  startYear: number | null;
+  endYear: number | null;
+  gpa: number | null;
+  honors: string | null;
+  activities: string | null;
+  order: number;
+}
+
+export interface ExportProject {
+  id: string;
+  name: string;
+  url: string | null;
+  repoUrl: string | null;
+  description: string | null;
+  technologies: string[];
+  role: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  isOngoing: boolean;
+  order: number;
+}
+
+export interface ExportCertification {
+  id: string;
+  name: string;
+  issuer: string;
+  issueDate: string | null;
+  expiryDate: string | null;
+  credentialUrl: string | null;
+  credentialId: string | null;
+  order: number;
+}
+
+export interface ExportSpokenLanguage {
+  id: string;
+  name: string;
+  proficiency: string;
+  order: number;
+}
+
+export interface ExportProfileChildren {
+  skills: ExportSkill[];
+  workExperiences: ExportWorkExperience[];
+  educationEntries: ExportEducationEntry[];
+  projects: ExportProject[];
+  certifications: ExportCertification[];
+  spokenLanguages: ExportSpokenLanguage[];
+}
+
 export interface ExportProfile {
   firstName: string;
   lastName: string;
@@ -98,6 +176,17 @@ export interface ExportProfile {
   linkedinUrl: string | null;
   githubUrl: string | null;
   portfolioUrl: string | null;
+  // Phase 5 — extended professional / social links
+  twitterUrl: string | null;
+  stackOverflowUrl: string | null;
+  dribbbleUrl: string | null;
+  behanceUrl: string | null;
+  mediumUrl: string | null;
+  devToUrl: string | null;
+  googleScholarUrl: string | null;
+  huggingFaceUrl: string | null;
+  kaggleUrl: string | null;
+  youtubeUrl: string | null;
   headline: string | null;
   summary: string | null;
   currentTitle: string | null;
@@ -121,9 +210,32 @@ export interface ExportProfile {
   resumeData: string | null;
   resumeData_omitted_due_to_size?: true;
   customAnswers: unknown;
+  // Phase 5 — job-search preferences
+  noticePeriodWeeks: number | null;
+  earliestStartDate: string | null;
+  targetRoles: string[];
+  targetIndustries: string[];
+  companySizePreferences: string[];
+  relocationOpen: boolean;
+  relocationCities: string[];
+  currencyPreference: string;
+  equityImportance: string | null;
+  desiredEmploymentTypes: string[];
+  searchStatus: string;
+  // Phase 5 — compliance
+  hasDriversLicense: boolean | null;
+  willingBackgroundCheck: boolean | null;
+  willingDrugTest: boolean | null;
+  securityClearance: string;
+  eligibleCountries: string[];
+  // Phase 5 — application templates
+  coverLetterIntro: string | null;
+  whyImLookingTemplate: string | null;
   isComplete: boolean;
   createdAt: string;
   updatedAt: string;
+  // Phase 5 — child entities owned by this profile.
+  children: ExportProfileChildren;
 }
 
 export interface ExportPayload {
@@ -164,6 +276,12 @@ function isoStrict(d: Date): string {
  * after serialization — see stripResumeBinary for the size-driven fallback.
  */
 export async function buildExportPayload(userId: string): Promise<ExportPayload> {
+  // Child resources are scoped via `profile: { userId }` to avoid a separate
+  // profileId lookup round-trip. Stable ordering: order ASC, then createdAt
+  // ASC (matches the editor's display order).
+  const childWhere = { profile: { userId } } as const;
+  const childOrderBy = [{ order: "asc" as const }, { createdAt: "asc" as const }];
+
   const [
     user,
     profile,
@@ -173,6 +291,12 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
     subscription,
     referralsSent,
     loginEvents,
+    skills,
+    workExperiences,
+    educationEntries,
+    projects,
+    certifications,
+    spokenLanguages,
   ] = await Promise.all([
     db.user.findUnique({
       where: { id: userId },
@@ -224,6 +348,12 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
         provider: true,
       },
     }),
+    db.skill.findMany({ where: childWhere, orderBy: childOrderBy }),
+    db.workExperience.findMany({ where: childWhere, orderBy: childOrderBy }),
+    db.educationEntry.findMany({ where: childWhere, orderBy: childOrderBy }),
+    db.project.findMany({ where: childWhere, orderBy: childOrderBy }),
+    db.certification.findMany({ where: childWhere, orderBy: childOrderBy }),
+    db.spokenLanguage.findMany({ where: childWhere, orderBy: childOrderBy }),
   ]);
 
   if (!user) {
@@ -310,6 +440,77 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
       }
     : { status: user.subscriptionStatus, currentPeriodEnd: null, cancelAtPeriodEnd: false };
 
+  // Child-entity serializers strip plumbing fields (profileId, createdAt,
+  // updatedAt) — those are internal book-keeping, not user-facing data.
+  const exportSkills: ExportSkill[] = skills.map((s) => ({
+    id: s.id,
+    name: s.name,
+    category: s.category,
+    proficiency: s.proficiency,
+    yearsUsed: s.yearsUsed,
+    order: s.order,
+  }));
+
+  const exportWorkExperiences: ExportWorkExperience[] = workExperiences.map((w) => ({
+    id: w.id,
+    title: w.title,
+    company: w.company,
+    companyUrl: w.companyUrl,
+    startDate: isoStrict(w.startDate),
+    endDate: iso(w.endDate),
+    isCurrent: w.isCurrent,
+    location: w.location,
+    employmentType: w.employmentType,
+    description: w.description,
+    order: w.order,
+  }));
+
+  const exportEducationEntries: ExportEducationEntry[] = educationEntries.map((e) => ({
+    id: e.id,
+    universityId: e.universityId,
+    schoolName: e.schoolName,
+    degree: e.degree,
+    fieldOfStudy: e.fieldOfStudy,
+    startYear: e.startYear,
+    endYear: e.endYear,
+    gpa: e.gpa,
+    honors: e.honors,
+    activities: e.activities,
+    order: e.order,
+  }));
+
+  const exportProjects: ExportProject[] = projects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    url: p.url,
+    repoUrl: p.repoUrl,
+    description: p.description,
+    technologies: p.technologies,
+    role: p.role,
+    startDate: iso(p.startDate),
+    endDate: iso(p.endDate),
+    isOngoing: p.isOngoing,
+    order: p.order,
+  }));
+
+  const exportCertifications: ExportCertification[] = certifications.map((c) => ({
+    id: c.id,
+    name: c.name,
+    issuer: c.issuer,
+    issueDate: iso(c.issueDate),
+    expiryDate: iso(c.expiryDate),
+    credentialUrl: c.credentialUrl,
+    credentialId: c.credentialId,
+    order: c.order,
+  }));
+
+  const exportSpokenLanguages: ExportSpokenLanguage[] = spokenLanguages.map((l) => ({
+    id: l.id,
+    name: l.name,
+    proficiency: l.proficiency,
+    order: l.order,
+  }));
+
   const exportProfile: ExportProfile | null = profile
     ? {
         firstName: profile.firstName,
@@ -321,6 +522,16 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
         linkedinUrl: profile.linkedinUrl,
         githubUrl: profile.githubUrl,
         portfolioUrl: profile.portfolioUrl,
+        twitterUrl: profile.twitterUrl,
+        stackOverflowUrl: profile.stackOverflowUrl,
+        dribbbleUrl: profile.dribbbleUrl,
+        behanceUrl: profile.behanceUrl,
+        mediumUrl: profile.mediumUrl,
+        devToUrl: profile.devToUrl,
+        googleScholarUrl: profile.googleScholarUrl,
+        huggingFaceUrl: profile.huggingFaceUrl,
+        kaggleUrl: profile.kaggleUrl,
+        youtubeUrl: profile.youtubeUrl,
         headline: profile.headline,
         summary: profile.summary,
         currentTitle: profile.currentTitle,
@@ -346,9 +557,35 @@ export async function buildExportPayload(userId: string): Promise<ExportPayload>
           ? Buffer.from(profile.resumeData).toString("base64")
           : null,
         customAnswers: profile.customAnswers ?? null,
+        noticePeriodWeeks: profile.noticePeriodWeeks,
+        earliestStartDate: iso(profile.earliestStartDate),
+        targetRoles: profile.targetRoles,
+        targetIndustries: profile.targetIndustries,
+        companySizePreferences: profile.companySizePreferences,
+        relocationOpen: profile.relocationOpen,
+        relocationCities: profile.relocationCities,
+        currencyPreference: profile.currencyPreference,
+        equityImportance: profile.equityImportance,
+        desiredEmploymentTypes: profile.desiredEmploymentTypes,
+        searchStatus: profile.searchStatus,
+        hasDriversLicense: profile.hasDriversLicense,
+        willingBackgroundCheck: profile.willingBackgroundCheck,
+        willingDrugTest: profile.willingDrugTest,
+        securityClearance: profile.securityClearance,
+        eligibleCountries: profile.eligibleCountries,
+        coverLetterIntro: profile.coverLetterIntro,
+        whyImLookingTemplate: profile.whyImLookingTemplate,
         isComplete: profile.isComplete,
         createdAt: isoStrict(profile.createdAt),
         updatedAt: isoStrict(profile.updatedAt),
+        children: {
+          skills: exportSkills,
+          workExperiences: exportWorkExperiences,
+          educationEntries: exportEducationEntries,
+          projects: exportProjects,
+          certifications: exportCertifications,
+          spokenLanguages: exportSpokenLanguages,
+        },
       }
     : null;
 

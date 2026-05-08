@@ -42,7 +42,20 @@ export async function deleteUserAccount(userId: string): Promise<void> {
       },
     });
 
-    // 2. Wipe UserProfile PII if profile exists. customAnswers needs the
+    // 2. Drop profile child entities (Phase 1 expansion). The cascade FK
+    //    only fires on profile deletion, but this is a SOFT delete that
+    //    retains the profile row, so we must wipe children explicitly.
+    //    Filter via `profile: { userId }` so we don't need a separate
+    //    profileId lookup round-trip.
+    const childWhere = { profile: { userId } };
+    await tx.skill.deleteMany({ where: childWhere });
+    await tx.workExperience.deleteMany({ where: childWhere });
+    await tx.educationEntry.deleteMany({ where: childWhere });
+    await tx.project.deleteMany({ where: childWhere });
+    await tx.certification.deleteMany({ where: childWhere });
+    await tx.spokenLanguage.deleteMany({ where: childWhere });
+
+    // 3. Wipe UserProfile PII if profile exists. customAnswers needs the
     //    explicit JsonNull sentinel — a bare `null` or `undefined` is not
     //    a SQL-NULL write in Prisma's typed JSON field semantics.
     await tx.userProfile.updateMany({
@@ -63,29 +76,61 @@ export async function deleteUserAccount(userId: string): Promise<void> {
         linkedinUrl: null,
         githubUrl: null,
         portfolioUrl: null,
+        // Phase 5 — extended social links (10 fields).
+        twitterUrl: null,
+        stackOverflowUrl: null,
+        dribbbleUrl: null,
+        behanceUrl: null,
+        mediumUrl: null,
+        devToUrl: null,
+        googleScholarUrl: null,
+        huggingFaceUrl: null,
+        kaggleUrl: null,
+        youtubeUrl: null,
         headline: null,
         summary: null,
         resumeData: null,
         resumeUrl: null,
         resumeFileName: null,
         customAnswers: Prisma.JsonNull,
+        // Phase 5 — application templates.
+        coverLetterIntro: null,
+        whyImLookingTemplate: null,
+        // Phase 5 — job-search preferences (reset to schema defaults).
+        noticePeriodWeeks: null,
+        earliestStartDate: null,
+        targetRoles: [],
+        targetIndustries: [],
+        companySizePreferences: [],
+        relocationCities: [],
+        desiredEmploymentTypes: [],
+        eligibleCountries: [],
+        relocationOpen: false,
+        searchStatus: "open",
+        securityClearance: "none",
+        currencyPreference: "USD",
+        // Phase 5 — compliance answers (nullable booleans + equity).
+        hasDriversLicense: null,
+        willingBackgroundCheck: null,
+        willingDrugTest: null,
+        equityImportance: null,
         isComplete: false,
       },
     });
 
-    // 3. Drop OAuth account links — these hold refresh/access tokens (PII).
+    // 4. Drop OAuth account links — these hold refresh/access tokens (PII).
     await tx.account.deleteMany({ where: { userId } });
 
-    // 4. Drop pending magic-link verification tokens for the old email.
+    // 5. Drop pending magic-link verification tokens for the old email.
     if (oldEmail) {
       await tx.verificationToken.deleteMany({ where: { identifier: oldEmail } });
     }
 
-    // 5. Force sign-out everywhere — drop all sessions
+    // 6. Force sign-out everywhere — drop all sessions
     await tx.session.deleteMany({ where: { userId } });
   });
 
-  // 4. Best-effort Stripe cancellation (outside the transaction so a Stripe
+  // 7. Best-effort Stripe cancellation (outside the transaction so a Stripe
   //    failure cannot roll back the local anonymization).
   if (subscription?.stripeSubscriptionId) {
     try {

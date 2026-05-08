@@ -8,6 +8,13 @@ type TxClient = {
   session: { deleteMany: ReturnType<typeof vi.fn> };
   account: { deleteMany: ReturnType<typeof vi.fn> };
   verificationToken: { deleteMany: ReturnType<typeof vi.fn> };
+  // Phase 5 — profile child entities deleted explicitly during soft-delete.
+  skill: { deleteMany: ReturnType<typeof vi.fn> };
+  workExperience: { deleteMany: ReturnType<typeof vi.fn> };
+  educationEntry: { deleteMany: ReturnType<typeof vi.fn> };
+  project: { deleteMany: ReturnType<typeof vi.fn> };
+  certification: { deleteMany: ReturnType<typeof vi.fn> };
+  spokenLanguage: { deleteMany: ReturnType<typeof vi.fn> };
 };
 
 const txClient: TxClient = {
@@ -16,6 +23,12 @@ const txClient: TxClient = {
   session: { deleteMany: vi.fn() },
   account: { deleteMany: vi.fn() },
   verificationToken: { deleteMany: vi.fn() },
+  skill: { deleteMany: vi.fn() },
+  workExperience: { deleteMany: vi.fn() },
+  educationEntry: { deleteMany: vi.fn() },
+  project: { deleteMany: vi.fn() },
+  certification: { deleteMany: vi.fn() },
+  spokenLanguage: { deleteMany: vi.fn() },
 };
 
 vi.mock("@prisma/client", () => ({
@@ -61,11 +74,23 @@ beforeEach(() => {
   txClient.session.deleteMany.mockReset();
   txClient.account.deleteMany.mockReset();
   txClient.verificationToken.deleteMany.mockReset();
+  txClient.skill.deleteMany.mockReset();
+  txClient.workExperience.deleteMany.mockReset();
+  txClient.educationEntry.deleteMany.mockReset();
+  txClient.project.deleteMany.mockReset();
+  txClient.certification.deleteMany.mockReset();
+  txClient.spokenLanguage.deleteMany.mockReset();
   txClient.user.update.mockResolvedValue({});
   txClient.userProfile.updateMany.mockResolvedValue({ count: 1 });
   txClient.session.deleteMany.mockResolvedValue({ count: 2 });
   txClient.account.deleteMany.mockResolvedValue({ count: 1 });
   txClient.verificationToken.deleteMany.mockResolvedValue({ count: 0 });
+  txClient.skill.deleteMany.mockResolvedValue({ count: 0 });
+  txClient.workExperience.deleteMany.mockResolvedValue({ count: 0 });
+  txClient.educationEntry.deleteMany.mockResolvedValue({ count: 0 });
+  txClient.project.deleteMany.mockResolvedValue({ count: 0 });
+  txClient.certification.deleteMany.mockResolvedValue({ count: 0 });
+  txClient.spokenLanguage.deleteMany.mockResolvedValue({ count: 0 });
   mockDb.subscription.findUnique.mockResolvedValue(null);
   mockDb.user.findUnique.mockResolvedValue({ email: "old@example.com" });
   mockDb.$transaction.mockImplementation(

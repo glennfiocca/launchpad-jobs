@@ -10,7 +10,16 @@ export interface RelevanceProfile {
   fieldOfStudy: string | null;
   desiredSalaryMin: number | null;
   desiredSalaryMax: number | null;
+  // Phase 5 additions (additive — empty arrays are treated as "no preference").
+  targetRoles: string[];
+  desiredEmploymentTypes: string[];
 }
+
+// Cap on cumulative `targetRoles` boost to prevent keyword-stuffing the title.
+// 2 matching keywords saturate it; further matches are ignored.
+const TARGET_ROLE_BOOST_PER_MATCH = 15;
+const TARGET_ROLE_BOOST_CAP = 30;
+const EMPLOYMENT_TYPE_BOOST = 10;
 
 /** Fallback ORDER BY when no profile signals are available. */
 const RECENCY_FALLBACK = Prisma.sql`j."createdAt" DESC NULLS LAST`;
@@ -63,7 +72,29 @@ function buildProfileScoreParts(profile: RelevanceProfile): Prisma.Sql[] {
     );
   }
 
-  // -- 4. Recency boost (up to 15 pts) --
+  // -- 4. Target-role title match (up to +30 total) --
+  // For each keyword, +15 if it appears as a case-insensitive substring of
+  // j."title". Sum across keywords is capped via LEAST(..., 30) so a profile
+  // listing 5 overlapping keywords doesn't dominate the score.
+  if (profile.targetRoles.length > 0) {
+    const perKeywordParts: Prisma.Sql[] = profile.targetRoles.map((kw) => {
+      const pattern = "%" + kw + "%";
+      return Prisma.sql`CASE WHEN LOWER(j."title") LIKE LOWER(${pattern}) THEN ${TARGET_ROLE_BOOST_PER_MATCH} ELSE 0 END`;
+    });
+    const sumExpr = Prisma.join(perKeywordParts, " + ");
+    parts.push(Prisma.sql`LEAST(${TARGET_ROLE_BOOST_CAP}, ${sumExpr})`);
+  }
+
+  // -- 5. Employment-type preference (+10 if match, otherwise 0) --
+  // Skipped entirely when the user has no preference — treated as neutral,
+  // not a penalty.
+  if (profile.desiredEmploymentTypes.length > 0) {
+    parts.push(
+      Prisma.sql`CASE WHEN j."employmentType" = ANY(${profile.desiredEmploymentTypes}) THEN ${EMPLOYMENT_TYPE_BOOST} ELSE 0 END`
+    );
+  }
+
+  // -- 6. Recency boost (up to 15 pts) --
   parts.push(RECENCY_BOOST);
 
   return parts;
@@ -85,7 +116,9 @@ export function hasProfileSignals(profile: RelevanceProfile | null): boolean {
     profile.openToRemote ||
     profile.openToOnsite ||
     profile.desiredSalaryMin != null ||
-    profile.desiredSalaryMax != null
+    profile.desiredSalaryMax != null ||
+    profile.targetRoles.length > 0 ||
+    profile.desiredEmploymentTypes.length > 0
   );
 }
 

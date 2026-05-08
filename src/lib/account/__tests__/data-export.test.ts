@@ -13,6 +13,13 @@ vi.mock("@/lib/db", () => ({
     subscription: { findUnique: vi.fn() },
     referral: { findMany: vi.fn() },
     loginEvent: { findMany: vi.fn() },
+    // Phase 5 — profile child entities included in the export payload.
+    skill: { findMany: vi.fn() },
+    workExperience: { findMany: vi.fn() },
+    educationEntry: { findMany: vi.fn() },
+    project: { findMany: vi.fn() },
+    certification: { findMany: vi.fn() },
+    spokenLanguage: { findMany: vi.fn() },
   },
 }));
 
@@ -36,6 +43,12 @@ const dbm = db as unknown as {
   subscription: Mocked<{ findUnique: () => unknown }>;
   referral: Mocked<{ findMany: () => unknown }>;
   loginEvent: Mocked<{ findMany: () => unknown }>;
+  skill: Mocked<{ findMany: () => unknown }>;
+  workExperience: Mocked<{ findMany: () => unknown }>;
+  educationEntry: Mocked<{ findMany: () => unknown }>;
+  project: Mocked<{ findMany: () => unknown }>;
+  certification: Mocked<{ findMany: () => unknown }>;
+  spokenLanguage: Mocked<{ findMany: () => unknown }>;
 };
 
 const NOW = new Date("2026-05-01T12:00:00.000Z");
@@ -63,6 +76,17 @@ function setupHappyPath(overrides?: {
     linkedinUrl: null,
     githubUrl: null,
     portfolioUrl: null,
+    // Phase 5 — extended social links default to null in fixtures.
+    twitterUrl: null,
+    stackOverflowUrl: null,
+    dribbbleUrl: null,
+    behanceUrl: null,
+    mediumUrl: null,
+    devToUrl: null,
+    googleScholarUrl: null,
+    huggingFaceUrl: null,
+    kaggleUrl: null,
+    youtubeUrl: null,
     headline: null,
     summary: null,
     currentTitle: null,
@@ -87,6 +111,26 @@ function setupHappyPath(overrides?: {
         ? Buffer.from("resume bytes")
         : overrides.resumeData,
     customAnswers: { foo: "bar" },
+    // Phase 5 — job-search preferences (schema defaults).
+    noticePeriodWeeks: null,
+    earliestStartDate: null,
+    targetRoles: [],
+    targetIndustries: [],
+    companySizePreferences: [],
+    relocationOpen: false,
+    relocationCities: [],
+    currencyPreference: "USD",
+    equityImportance: null,
+    desiredEmploymentTypes: [],
+    searchStatus: "open",
+    // Phase 5 — compliance defaults.
+    hasDriversLicense: null,
+    willingBackgroundCheck: null,
+    willingDrugTest: null,
+    securityClearance: "none",
+    eligibleCountries: [],
+    coverLetterIntro: null,
+    whyImLookingTemplate: null,
     isComplete: true,
     createdAt: NOW,
     updatedAt: NOW,
@@ -140,6 +184,13 @@ function setupHappyPath(overrides?: {
       provider: "email",
     },
   ]);
+  // Phase 5 — child entity findMany mocks default to empty.
+  dbm.skill.findMany.mockResolvedValue([]);
+  dbm.workExperience.findMany.mockResolvedValue([]);
+  dbm.educationEntry.findMany.mockResolvedValue([]);
+  dbm.project.findMany.mockResolvedValue([]);
+  dbm.certification.findMany.mockResolvedValue([]);
+  dbm.spokenLanguage.findMany.mockResolvedValue([]);
 }
 
 beforeEach(() => {
@@ -166,7 +217,7 @@ describe("buildExportPayload", () => {
         "user",
       ].sort(),
     );
-    expect(payload.schemaVersion).toBe(1);
+    expect(payload.schemaVersion).toBe(2);
     expect(payload.user.id).toBe("u_1");
     expect(payload.user.email).toBe("user@example.com");
     expect(payload.applications).toHaveLength(1);
@@ -284,7 +335,7 @@ describe("stripResumeBinary", () => {
   it("is a no-op when profile is null", async () => {
     const payload: ExportPayload = {
       exportedAt: NOW.toISOString(),
-      schemaVersion: 1,
+      schemaVersion: 2,
       user: {
         id: "u_1",
         email: null,

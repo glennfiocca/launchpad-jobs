@@ -21,14 +21,84 @@ import { z } from "zod";
 import type { ApiResponse, ApplicationWithJob, QuestionMeta, PendingQuestion } from "@/types";
 import type { NormalizedQuestion, NormalizedFieldType } from "@/lib/ats/types";
 import type { QuestionMatchProfile } from "@/lib/ats/question-matcher";
-import type { AtsProvider, UserProfile } from "@prisma/client";
+import type {
+  AtsProvider,
+  UserProfile,
+  Skill,
+  WorkExperience,
+  EducationEntry,
+  Project,
+  Certification,
+  SpokenLanguage,
+} from "@prisma/client";
+
+// Profile + Phase-4 child relations as loaded by the apply endpoint.
+type ProfileWithRelations = UserProfile & {
+  skills: Skill[];
+  workExperiences: WorkExperience[];
+  educationEntries: EducationEntry[];
+  projects: Project[];
+  certifications: Certification[];
+  spokenLanguages: SpokenLanguage[];
+};
 
 // Error codes that route to the operator queue instead of hard-failing
 const OPERATOR_QUEUE_CODES = new Set(
   (process.env.OPERATOR_QUEUE_CODES ?? "CAPTCHA_REQUIRED,BROWSER_LAUNCH_FAILED,NO_CONFIRMATION,FORM_NOT_FOUND").split(",")
 );
 
+// Phase-4 child-collection projections — trimmed shapes the extension /
+// operator UIs can consume without round-tripping the full Prisma row.
+interface SnapshotSkill {
+  name: string;
+  category: string;
+  proficiency: number;
+  yearsUsed?: number;
+}
+interface SnapshotWorkExperience {
+  title: string;
+  company: string;
+  startDate: string;
+  endDate?: string;
+  isCurrent: boolean;
+  location?: string;
+  employmentType: string;
+  description?: string;
+}
+interface SnapshotEducationEntry {
+  schoolName?: string;
+  degree: string;
+  fieldOfStudy: string;
+  startYear?: number;
+  endYear?: number;
+  gpa?: number;
+  honors?: string;
+  activities?: string;
+}
+interface SnapshotProject {
+  name: string;
+  url?: string;
+  repoUrl?: string;
+  description?: string;
+  technologies: string[];
+  role?: string;
+}
+interface SnapshotCertification {
+  name: string;
+  issuer: string;
+  issueDate?: string;
+  expiryDate?: string;
+  credentialUrl?: string;
+  credentialId?: string;
+}
+interface SnapshotLanguage {
+  name: string;
+  proficiency: string;
+}
+
 interface ApplicationSnapshot {
+  /** Discriminator so the extension picks the matcher table for new fields. */
+  version?: number;
   firstName: string;
   lastName: string;
   email: string;
@@ -57,6 +127,142 @@ interface ApplicationSnapshot {
       disability?: string;
     };
   };
+  // ── Phase 4: extended profile data ───────────────────────────────────────
+  // Extended social links
+  twitterUrl?: string;
+  stackOverflowUrl?: string;
+  dribbbleUrl?: string;
+  behanceUrl?: string;
+  mediumUrl?: string;
+  devToUrl?: string;
+  googleScholarUrl?: string;
+  huggingFaceUrl?: string;
+  kaggleUrl?: string;
+  youtubeUrl?: string;
+  // Job-search preferences
+  noticePeriodWeeks?: number;
+  earliestStartDate?: string;
+  targetRoles?: string[];
+  targetIndustries?: string[];
+  companySizePreferences?: string[];
+  relocationOpen?: boolean;
+  relocationCities?: string[];
+  currencyPreference?: string;
+  equityImportance?: string;
+  desiredEmploymentTypes?: string[];
+  searchStatus?: string;
+  // Compliance
+  hasDriversLicense?: boolean;
+  willingBackgroundCheck?: boolean;
+  willingDrugTest?: boolean;
+  securityClearance?: string;
+  eligibleCountries?: string[];
+  // Application templates
+  coverLetterIntro?: string;
+  whyImLookingTemplate?: string;
+  // Trimmed child collections
+  skills?: SnapshotSkill[];
+  workExperiences?: SnapshotWorkExperience[];
+  educationEntries?: SnapshotEducationEntry[];
+  projects?: SnapshotProject[];
+  certifications?: SnapshotCertification[];
+  languages?: SnapshotLanguage[];
+}
+
+/** Maximum serialized snapshot size before we drop the fattest fields. */
+const MAX_SNAPSHOT_BYTES = 32 * 1024;
+
+function dateISO(d: Date | null | undefined): string | undefined {
+  if (!d) return undefined;
+  const date = d instanceof Date ? d : new Date(d);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+/** Strip empty/null fields from a record so JSON stays compact. */
+function compact<T extends Record<string, unknown>>(obj: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    out[k] = v;
+  }
+  return out as T;
+}
+
+/**
+ * Trim a snapshot to fit under MAX_SNAPSHOT_BYTES.
+ * Drops the fattest narrative fields first, then whole child arrays LIFO.
+ * Logs the dropped fields with the application id (caller passes via id arg).
+ */
+function trimSnapshotToFit(
+  snapshot: ApplicationSnapshot,
+  applicationId: string
+): ApplicationSnapshot {
+  let serialized = JSON.stringify(snapshot);
+  if (serialized.length <= MAX_SNAPSHOT_BYTES) return snapshot;
+
+  const dropped: string[] = [];
+  let s: ApplicationSnapshot = { ...snapshot };
+
+  // Pass 1: drop narrative descriptions (the schema marks these optional,
+  // so omitting them keeps the SnapshotXxx contract intact).
+  if (s.workExperiences) {
+    s = {
+      ...s,
+      workExperiences: s.workExperiences.map((w) => {
+        const out: SnapshotWorkExperience = { ...w };
+        delete out.description;
+        return out;
+      }),
+    };
+    dropped.push("workExperiences[].description");
+  }
+  if (s.projects) {
+    s = {
+      ...s,
+      projects: s.projects.map((p) => {
+        const out: SnapshotProject = { ...p };
+        delete out.description;
+        return out;
+      }),
+    };
+    dropped.push("projects[].description");
+  }
+  if (s.educationEntries) {
+    s = {
+      ...s,
+      educationEntries: s.educationEntries.map((e) => {
+        const out: SnapshotEducationEntry = { ...e };
+        delete out.activities;
+        return out;
+      }),
+    };
+    dropped.push("educationEntries[].activities");
+  }
+  serialized = JSON.stringify(s);
+
+  // Pass 2: drop entire child arrays LIFO (educationEntries → projects → certifications → workExperiences)
+  const order: Array<keyof ApplicationSnapshot> = [
+    "educationEntries",
+    "projects",
+    "certifications",
+    "workExperiences",
+  ];
+  for (const key of order) {
+    if (serialized.length <= MAX_SNAPSHOT_BYTES) break;
+    if (s[key] !== undefined) {
+      s = { ...s, [key]: undefined };
+      dropped.push(String(key));
+      serialized = JSON.stringify(s);
+    }
+  }
+
+  console.warn(
+    `[apply] Snapshot for ${applicationId} exceeded ${MAX_SNAPSHOT_BYTES}B; ` +
+      `dropped fields: ${dropped.join(", ")} (final size: ${serialized.length}B)`
+  );
+  return s;
 }
 
 const COUNTRY_ALIASES: Record<string, string> = {
@@ -166,7 +372,7 @@ function toSelectValues(
 }
 
 /** Map UserProfile → QuestionMatchProfile for ATS-agnostic question matching */
-function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
+function toMatchProfile(profile: ProfileWithRelations): QuestionMatchProfile {
   return {
     linkedInUrl: profile.linkedinUrl,
     githubUrl: profile.githubUrl,
@@ -183,16 +389,29 @@ function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
     sponsorshipRequired: profile.requiresSponsorship,
     workAuthorized: !!profile.workAuthorization,
     openToRemote: profile.openToRemote,
+    // Phase 4 — registry-backed scalars + child collections
+    noticePeriodWeeks: profile.noticePeriodWeeks,
+    earliestStartDate: profile.earliestStartDate,
+    hasDriversLicense: profile.hasDriversLicense,
+    willingBackgroundCheck: profile.willingBackgroundCheck,
+    willingDrugTest: profile.willingDrugTest,
+    securityClearance: profile.securityClearance,
+    searchStatus: profile.searchStatus,
+    coverLetterIntro: profile.coverLetterIntro,
+    whyImLookingTemplate: profile.whyImLookingTemplate,
+    spokenLanguages: profile.spokenLanguages.map((l) => ({ name: l.name })),
+    eligibleCountries: profile.eligibleCountries,
   };
 }
 
 function buildSnapshot(
-  profile: UserProfile,
+  profile: ProfileWithRelations,
   boardToken: string,
   externalId: string,
   questions: readonly NormalizedQuestion[],
   questionAnswers: Record<string, string | number>,
   trackingEmail: string,
+  applicationId: string,
   manualApplyUrl?: string
 ): ApplicationSnapshot {
   // Extract Spaces key from resumeUrl (not a presigned URL — stable reference)
@@ -256,7 +475,113 @@ function buildSnapshot(
     disability: undefined,
   };
 
-  return {
+  // ── Phase 4: extended profile data (scalars + child collections) ─────────
+  const skills: SnapshotSkill[] = profile.skills.map((s) =>
+    compact({
+      name: s.name,
+      category: s.category,
+      proficiency: s.proficiency,
+      yearsUsed: s.yearsUsed ?? undefined,
+    }) as SnapshotSkill
+  );
+
+  const workExperiences: SnapshotWorkExperience[] = profile.workExperiences.map(
+    (w) =>
+      compact({
+        title: w.title,
+        company: w.company,
+        startDate: dateISO(w.startDate)!,
+        endDate: dateISO(w.endDate),
+        isCurrent: w.isCurrent,
+        location: w.location ?? undefined,
+        employmentType: w.employmentType,
+        description: w.description ?? undefined,
+      }) as SnapshotWorkExperience
+  );
+
+  const educationEntries: SnapshotEducationEntry[] = profile.educationEntries.map(
+    (e) =>
+      compact({
+        schoolName: e.schoolName ?? undefined,
+        degree: e.degree,
+        fieldOfStudy: e.fieldOfStudy,
+        startYear: e.startYear ?? undefined,
+        endYear: e.endYear ?? undefined,
+        gpa: e.gpa ?? undefined,
+        honors: e.honors ?? undefined,
+        activities: e.activities ?? undefined,
+      }) as SnapshotEducationEntry
+  );
+
+  const projects: SnapshotProject[] = profile.projects.map((p) =>
+    compact({
+      name: p.name,
+      url: p.url ?? undefined,
+      repoUrl: p.repoUrl ?? undefined,
+      description: p.description ?? undefined,
+      technologies: p.technologies,
+      role: p.role ?? undefined,
+    }) as SnapshotProject
+  );
+
+  const certifications: SnapshotCertification[] = profile.certifications.map(
+    (c) =>
+      compact({
+        name: c.name,
+        issuer: c.issuer,
+        issueDate: dateISO(c.issueDate),
+        expiryDate: dateISO(c.expiryDate),
+        credentialUrl: c.credentialUrl ?? undefined,
+        credentialId: c.credentialId ?? undefined,
+      }) as SnapshotCertification
+  );
+
+  const languages: SnapshotLanguage[] = profile.spokenLanguages.map((l) => ({
+    name: l.name,
+    proficiency: l.proficiency,
+  }));
+
+  // Build the snapshot with v2 discriminator + Phase-4 fields. compact()
+  // strips empty arrays / null strings so JSON stays compact.
+  const phase4Extras = compact({
+    twitterUrl: profile.twitterUrl ?? undefined,
+    stackOverflowUrl: profile.stackOverflowUrl ?? undefined,
+    dribbbleUrl: profile.dribbbleUrl ?? undefined,
+    behanceUrl: profile.behanceUrl ?? undefined,
+    mediumUrl: profile.mediumUrl ?? undefined,
+    devToUrl: profile.devToUrl ?? undefined,
+    googleScholarUrl: profile.googleScholarUrl ?? undefined,
+    huggingFaceUrl: profile.huggingFaceUrl ?? undefined,
+    kaggleUrl: profile.kaggleUrl ?? undefined,
+    youtubeUrl: profile.youtubeUrl ?? undefined,
+    noticePeriodWeeks: profile.noticePeriodWeeks ?? undefined,
+    earliestStartDate: dateISO(profile.earliestStartDate)?.slice(0, 10),
+    targetRoles: profile.targetRoles,
+    targetIndustries: profile.targetIndustries,
+    companySizePreferences: profile.companySizePreferences,
+    relocationOpen: profile.relocationOpen,
+    relocationCities: profile.relocationCities,
+    currencyPreference: profile.currencyPreference,
+    equityImportance: profile.equityImportance ?? undefined,
+    desiredEmploymentTypes: profile.desiredEmploymentTypes,
+    searchStatus: profile.searchStatus,
+    hasDriversLicense: profile.hasDriversLicense ?? undefined,
+    willingBackgroundCheck: profile.willingBackgroundCheck ?? undefined,
+    willingDrugTest: profile.willingDrugTest ?? undefined,
+    securityClearance: profile.securityClearance,
+    eligibleCountries: profile.eligibleCountries,
+    coverLetterIntro: profile.coverLetterIntro ?? undefined,
+    whyImLookingTemplate: profile.whyImLookingTemplate ?? undefined,
+    skills,
+    workExperiences,
+    educationEntries,
+    projects,
+    certifications,
+    languages,
+  });
+
+  const snapshot: ApplicationSnapshot = {
+    version: 2,
     firstName: profile.firstName,
     lastName: profile.lastName,
     email: profile.email,
@@ -273,7 +598,10 @@ function buildSnapshot(
     pendingQuestions,
     snapshotAt: new Date().toISOString(),
     ...(Object.keys(coreFieldExtras).length > 0 ? { coreFieldExtras } : {}),
+    ...phase4Extras,
   };
+
+  return trimSnapshotToFit(snapshot, applicationId);
 }
 
 const applySchema = z.object({
@@ -290,7 +618,7 @@ async function runPlaywrightSubmission(opts: {
   externalJobId: string;
   applyUrl: string | null;
   applySelector: string | null;
-  profile: UserProfile;
+  profile: ProfileWithRelations;
   trackingEmail: string;
   resumeBuffer: Buffer | undefined;
   resumeFileName: string;
@@ -380,6 +708,7 @@ async function runPlaywrightSubmission(opts: {
           opts.questions,
           opts.questionAnswers,
           opts.trackingEmail,
+          opts.applicationId,
           applyResult.manualApplyUrl
         );
 
@@ -518,10 +847,23 @@ export async function POST(request: Request) {
     return NextResponse.json<ApiResponse<never>>({ success: false, error: "Invalid request" }, { status: 400 });
   }
 
-  // Get job and profile
+  // Get job and profile (with Phase-4 child relations for the fill-package snapshot)
   const [job, profile] = await Promise.all([
     db.job.findUnique({ where: { id: parsed.data.jobId }, include: { company: true } }),
-    db.userProfile.findUnique({ where: { userId: session.user.id } }),
+    db.userProfile.findUnique({
+      where: { userId: session.user.id },
+      include: {
+        skills: { orderBy: { order: "asc" }, take: 20 },
+        workExperiences: {
+          orderBy: [{ order: "asc" }, { startDate: "desc" }],
+          take: 5,
+        },
+        educationEntries: { orderBy: { order: "asc" }, take: 3 },
+        projects: { orderBy: { order: "asc" }, take: 5 },
+        certifications: { orderBy: { order: "asc" } },
+        spokenLanguages: { orderBy: { order: "asc" } },
+      },
+    }),
   ]);
 
   if (!job) {

@@ -1553,6 +1553,9 @@ async function fillAshbyForm(snap, token) {
     console.log("[pipeline-operator] Filled: website")
   }
 
+  // ── Phase 4: extended profile fields (link inputs, notice period, etc.) ──
+  filled += fillAshbyPhase4Fields(snap, findAshbyField)
+
   // NOTE: Location fill is DEFERRED to after resume upload + email guard.
   // Ashby's resume parser overwrites the location field after upload,
   // so filling location before upload is pointless.
@@ -2044,6 +2047,146 @@ async function tryClickAshbyDropdownOption(fieldName, labelText, answer, selectV
 }
 
 /**
+ * Phase-4 extended profile fields shared between Greenhouse + Ashby.
+ *
+ * The producer always emits the new keys when set; this map tells us
+ * which DOM signals to try for each field. Snapshot-only keys (e.g.
+ * targetIndustries, equityImportance) are intentionally absent — they
+ * ride along in the JWT but have no fillable form-field equivalent.
+ */
+const PHASE4_LINK_FIELDS = [
+  { key: "twitterUrl", labels: ["twitter", "twitter url", "twitter profile", "x profile"] },
+  { key: "stackOverflowUrl", labels: ["stack overflow", "stackoverflow"] },
+  { key: "mediumUrl", labels: ["medium", "medium url", "medium profile"] },
+  { key: "dribbbleUrl", labels: ["dribbble", "dribbble url"] },
+  { key: "behanceUrl", labels: ["behance", "behance url"] },
+  { key: "devToUrl", labels: ["dev.to", "dev to"] },
+  { key: "googleScholarUrl", labels: ["google scholar", "scholar"] },
+  { key: "huggingFaceUrl", labels: ["hugging face", "huggingface"] },
+  { key: "kaggleUrl", labels: ["kaggle"] },
+  { key: "youtubeUrl", labels: ["youtube"] },
+]
+
+/**
+ * Fill Greenhouse-style extended profile fields. Returns the count of
+ * fields filled. No-op for any key absent from the snapshot.
+ */
+function fillGreenhousePhase4Fields(snap) {
+  let count = 0
+
+  // Extended social links — Greenhouse renders these as plain text inputs.
+  for (const { key, labels } of PHASE4_LINK_FIELDS) {
+    const value = snap?.[key]
+    if (!value) continue
+    let field = null
+    for (const label of labels) {
+      field = findFieldByLabel(label)
+      if (field) break
+    }
+    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+      nativeSet(field, value)
+      count++
+    }
+  }
+
+  // Notice period (number)
+  if (snap?.noticePeriodWeeks != null) {
+    const f = findFieldByLabel("notice period") ?? findFieldByLabel("how much notice")
+    if (f instanceof HTMLInputElement) {
+      nativeSet(f, String(snap.noticePeriodWeeks))
+      count++
+    }
+  }
+
+  // Earliest start date (YYYY-MM-DD)
+  if (snap?.earliestStartDate) {
+    const f =
+      findFieldByLabel("earliest start") ??
+      findFieldByLabel("available start") ??
+      findFieldByLabel("start date")
+    if (f instanceof HTMLInputElement) {
+      nativeSet(f, snap.earliestStartDate)
+      count++
+    }
+  }
+
+  // Cover-letter intro — only when no native cover-letter file field exists.
+  if (snap?.coverLetterIntro) {
+    const fileFields = document.querySelectorAll("input[type='file']")
+    const hasCoverLetterFile = Array.from(fileFields).some((el) => {
+      const ctx = (el.closest("label, .field, fieldset")?.textContent ?? "").toLowerCase()
+      return ctx.includes("cover letter")
+    })
+    if (!hasCoverLetterFile) {
+      const f =
+        findFieldByLabel("why are you interested") ??
+        findFieldByLabel("tell us about yourself") ??
+        findFieldByLabel("cover letter")
+      if (f instanceof HTMLTextAreaElement) {
+        nativeSet(f, snap.coverLetterIntro)
+        count++
+      }
+    }
+  }
+
+  return count
+}
+
+/**
+ * Fill Ashby-style extended profile fields. Returns the count of fields
+ * filled. Expects findAshbyField helper to be in scope (closure).
+ */
+function fillAshbyPhase4Fields(snap, findAshbyField) {
+  let count = 0
+
+  for (const { key, labels } of PHASE4_LINK_FIELDS) {
+    const value = snap?.[key]
+    if (!value) continue
+    const f = findAshbyField(null, ...labels)
+    if (f instanceof HTMLInputElement || f instanceof HTMLTextAreaElement) {
+      nativeSet(f, String(value).trim())
+      count++
+      console.log(`[pipeline-operator] Filled Phase4 link: ${key}`)
+    }
+  }
+
+  if (snap?.noticePeriodWeeks != null) {
+    const f = findAshbyField(null, "notice period", "how much notice")
+    if (f instanceof HTMLInputElement) {
+      nativeSet(f, String(snap.noticePeriodWeeks))
+      count++
+      console.log("[pipeline-operator] Filled Phase4: noticePeriodWeeks")
+    }
+  }
+
+  if (snap?.earliestStartDate) {
+    const f = findAshbyField(null, "earliest start", "available start", "start date")
+    if (f instanceof HTMLInputElement) {
+      nativeSet(f, snap.earliestStartDate)
+      count++
+      console.log("[pipeline-operator] Filled Phase4: earliestStartDate")
+    }
+  }
+
+  if (snap?.coverLetterIntro) {
+    // Skip when the page has a dedicated cover-letter file uploader.
+    const hasCoverLetterFile = !!document.querySelector(
+      'input[type="file"][name*="cover" i], input[type="file"][name*="letter" i]',
+    )
+    if (!hasCoverLetterFile) {
+      const f = findAshbyField(null, "why are you interested", "tell us about yourself", "cover letter")
+      if (f instanceof HTMLTextAreaElement) {
+        nativeSet(f, snap.coverLetterIntro)
+        count++
+        console.log("[pipeline-operator] Filled Phase4: coverLetterIntro")
+      }
+    }
+  }
+
+  return count
+}
+
+/**
  * Main fill routine — dispatches to ATS-specific handler.
  */
 async function fillFormFromToken(token) {
@@ -2063,7 +2206,13 @@ async function fillFormFromToken(token) {
   }
 
   const snap = payload.snapshot
-  console.log("[pipeline-operator] Snapshot loaded, keys:", Object.keys(snap))
+  // Phase-4 version guard: known versions (1, 2) are fully supported;
+  // unknown future versions log a warning and proceed best-effort.
+  const snapshotVersion = snap?.version ?? 1
+  if (snapshotVersion > 2) {
+    console.warn(`[pipeline-operator] Unknown snapshot version ${snapshotVersion} — proceeding best-effort`)
+  }
+  console.log("[pipeline-operator] Snapshot loaded, version:", snapshotVersion, "keys:", Object.keys(snap))
 
   // Dispatch to ATS-specific handler if on Ashby
   const provider = detectAtsProvider()
@@ -2186,6 +2335,11 @@ async function fillFormFromToken(token) {
       missingFields.push("Country")
     }
   }
+
+  // ── Phase 4: extended profile fields ─────────────────────────────────────
+  // Mirrors the same shim pattern used for LinkedIn/GitHub above.
+  // Greenhouse renders most of these as plain <input> with a label-derived id.
+  filled += fillGreenhousePhase4Fields(snap)
 
   // ── Resume upload ────────────────────────────────────────────────────────────
   if (snap.presignedResumeUrl) {

@@ -1,4 +1,8 @@
 import type { NormalizedQuestion } from "./types";
+import {
+  findPattern,
+  type ExtendedMatchProfile,
+} from "./question-patterns";
 
 // ─── Profile interface ───────────────────────────────────────────────────────
 
@@ -6,8 +10,12 @@ import type { NormalizedQuestion } from "./types";
  * Profile data used to auto-answer application questions.
  * Intentionally decoupled from Prisma's UserProfile so any ATS provider
  * can map its own profile shape into this interface.
+ *
+ * Extends `ExtendedMatchProfile` for the Phase-4 expansion fields
+ * (notice period, compliance, languages, etc.) consumed by the shared
+ * question-pattern registry.
  */
-export interface QuestionMatchProfile {
+export interface QuestionMatchProfile extends ExtendedMatchProfile {
   linkedInUrl?: string | null;
   githubUrl?: string | null;
   websiteUrl?: string | null;
@@ -319,6 +327,55 @@ export function autoAnswerQuestion(
   if (/disabilit/i.test(question.label)) {
     if (question.fieldType !== "select" || opts.length === 0) return null;
     return matchDemographic(opts, profile.disability);
+  }
+
+  // ── Phase 4: registry-backed matchers ────────────────────────────────────
+  // The shared registry centralizes new patterns (notice period, earliest
+  // start, compliance, languages, etc.) so Greenhouse + Ashby + the
+  // browser extension consult the same source of truth.
+  const registryEntry = findPattern(question.label);
+  if (registryEntry) {
+    const resolved = registryEntry.resolve(profile);
+    if (resolved == null) return null;
+
+    // Multi-select resolvers return label arrays; this matcher returns a
+    // single string per question. Resolve labels against options when
+    // possible, otherwise return the comma-joined raw labels (Greenhouse
+    // mapper joins multi-value answers with "," upstream).
+    if (Array.isArray(resolved)) {
+      if (
+        question.fieldType === "multiselect" ||
+        question.fieldType === "select"
+      ) {
+        const matched: string[] = [];
+        for (const label of resolved) {
+          const value = findOption(opts, label);
+          if (value !== null) matched.push(value);
+        }
+        if (matched.length === 0) return null;
+        return matched.join(",");
+      }
+      // Free-text fallback: comma-join the labels
+      return resolved.join(", ");
+    }
+
+    // yesno → resolve via opts ("yes"/"no")
+    if (registryEntry.fieldType === "yesno") {
+      if (question.fieldType === "boolean") {
+        return resolved === "yes" ? "true" : "false";
+      }
+      if (question.fieldType !== "select" || opts.length === 0) return null;
+      return resolveYesNo(opts, resolved === "yes");
+    }
+
+    // select → resolve label → option value
+    if (registryEntry.fieldType === "select") {
+      if (question.fieldType !== "select" || opts.length === 0) return null;
+      return findOption(opts, resolved);
+    }
+
+    // text/number/date — return the resolved string as-is
+    return resolved;
   }
 
   return null;

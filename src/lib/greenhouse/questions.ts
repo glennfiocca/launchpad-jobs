@@ -1,6 +1,10 @@
 import type { UserProfile } from "@prisma/client";
 import type { GreenhouseQuestion, GreenhouseQuestionField } from "@/types";
 import { matchDemographicOption } from "./demographic-matcher";
+import {
+  findPattern,
+  type ExtendedMatchProfile,
+} from "@/lib/ats/question-patterns";
 
 // --- Helpers ---
 
@@ -12,6 +16,48 @@ function resolveYesNo(
   const no = field.values.find((v) => v.label.toLowerCase() === "no");
   const target = wantYes ? yes : no;
   return target?.value ?? null;
+}
+
+/**
+ * Find a Greenhouse field option by exact label match (case-insensitive).
+ * Returns the option value (numeric ID) or null.
+ */
+function findFieldValueByLabel(
+  field: GreenhouseQuestionField,
+  label: string
+): number | null {
+  const match = field.values.find(
+    (v) => v.label.toLowerCase() === label.toLowerCase()
+  );
+  return match?.value ?? null;
+}
+
+/**
+ * Adapt a Prisma UserProfile (and any optionally-loaded child relations)
+ * into the structural ExtendedMatchProfile the registry consumes.
+ *
+ * Child collections (spokenLanguages, eligibleCountries) come from the
+ * profile when callers pre-loaded them; otherwise we return empty arrays
+ * so the registry resolves to null rather than throwing.
+ */
+function toExtendedProfile(
+  profile: UserProfile & {
+    spokenLanguages?: ReadonlyArray<{ name: string }>;
+  }
+): ExtendedMatchProfile {
+  return {
+    noticePeriodWeeks: profile.noticePeriodWeeks,
+    earliestStartDate: profile.earliestStartDate,
+    hasDriversLicense: profile.hasDriversLicense,
+    willingBackgroundCheck: profile.willingBackgroundCheck,
+    willingDrugTest: profile.willingDrugTest,
+    securityClearance: profile.securityClearance,
+    searchStatus: profile.searchStatus,
+    coverLetterIntro: profile.coverLetterIntro,
+    whyImLookingTemplate: profile.whyImLookingTemplate,
+    spokenLanguages: profile.spokenLanguages,
+    eligibleCountries: profile.eligibleCountries,
+  };
 }
 
 // Return true if a question is a core field we skip entirely (handled as top-level form fields)
@@ -245,6 +291,57 @@ export function autoAnswerQuestion(
     const result = matchDemographicOption(options, null, "disability");
     if (result.optionId !== null) return { [fieldName]: result.optionId };
     return null;
+  }
+
+  // --- Phase 4: registry-backed matchers ----------------------------------
+  // Shared between Greenhouse + Ashby. The registry exports a single
+  // pattern table — Greenhouse-specific selectValue lookup happens here.
+  const registryEntry = findPattern(question.label);
+  if (registryEntry) {
+    const ext = toExtendedProfile(profile);
+    const resolved = registryEntry.resolve(ext);
+    if (resolved == null) return null;
+
+    if (Array.isArray(resolved)) {
+      // Multi-select: resolve each label → numeric option ID and join with comma
+      // (Greenhouse snapshot mapper joins multi-value answers with ",").
+      if (
+        field.type !== "multi_value_multi_select" &&
+        field.type !== "multi_value_single_select"
+      ) {
+        // Free-text fallback for unsupported field types
+        if (field.type === "input_text" || field.type === "textarea") {
+          return { [fieldName]: resolved.join(", ") };
+        }
+        return null;
+      }
+      const ids: number[] = [];
+      for (const label of resolved) {
+        const v = findFieldValueByLabel(field, label);
+        if (v != null) ids.push(v);
+      }
+      if (ids.length === 0) return null;
+      return field.type === "multi_value_multi_select"
+        ? { [fieldName]: ids.join(",") }
+        : { [fieldName]: ids[0] };
+    }
+
+    // yesno → resolve via field options
+    if (registryEntry.fieldType === "yesno") {
+      if (field.type !== "multi_value_single_select") return null;
+      const v = resolveYesNo(field, resolved === "yes");
+      return v !== null ? { [fieldName]: v } : null;
+    }
+
+    // select → label → numeric value lookup
+    if (registryEntry.fieldType === "select") {
+      if (field.type !== "multi_value_single_select") return null;
+      const v = findFieldValueByLabel(field, resolved);
+      return v !== null ? { [fieldName]: v } : null;
+    }
+
+    // text/number/date — return as-is
+    return { [fieldName]: resolved };
   }
 
   return null;

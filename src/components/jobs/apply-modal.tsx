@@ -37,6 +37,20 @@ function toMatchProfile(profile: UserProfile): QuestionMatchProfile {
     sponsorshipRequired: profile.requiresSponsorship,
     workAuthorized: !!profile.workAuthorization,
     openToRemote: profile.openToRemote,
+    // Phase 4: scalar fields needed by the registry-backed matchers.
+    // Child collections (skills, languages, etc.) are intentionally
+    // omitted — the client preview only needs scalars; the server-side
+    // snapshot still includes the full child arrays.
+    noticePeriodWeeks: profile.noticePeriodWeeks,
+    earliestStartDate: profile.earliestStartDate,
+    hasDriversLicense: profile.hasDriversLicense,
+    willingBackgroundCheck: profile.willingBackgroundCheck,
+    willingDrugTest: profile.willingDrugTest,
+    securityClearance: profile.securityClearance,
+    searchStatus: profile.searchStatus,
+    coverLetterIntro: profile.coverLetterIntro,
+    whyImLookingTemplate: profile.whyImLookingTemplate,
+    eligibleCountries: profile.eligibleCountries,
   };
 }
 

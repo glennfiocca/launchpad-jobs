@@ -11,6 +11,8 @@ import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } f
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
+import { EmptyState } from "./_shared/empty-state";
+import { EMPTY_STATES } from "./_shared/empty-states";
 
 // Each row is a WorkExperienceInput, plus a server-assigned `id` once persisted.
 type WorkExperienceRow = WorkExperienceInput & { id: string };
@@ -127,7 +129,7 @@ export function WorkHistoryForm({ initialData }: WorkHistoryFormProps) {
             onReorder={handleReorder}
             onItemUpdate={handleUpdate}
             addLabel="Add role"
-            emptyState="No roles yet — click below to add one."
+            emptyState={<EmptyState content={EMPTY_STATES["work-experience"]} />}
             itemLabel={(item) =>
               item.company ? `${item.title} · ${item.company}` : item.title
             }

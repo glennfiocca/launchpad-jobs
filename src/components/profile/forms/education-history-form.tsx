@@ -7,6 +7,8 @@ import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } f
 import { isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
+import { EmptyState } from "./_shared/empty-state";
+import { EMPTY_STATES } from "./_shared/empty-states";
 
 // Multi-degree history. Sits BELOW the legacy single-degree form on the
 // Education tab — the orchestrator mounts both components inside the same
@@ -82,7 +84,7 @@ export function EducationHistoryForm({ initialData }: Props) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           addLabel="Add school / degree"
-          emptyState="No additional education entries yet."
+          emptyState={<EmptyState content={EMPTY_STATES["education-entries"]} />}
           itemLabel={(item) =>
             [item.degree, item.fieldOfStudy, item.schoolName]
               .filter(Boolean)

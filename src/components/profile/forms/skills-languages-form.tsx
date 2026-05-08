@@ -13,6 +13,8 @@ import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } f
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
+import { EmptyState } from "./_shared/empty-state";
+import { EMPTY_STATES } from "./_shared/empty-states";
 
 type SkillRow = SkillInput & { id: string };
 type LanguageRow = SpokenLanguageInput & { id: string };
@@ -112,7 +114,7 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           addLabel="Add skill"
-          emptyState="No skills yet — click below to add one."
+          emptyState={<EmptyState content={EMPTY_STATES.skills} />}
           itemLabel={(item) => item.name || "(unnamed skill)"}
           renderItem={(item, _index, patch) => (
             <SkillFields item={item} patch={patch} />
@@ -285,7 +287,7 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           addLabel="Add language"
-          emptyState="No languages yet — click below to add one."
+          emptyState={<EmptyState content={EMPTY_STATES.languages} />}
           itemLabel={(item) => item.name || "(unnamed language)"}
           renderItem={(item, _index, patch) => (
             <div className={gridTwoCol}>

@@ -8,6 +8,8 @@ import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-g
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
 import { ChipInput } from "./_shared/chip-input";
+import { EmptyState } from "./_shared/empty-state";
+import { EMPTY_STATES } from "./_shared/empty-states";
 
 type ProjectRow = ProjectInput & { id: string };
 type CertificationRow = CertificationInput & { id: string };
@@ -106,7 +108,7 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           addLabel="Add project"
-          emptyState="No projects yet — click below to add one."
+          emptyState={<EmptyState content={EMPTY_STATES.projects} />}
           itemLabel={(item) => item.name || "(unnamed project)"}
           renderItem={(item, _index, patch) => (
             <ProjectFields item={item} patch={patch} />
@@ -322,7 +324,7 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           addLabel="Add certification"
-          emptyState="No certifications yet."
+          emptyState={<EmptyState content={EMPTY_STATES.certifications} />}
           itemLabel={(item) => item.name || "(unnamed certification)"}
           renderItem={(item, _index, patch) => (
             <CertificationFields item={item} patch={patch} />

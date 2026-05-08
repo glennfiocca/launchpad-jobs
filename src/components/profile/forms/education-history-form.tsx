@@ -3,7 +3,7 @@
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import type { EducationEntryInput } from "@/types";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
@@ -111,20 +111,19 @@ interface FieldsProps {
 function EducationEntryFields({ item, patch }: FieldsProps) {
   return (
     <>
-      <div>
-        <label className={labelClass}>School name</label>
-        <input
-          className={inputClass}
-          defaultValue={item.schoolName ?? ""}
-          onBlur={(e) => {
-            const v = e.target.value;
-            if (v !== (item.schoolName ?? "")) patch({ schoolName: v || null });
-          }}
-          placeholder="Massachusetts Institute of Technology"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
+        <div>
+          <label className={labelClass}>School name</label>
+          <input
+            className={inputClass}
+            defaultValue={item.schoolName ?? ""}
+            onBlur={(e) => {
+              const v = e.target.value;
+              if (v !== (item.schoolName ?? "")) patch({ schoolName: v || null });
+            }}
+            placeholder="Massachusetts Institute of Technology"
+          />
+        </div>
         <div>
           <label className={labelClass}>Degree</label>
           <input
@@ -137,6 +136,9 @@ function EducationEntryFields({ item, patch }: FieldsProps) {
             placeholder="Bachelor's of Science"
           />
         </div>
+      </div>
+
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Field of study</label>
           <input
@@ -149,9 +151,25 @@ function EducationEntryFields({ item, patch }: FieldsProps) {
             placeholder="Computer Science"
           />
         </div>
+        <div>
+          <label className={labelClass}>GPA</label>
+          <input
+            className={inputClass}
+            type="number"
+            step="0.01"
+            min="0"
+            max="5"
+            defaultValue={item.gpa ?? ""}
+            onBlur={(e) => {
+              const raw = e.target.value;
+              const next = raw === "" ? null : Number(raw);
+              if (next !== (item.gpa ?? null)) patch({ gpa: next });
+            }}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Start year</label>
           <input
@@ -179,22 +197,6 @@ function EducationEntryFields({ item, patch }: FieldsProps) {
               const raw = e.target.value;
               const next = raw === "" ? null : Number(raw);
               if (next !== (item.endYear ?? null)) patch({ endYear: next });
-            }}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>GPA</label>
-          <input
-            className={inputClass}
-            type="number"
-            step="0.01"
-            min="0"
-            max="5"
-            defaultValue={item.gpa ?? ""}
-            onBlur={(e) => {
-              const raw = e.target.value;
-              const next = raw === "" ? null : Number(raw);
-              if (next !== (item.gpa ?? null)) patch({ gpa: next });
             }}
           />
         </div>

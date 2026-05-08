@@ -16,7 +16,7 @@ import {
   type SearchStatus,
   type SecurityClearance,
 } from "@/types/_shared/profile-enums";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { SaveButton } from "./_shared/save-button";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
@@ -186,9 +186,10 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <IdentityRequiredNotice initialData={initialData} />
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Salary Expectations</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Minimum (USD/year)</label>
             <div className="relative">
@@ -243,6 +244,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           ))}
         </div>
       </div>
+      </div>
 
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Search Preferences</h2>
@@ -271,7 +273,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Notice period (weeks)</label>
             <input
@@ -363,7 +365,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Currency preference</label>
             <input
@@ -404,6 +406,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Relocation</h2>
         <label className="flex items-center gap-3 cursor-pointer">
@@ -457,6 +460,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           />
           <span className="text-sm text-zinc-400">I require visa sponsorship</span>
         </label>
+      </div>
       </div>
 
       <div className={sectionClass}>

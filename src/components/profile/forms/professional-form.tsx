@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { SaveButton } from "./_shared/save-button";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
@@ -96,25 +96,27 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
             placeholder="Senior Software Engineer at Acme Corp"
           />
         </div>
-        <div>
-          <label className={labelClass}>Current Title</label>
-          <input
-            className={inputClass}
-            value={form.currentTitle}
-            onChange={(e) => set("currentTitle", e.target.value)}
-            placeholder="Software Engineer"
-          />
+        <div className={gridTwoCol}>
+          <div>
+            <label className={labelClass}>Current Title</label>
+            <input
+              className={inputClass}
+              value={form.currentTitle}
+              onChange={(e) => set("currentTitle", e.target.value)}
+              placeholder="Software Engineer"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Current Company</label>
+            <input
+              className={inputClass}
+              value={form.currentCompany}
+              onChange={(e) => set("currentCompany", e.target.value)}
+              placeholder="Acme Corp"
+            />
+          </div>
         </div>
-        <div>
-          <label className={labelClass}>Current Company</label>
-          <input
-            className={inputClass}
-            value={form.currentCompany}
-            onChange={(e) => set("currentCompany", e.target.value)}
-            placeholder="Acme Corp"
-          />
-        </div>
-        <div>
+        <div className="max-w-xs">
           <label className={labelClass}>Years of Experience</label>
           <input
             className={inputClass}

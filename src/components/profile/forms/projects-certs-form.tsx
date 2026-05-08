@@ -3,7 +3,7 @@
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import type { CertificationInput, ProjectInput } from "@/types";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
@@ -32,8 +32,10 @@ export function ProjectsCertsForm({ initialData }: Props) {
   return (
     <div className="space-y-6">
       <IdentityRequiredNotice initialData={initialData} />
-      <ProjectsSection identityOk={identityOk} />
-      <CertificationsSection identityOk={identityOk} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ProjectsSection identityOk={identityOk} />
+        <CertificationsSection identityOk={identityOk} />
+      </div>
     </div>
   );
 }
@@ -129,7 +131,7 @@ interface ProjectFieldsProps {
 function ProjectFields({ item, patch }: ProjectFieldsProps) {
   return (
     <>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Name</label>
           <input
@@ -156,7 +158,7 @@ function ProjectFields({ item, patch }: ProjectFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Project URL</label>
           <input
@@ -211,7 +213,7 @@ function ProjectFields({ item, patch }: ProjectFieldsProps) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Start date</label>
           <input
@@ -345,7 +347,7 @@ interface CertificationFieldsProps {
 function CertificationFields({ item, patch }: CertificationFieldsProps) {
   return (
     <>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Name</label>
           <input
@@ -372,7 +374,7 @@ function CertificationFields({ item, patch }: CertificationFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Issue date</label>
           <input
@@ -401,7 +403,7 @@ function CertificationFields({ item, patch }: CertificationFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Credential URL</label>
           <input

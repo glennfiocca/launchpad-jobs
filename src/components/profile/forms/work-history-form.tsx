@@ -7,7 +7,7 @@ import {
   type EmploymentType,
 } from "@/types/_shared/profile-enums";
 import type { WorkExperienceInput } from "@/types";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
@@ -157,7 +157,7 @@ interface WorkExperienceFieldsProps {
 function WorkExperienceFields({ item, patch }: WorkExperienceFieldsProps) {
   return (
     <>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Title</label>
           <input
@@ -184,7 +184,7 @@ function WorkExperienceFields({ item, patch }: WorkExperienceFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Company URL</label>
           <input
@@ -212,7 +212,7 @@ function WorkExperienceFields({ item, patch }: WorkExperienceFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Start date</label>
           <input
@@ -238,22 +238,23 @@ function WorkExperienceFields({ item, patch }: WorkExperienceFieldsProps) {
             }}
           />
         </div>
-        <div>
-          <label className={labelClass}>Employment type</label>
-          <select
-            className={inputClass}
-            value={item.employmentType}
-            onChange={(e) =>
-              patch({ employmentType: e.target.value as EmploymentType })
-            }
-          >
-            {EMPLOYMENT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {EMPLOYMENT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </div>
+      </div>
+
+      <div className="max-w-xs">
+        <label className={labelClass}>Employment type</label>
+        <select
+          className={inputClass}
+          value={item.employmentType}
+          onChange={(e) =>
+            patch({ employmentType: e.target.value as EmploymentType })
+          }
+        >
+          {EMPLOYMENT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {EMPLOYMENT_TYPE_LABELS[t]}
+            </option>
+          ))}
+        </select>
       </div>
 
       <label className="flex items-center gap-3 cursor-pointer">

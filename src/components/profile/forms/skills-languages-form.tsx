@@ -9,7 +9,7 @@ import {
   type SkillCategory,
 } from "@/types/_shared/profile-enums";
 import type { SkillInput, SpokenLanguageInput } from "@/types";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
@@ -43,8 +43,10 @@ export function SkillsLanguagesForm({ initialData }: Props) {
   return (
     <div className="space-y-6">
       <IdentityRequiredNotice initialData={initialData} />
-      <SkillsSection identityOk={identityOk} />
-      <LanguagesSection identityOk={identityOk} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SkillsSection identityOk={identityOk} />
+        <LanguagesSection identityOk={identityOk} />
+      </div>
     </div>
   );
 }
@@ -135,7 +137,7 @@ interface SkillFieldsProps {
 function SkillFields({ item, patch }: SkillFieldsProps) {
   return (
     <>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Name</label>
           <input
@@ -166,7 +168,7 @@ function SkillFields({ item, patch }: SkillFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>Proficiency</label>
           <ProficiencyStars
@@ -286,7 +288,7 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
           emptyState="No languages yet — click below to add one."
           itemLabel={(item) => item.name || "(unnamed language)"}
           renderItem={(item, _index, patch) => (
-            <div className="grid grid-cols-2 gap-4">
+            <div className={gridTwoCol}>
               <div>
                 <label className={labelClass}>Name</label>
                 <input

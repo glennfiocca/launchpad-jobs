@@ -6,7 +6,14 @@ import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import { AddressCombobox } from "@/components/ui/address-combobox";
 import type { PlaceDetails } from "@/lib/validations/places";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import {
+  gridThreeCol,
+  gridTwoCol,
+  inputClass,
+  labelClass,
+  sectionClass,
+  sectionTitleClass,
+} from "./_shared/styles";
 import { SaveButton } from "./_shared/save-button";
 import { submitProfilePatch } from "./_shared/submit";
 
@@ -205,7 +212,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Personal Information</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>First Name *</label>
             <input
@@ -241,7 +248,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
             placeholder="e.g. Alex (if different from your legal first name)"
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Email *</label>
             <input
@@ -307,7 +314,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
             <p className="text-xs uppercase tracking-wide text-zinc-500">
               {group.title}
             </p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className={gridThreeCol}>
               {group.fields.map(({ key, label, placeholder }) => (
                 <div key={key}>
                   <label className={labelClass}>{label}</label>

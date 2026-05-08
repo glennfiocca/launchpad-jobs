@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import { UniversityCombobox } from "@/components/ui/university-combobox";
-import { inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
+import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { SaveButton } from "./_shared/save-button";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
@@ -72,7 +72,7 @@ export function EducationForm({ initialData }: EducationFormProps) {
       <IdentityRequiredNotice initialData={initialData} />
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Education</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Highest Degree</label>
             <select
@@ -102,7 +102,7 @@ export function EducationForm({ initialData }: EducationFormProps) {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Field of Study</label>
             <input

@@ -54,7 +54,7 @@ export function ResumeForm({ initialData }: ResumeFormProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       <div className={sectionClass}>
         <h2 className={sectionTitleClass}>Resume</h2>
         <p className="text-sm text-zinc-500 -mt-2">

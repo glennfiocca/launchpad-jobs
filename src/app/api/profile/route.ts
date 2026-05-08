@@ -5,6 +5,21 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import type { ApiResponse } from "@/types";
 import type { UserProfile } from "@prisma/client";
+import {
+  COMPANY_SIZES,
+  EMPLOYMENT_TYPES,
+  EQUITY_IMPORTANCE_VALUES,
+  SEARCH_STATUSES,
+  SECURITY_CLEARANCES,
+} from "@/types/_shared/profile-enums";
+import {
+  computeCompletionScore,
+  computeIsComplete,
+} from "@/lib/profile/completeness";
+
+// URLs in DB are nullable; UI sends "" for cleared fields. Mirror the existing
+// linkedinUrl/githubUrl/portfolioUrl pattern for every social link.
+const urlField = z.string().url().optional().or(z.literal(""));
 
 const profileSchema = z.object({
   firstName: z.string().min(1),
@@ -22,9 +37,20 @@ const profileSchema = z.object({
   locationPostalCode: z.string().optional(),
   locationLat: z.number().optional(),
   locationLng: z.number().optional(),
-  linkedinUrl: z.string().url().optional().or(z.literal("")),
-  githubUrl: z.string().url().optional().or(z.literal("")),
-  portfolioUrl: z.string().url().optional().or(z.literal("")),
+  // Social / professional links (10 new + 3 existing)
+  linkedinUrl: urlField,
+  githubUrl: urlField,
+  portfolioUrl: urlField,
+  twitterUrl: urlField,
+  stackOverflowUrl: urlField,
+  dribbbleUrl: urlField,
+  behanceUrl: urlField,
+  mediumUrl: urlField,
+  devToUrl: urlField,
+  googleScholarUrl: urlField,
+  huggingFaceUrl: urlField,
+  kaggleUrl: urlField,
+  youtubeUrl: urlField,
   resumeUrl: z.string().optional(),
   resumeFileName: z.string().optional(),
   headline: z.string().optional(),
@@ -44,7 +70,61 @@ const profileSchema = z.object({
   graduationYear: z.number().int().min(1950).max(2030).optional(),
   workAuthorization: z.string().optional(),
   requiresSponsorship: z.boolean().default(false),
+  // Job-search preferences (Phase 1 expansion)
+  noticePeriodWeeks: z.coerce.number().int().min(0).max(52).nullable().optional(),
+  earliestStartDate: z.coerce.date().nullable().optional(),
+  targetRoles: z.array(z.string().min(1).max(120)).max(50).default([]),
+  targetIndustries: z.array(z.string().min(1).max(120)).max(50).default([]),
+  companySizePreferences: z.array(z.enum(COMPANY_SIZES)).max(COMPANY_SIZES.length).default([]),
+  relocationOpen: z.boolean().default(false),
+  relocationCities: z.array(z.string().min(1).max(120)).max(50).default([]),
+  currencyPreference: z.string().length(3).default("USD"),
+  equityImportance: z.enum(EQUITY_IMPORTANCE_VALUES).nullable().optional(),
+  desiredEmploymentTypes: z.array(z.enum(EMPLOYMENT_TYPES)).max(EMPLOYMENT_TYPES.length).default([]),
+  searchStatus: z.enum(SEARCH_STATUSES).default("open"),
+  // Compliance — none of these are PII; standard ATS questions.
+  hasDriversLicense: z.boolean().nullable().optional(),
+  willingBackgroundCheck: z.boolean().nullable().optional(),
+  willingDrugTest: z.boolean().nullable().optional(),
+  securityClearance: z.enum(SECURITY_CLEARANCES).default("none"),
+  eligibleCountries: z.array(z.string().length(2)).max(50).default([]),
+  // Templates
+  coverLetterIntro: z.string().max(4000).nullable().optional(),
+  whyImLookingTemplate: z.string().max(4000).nullable().optional(),
 });
+
+// "" → null normalization for every URL field, so Postgres stores cleared
+// inputs as NULL rather than empty strings.
+function nullifyEmptyUrls<T extends Record<string, unknown>>(data: T): T {
+  const urlKeys: ReadonlyArray<keyof T> = [
+    "linkedinUrl",
+    "githubUrl",
+    "portfolioUrl",
+    "twitterUrl",
+    "stackOverflowUrl",
+    "dribbbleUrl",
+    "behanceUrl",
+    "mediumUrl",
+    "devToUrl",
+    "googleScholarUrl",
+    "huggingFaceUrl",
+    "kaggleUrl",
+    "youtubeUrl",
+  ] as ReadonlyArray<keyof T>;
+  const out = { ...data } as Record<string, unknown>;
+  for (const k of urlKeys) {
+    const key = k as string;
+    if (out[key] === "") out[key] = null;
+  }
+  return out as T;
+}
+
+// GET response keeps the legacy { success, data } envelope (consumed by
+// /components/jobs/apply-modal.tsx and the per-tab forms) and adds an extra
+// top-level `completionScore` field. Existing callers ignore unknown keys.
+interface ProfileGetResponse extends ApiResponse<UserProfile | null> {
+  completionScore?: number;
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -59,9 +139,29 @@ export async function GET() {
     where: { userId: session.user.id },
   });
 
-  return NextResponse.json<ApiResponse<UserProfile | null>>({
+  if (!profile) {
+    return NextResponse.json<ProfileGetResponse>({
+      success: true,
+      data: null,
+    });
+  }
+
+  // Two cheap COUNT(*) queries beat over-fetching child rows just to compute
+  // a score; we only need the scalar counts here.
+  const [workExperiences, skills] = await Promise.all([
+    db.workExperience.count({ where: { profileId: profile.id } }),
+    db.skill.count({ where: { profileId: profile.id } }),
+  ]);
+
+  const completionScore = computeCompletionScore(profile, {
+    workExperiences,
+    skills,
+  });
+
+  return NextResponse.json<ProfileGetResponse>({
     success: true,
     data: profile,
+    completionScore,
   });
 }
 
@@ -83,20 +183,32 @@ export async function PUT(request: Request) {
     );
   }
 
-  const data = {
-    ...parsed.data,
-    isComplete: true,
-    linkedinUrl: parsed.data.linkedinUrl || null,
-    githubUrl: parsed.data.githubUrl || null,
-    portfolioUrl: parsed.data.portfolioUrl || null,
-  };
+  const data = nullifyEmptyUrls(parsed.data);
 
   try {
-    const profile = await db.userProfile.upsert({
+    // First upsert: write the validated data without isComplete. We compute
+    // completeness from the persisted row + child counts in a follow-up
+    // update so the boolean reflects current state, not just the request body.
+    const upserted = await db.userProfile.upsert({
       where: { userId: session.user.id },
       update: data,
       create: { ...data, userId: session.user.id },
     });
+
+    const workExperiences = await db.workExperience.count({
+      where: { profileId: upserted.id },
+    });
+
+    const isComplete = computeIsComplete(upserted, { workExperiences });
+
+    const profile =
+      upserted.isComplete === isComplete
+        ? upserted
+        : await db.userProfile.update({
+            where: { id: upserted.id },
+            data: { isComplete },
+          });
+
     return NextResponse.json<ApiResponse<UserProfile>>({
       success: true,
       data: profile,

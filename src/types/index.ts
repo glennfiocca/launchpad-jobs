@@ -8,7 +8,18 @@ import type {
   ApplicationStatus,
 } from "@prisma/client";
 
+import type {
+  SkillCategory,
+  EmploymentType,
+  LanguageProficiency,
+  SecurityClearance,
+  EquityImportance,
+  SearchStatus,
+  CompanySize,
+} from "./_shared/profile-enums";
+
 export type { ApplicationStatus };
+export * from "./_shared/profile-enums";
 
 // Job with company
 export type JobWithCompany = Job & {
@@ -172,6 +183,17 @@ export interface ProfileFormData {
   linkedinUrl?: string;
   githubUrl?: string;
   portfolioUrl?: string;
+  // Extended professional / social links
+  twitterUrl?: string;
+  stackOverflowUrl?: string;
+  dribbbleUrl?: string;
+  behanceUrl?: string;
+  mediumUrl?: string;
+  devToUrl?: string;
+  googleScholarUrl?: string;
+  huggingFaceUrl?: string;
+  kaggleUrl?: string;
+  youtubeUrl?: string;
   headline?: string;
   summary?: string;
   currentTitle?: string;
@@ -189,6 +211,102 @@ export interface ProfileFormData {
   graduationYear?: number;
   workAuthorization?: string;
   requiresSponsorship: boolean;
+  // Job-search preferences
+  noticePeriodWeeks?: number;
+  /** ISO date string (YYYY-MM-DD or full ISO) — null when cleared */
+  earliestStartDate?: string | null;
+  targetRoles: string[];
+  targetIndustries: string[];
+  companySizePreferences: CompanySize[];
+  relocationOpen: boolean;
+  relocationCities: string[];
+  currencyPreference: string;
+  equityImportance?: EquityImportance;
+  desiredEmploymentTypes: EmploymentType[];
+  searchStatus: SearchStatus;
+  // Compliance (standard ATS questions — none are PII)
+  hasDriversLicense?: boolean;
+  willingBackgroundCheck?: boolean;
+  willingDrugTest?: boolean;
+  securityClearance: SecurityClearance;
+  eligibleCountries: string[]; // ISO-3166-1 alpha-2
+  // Application templates
+  coverLetterIntro?: string;
+  whyImLookingTemplate?: string;
+}
+
+// ───────── Profile sub-resource inputs (Phase 1 expansion) ─────────
+// Each interface mirrors its Prisma model minus generated/relation fields.
+// `id?` is optional so the same shape works for create + update upserts.
+// Dates are serialized as ISO strings on the wire.
+
+export interface SkillInput {
+  id?: string;
+  name: string;
+  category: SkillCategory;
+  proficiency: number; // 1-5, validated app-side
+  yearsUsed?: number | null;
+  order: number;
+}
+
+export interface WorkExperienceInput {
+  id?: string;
+  title: string;
+  company: string;
+  companyUrl?: string | null;
+  startDate: string;        // ISO
+  endDate?: string | null;  // ISO
+  isCurrent: boolean;
+  location?: string | null;
+  employmentType: EmploymentType;
+  description?: string | null;
+  order: number;
+}
+
+export interface EducationEntryInput {
+  id?: string;
+  universityId?: string | null;
+  schoolName?: string | null;
+  degree: string;
+  fieldOfStudy: string;
+  startYear?: number | null;
+  endYear?: number | null;
+  gpa?: number | null;
+  honors?: string | null;
+  activities?: string | null;
+  order: number;
+}
+
+export interface ProjectInput {
+  id?: string;
+  name: string;
+  url?: string | null;
+  repoUrl?: string | null;
+  description?: string | null;
+  technologies: string[];
+  role?: string | null;
+  startDate?: string | null; // ISO
+  endDate?: string | null;   // ISO
+  isOngoing: boolean;
+  order: number;
+}
+
+export interface CertificationInput {
+  id?: string;
+  name: string;
+  issuer: string;
+  issueDate?: string | null;  // ISO
+  expiryDate?: string | null; // ISO
+  credentialUrl?: string | null;
+  credentialId?: string | null;
+  order: number;
+}
+
+export interface SpokenLanguageInput {
+  id?: string;
+  name: string;
+  proficiency: LanguageProficiency;
+  order: number;
 }
 
 export * from "./admin"

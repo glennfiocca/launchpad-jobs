@@ -112,7 +112,7 @@ model User {
   // a future UI. Honored as the legal "Do Not Sell or Share" signal.
   gpcOptOut Boolean @default(false)
 
-  role      Role     @default(USER)
+  role Role @default(USER)
 
   // Billing
   stripeCustomerId   String?            @unique
@@ -123,14 +123,14 @@ model User {
   creditsUsed       Int      @default(0)
 
   // Referral system
-  referralCode        String?   @unique
-  normalizedEmail     String?   @unique
-  signupIpAddress     String?
-  referralCredits     Int       @default(0)
-  referralsSent       Referral[] @relation("ReferralsSent")
-  referralReceived    Referral?  @relation("ReferralReceived")
-  creditTransactions  CreditTransaction[]
-  creditActorLogs     CreditTransaction[] @relation("CreditActor")
+  referralCode       String?             @unique
+  normalizedEmail    String?             @unique
+  signupIpAddress    String?
+  referralCredits    Int                 @default(0)
+  referralsSent      Referral[]          @relation("ReferralsSent")
+  referralReceived   Referral?           @relation("ReferralReceived")
+  creditTransactions CreditTransaction[]
+  creditActorLogs    CreditTransaction[] @relation("CreditActor")
 
   accounts               Account[]
   sessions               Session[]
@@ -157,19 +157,19 @@ model User {
 // FK uses SetNull (not Cascade) so privacy-related submissions outlive an
 // account deletion for legal/audit purposes.
 model ContactMessage {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   email       String
   // App-validated enum: general | privacy | account | bug | other
   category    String
   pageUrl     String?
-  message     String   @db.Text
+  message     String    @db.Text
   ipAddress   String?
   userAgent   String?
   userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   deliveredAt DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([createdAt])
   @@index([category])
@@ -196,15 +196,15 @@ model LoginEvent {
 // proposed new address; consumption atomically updates User.email and bumps
 // User.tokenVersion to invalidate all outstanding JWTs.
 model EmailChangeRequest {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  newEmail    String
-  tokenHash   String   @unique // sha256(token)
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime @default(now())
-  ipAddress   String?
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newEmail   String
+  tokenHash  String    @unique // sha256(token)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  ipAddress  String?
 
   @@index([userId])
   @@index([expiresAt])
@@ -233,18 +233,30 @@ model UserProfile {
   firstName          String
   lastName           String
   preferredFirstName String?
-  email       String
-  phone       String?
-  location    String?
+  email              String
+  phone              String?
+  location           String?
 
   // Professional links
   linkedinUrl  String?
   githubUrl    String?
   portfolioUrl String?
 
+  // Extended professional / social links
+  twitterUrl       String?
+  stackOverflowUrl String?
+  dribbbleUrl      String?
+  behanceUrl       String?
+  mediumUrl        String?
+  devToUrl         String?
+  googleScholarUrl String?
+  huggingFaceUrl   String?
+  kaggleUrl        String?
+  youtubeUrl       String?
+
   // Resume — stored in DB (bytes), migrates to DO Spaces (url) in production
   resumeData     Bytes?
-  resumeUrl      String?   // set when using DO Spaces
+  resumeUrl      String? // set when using DO Spaces
   resumeFileName String?
   resumeMimeType String?
 
@@ -269,7 +281,7 @@ model UserProfile {
   // Education
   highestDegree  String?
   fieldOfStudy   String?
-  university     String?   // legacy free-text (soft-deprecated; use universityId)
+  university     String? // legacy free-text (soft-deprecated; use universityId)
   graduationYear Int?
 
   // University FK (structured)
@@ -294,6 +306,38 @@ model UserProfile {
   // { "questionKey": "answer" }
   customAnswers Json?
 
+  // Job-search preferences
+  noticePeriodWeeks      Int?
+  earliestStartDate      DateTime?
+  targetRoles            String[]  @default([])
+  targetIndustries       String[]  @default([])
+  companySizePreferences String[]  @default([]) // startup|scaleup|midsize|enterprise
+  relocationOpen         Boolean   @default(false)
+  relocationCities       String[]  @default([])
+  currencyPreference     String    @default("USD")
+  equityImportance       String? // none|some|high
+  desiredEmploymentTypes String[]  @default([]) // full-time|part-time|contract|internship|temporary
+  searchStatus           String    @default("open") // actively-looking|open|not-looking
+
+  // Compliance (standard ATS questions — none are PII)
+  hasDriversLicense      Boolean?
+  willingBackgroundCheck Boolean?
+  willingDrugTest        Boolean?
+  securityClearance      String   @default("none") // none|confidential|secret|top-secret
+  eligibleCountries      String[] @default([]) // ISO-3166-1 alpha-2 codes
+
+  // Application templates
+  coverLetterIntro     String? @db.Text
+  whyImLookingTemplate String? @db.Text
+
+  // Reverse relations (Phase 1 expansion)
+  skills           Skill[]
+  workExperiences  WorkExperience[]
+  educationEntries EducationEntry[]
+  projects         Project[]
+  certifications   Certification[]
+  spokenLanguages  SpokenLanguage[]
+
   isComplete Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -301,12 +345,13 @@ model UserProfile {
 }
 
 model University {
-  id       String        @id @default(cuid())
-  ipedId   String        @unique
-  name     String
-  city     String?
-  state    String?       // 2-letter abbreviation
-  profiles UserProfile[]
+  id               String           @id @default(cuid())
+  ipedId           String           @unique
+  name             String
+  city             String?
+  state            String? // 2-letter abbreviation
+  profiles         UserProfile[]
+  educationEntries EducationEntry[]
 
   @@index([name])
 }
@@ -314,19 +359,19 @@ model University {
 model Company {
   id       String      @id @default(cuid())
   name     String
-  slug     String      // Greenhouse board token (unique per provider)
+  slug     String // Greenhouse board token (unique per provider)
   provider AtsProvider @default(GREENHOUSE)
 
-  logoUrl  String?
+  logoUrl    String?
   /// Where logoUrl came from — set alongside logoUrl on every write by
   /// the resolver/enrichment pipeline. Null until the next sync cycle
   /// populates it (Track B.5 of HARDENING_PLAN.md). Surfaced as a
   /// distribution stat in /admin/sync.
   logoSource LogoSource?
-  website  String?
-  industry String?
-  size     String?
-  about    String? @db.Text
+  website    String?
+  industry   String?
+  size       String?
+  about      String?     @db.Text
 
   /// CSS selector override for the apply trigger button on self-hoster
   /// careers pages (Track A.2 of HARDENING_PLAN.md). When set, the Ashby
@@ -343,13 +388,13 @@ model Company {
 }
 
 model Job {
-  id         String      @id @default(cuid())
+  id          String      @id @default(cuid())
   /// External listing ref (e.g. PL + hash) for URLs and search; internal `id` stays the FK.
-  publicJobId String     @unique
-  externalId String      // Greenhouse job ID (numeric string)
-  companyId  String
-  company    Company     @relation(fields: [companyId], references: [id])
-  provider   AtsProvider @default(GREENHOUSE)
+  publicJobId String      @unique
+  externalId  String // Greenhouse job ID (numeric string)
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id])
+  provider    AtsProvider @default(GREENHOUSE)
 
   title           String
   location        String?
@@ -460,7 +505,7 @@ model Application {
   submissionError String? @db.Text
 
   // Tracks async Playwright submission lifecycle: PENDING | SUBMITTED | FAILED | AWAITING_OPERATOR
-  submissionStatus  String @default("PENDING")
+  submissionStatus String @default("PENDING")
 
   // Immutable snapshot of apply-time data written when AWAITING_OPERATOR
   applicationSnapshot Json?
@@ -505,7 +550,7 @@ model ApplicationDocument {
 
   fileName  String
   mimeType  String
-  spacesKey String  @unique
+  spacesKey String @unique
   sizeBytes Int
 
   // Optional human-friendly title (e.g. "Q&A Summary — Acme / Senior Engineer")
@@ -534,7 +579,7 @@ model ApplicationEmail {
   // AI-determined classification
   aiClassification ApplicationStatus?
   aiConfidence     Float?
-  aiReasoning      String? @db.Text
+  aiReasoning      String?            @db.Text
 
   direction String @default("inbound") // inbound | outbound
 
@@ -552,7 +597,7 @@ model ApplicationStatusHistory {
   fromStatus  ApplicationStatus?
   toStatus    ApplicationStatus
   reason      String?
-  triggeredBy String @default("system") // user | ai | system
+  triggeredBy String             @default("system") // user | ai | system
 
   createdAt DateTime @default(now())
 
@@ -630,20 +675,20 @@ enum SyncBoardStatus {
 }
 
 model SyncLog {
-  id           String     @id @default(cuid())
-  triggeredBy  String     // "cron" | "admin:<email>" | "api"
-  startedAt    DateTime   @default(now())
-  completedAt  DateTime?
-  status       SyncStatus @default(RUNNING)
-  totalBoards  Int        @default(0)
-  boardsSynced Int        @default(0)
-  boardsFailed Int        @default(0)
-  totalAdded   Int        @default(0)
-  totalUpdated Int        @default(0)
-  totalDeactivated         Int @default(0)
-  totalApplicationsUpdated Int @default(0)
-  durationMs   Int?
-  errorSummary String?    @db.Text
+  id                       String     @id @default(cuid())
+  triggeredBy              String // "cron" | "admin:<email>" | "api"
+  startedAt                DateTime   @default(now())
+  completedAt              DateTime?
+  status                   SyncStatus @default(RUNNING)
+  totalBoards              Int        @default(0)
+  boardsSynced             Int        @default(0)
+  boardsFailed             Int        @default(0)
+  totalAdded               Int        @default(0)
+  totalUpdated             Int        @default(0)
+  totalDeactivated         Int        @default(0)
+  totalApplicationsUpdated Int        @default(0)
+  durationMs               Int?
+  errorSummary             String?    @db.Text
 
   boardResults SyncBoardResult[]
 
@@ -652,20 +697,20 @@ model SyncLog {
 }
 
 model SyncBoardResult {
-  id          String          @id @default(cuid())
-  syncLogId   String
-  syncLog     SyncLog         @relation(fields: [syncLogId], references: [id], onDelete: Cascade)
-  boardToken  String
-  boardName   String
-  status      SyncBoardStatus
-  added       Int             @default(0)
-  updated     Int             @default(0)
-  deactivated Int             @default(0)
-  applicationsUpdated Int     @default(0)
-  errors      String[]        @default([])
-  startedAt   DateTime
-  completedAt DateTime?
-  durationMs  Int?
+  id                  String          @id @default(cuid())
+  syncLogId           String
+  syncLog             SyncLog         @relation(fields: [syncLogId], references: [id], onDelete: Cascade)
+  boardToken          String
+  boardName           String
+  status              SyncBoardStatus
+  added               Int             @default(0)
+  updated             Int             @default(0)
+  deactivated         Int             @default(0)
+  applicationsUpdated Int             @default(0)
+  errors              String[]        @default([])
+  startedAt           DateTime
+  completedAt         DateTime?
+  durationMs          Int?
 
   @@index([syncLogId])
 }
@@ -707,7 +752,7 @@ model Notification {
 
   // Pre-rendered content for fast reads
   title    String
-  body     String?  @db.Text
+  body     String? @db.Text
   ctaUrl   String?
   ctaLabel String?
 
@@ -782,22 +827,22 @@ model ApplicationAuditLog {
 // ─── Referral System ─────────────────────────────────────────────────────────
 
 model Referral {
-  id                   String         @id @default(cuid())
-  referrerId           String
-  referrer             User           @relation("ReferralsSent", fields: [referrerId], references: [id])
-  refereeId            String?        @unique
-  referee              User?          @relation("ReferralReceived", fields: [refereeId], references: [id])
-  referralCode         String
-  status               ReferralStatus @default(PENDING)
-  refereeIpAddress     String?
-  referrerIpAddress    String?
-  ipFlagged            Boolean        @default(false)
-  firstApplicationAt   DateTime?
-  creditTransactionId  String?        @unique
-  creditTransaction    CreditTransaction? @relation(fields: [creditTransactionId], references: [id])
-  expiresAt            DateTime
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  id                  String             @id @default(cuid())
+  referrerId          String
+  referrer            User               @relation("ReferralsSent", fields: [referrerId], references: [id])
+  refereeId           String?            @unique
+  referee             User?              @relation("ReferralReceived", fields: [refereeId], references: [id])
+  referralCode        String
+  status              ReferralStatus     @default(PENDING)
+  refereeIpAddress    String?
+  referrerIpAddress   String?
+  ipFlagged           Boolean            @default(false)
+  firstApplicationAt  DateTime?
+  creditTransactionId String?            @unique
+  creditTransaction   CreditTransaction? @relation(fields: [creditTransactionId], references: [id])
+  expiresAt           DateTime
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([referrerId])
   @@index([referralCode])
@@ -873,4 +918,115 @@ model JobReport {
   @@index([status, createdAt(sort: Desc)])
   @@index([jobId])
   @@index([userId])
+}
+
+// Profile expansion (Phase 1) ——————————————————————————————————————
+
+model Skill {
+  id          String      @id @default(cuid())
+  profileId   String
+  profile     UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name        String
+  category    String // language|framework|tool|domain|soft
+  proficiency Int // 1-5
+  yearsUsed   Int?
+  order       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([profileId, name])
+  @@index([profileId])
+}
+
+model WorkExperience {
+  id             String      @id @default(cuid())
+  profileId      String
+  profile        UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title          String
+  company        String
+  companyUrl     String?
+  startDate      DateTime
+  endDate        DateTime?
+  isCurrent      Boolean     @default(false)
+  location       String?
+  employmentType String // full-time|part-time|contract|internship|temporary
+  description    String?     @db.Text
+  order          Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([profileId])
+  @@index([profileId, startDate])
+}
+
+model EducationEntry {
+  id           String      @id @default(cuid())
+  profileId    String
+  profile      UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  universityId String?
+  university   University? @relation(fields: [universityId], references: [id])
+  schoolName   String?
+  degree       String
+  fieldOfStudy String
+  startYear    Int?
+  endYear      Int?
+  gpa          Float?
+  honors       String?
+  activities   String?     @db.Text
+  order        Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([profileId])
+}
+
+model Project {
+  id           String      @id @default(cuid())
+  profileId    String
+  profile      UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name         String
+  url          String?
+  repoUrl      String?
+  description  String?     @db.Text
+  technologies String[]    @default([])
+  role         String?
+  startDate    DateTime?
+  endDate      DateTime?
+  isOngoing    Boolean     @default(false)
+  order        Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([profileId])
+}
+
+model Certification {
+  id            String      @id @default(cuid())
+  profileId     String
+  profile       UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String
+  issueDate     DateTime?
+  expiryDate    DateTime?
+  credentialUrl String?
+  credentialId  String?
+  order         Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([profileId])
+}
+
+model SpokenLanguage {
+  id          String      @id @default(cuid())
+  profileId   String
+  profile     UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name        String
+  proficiency String // native|fluent|professional|conversational|basic
+  order       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([profileId, name])
+  @@index([profileId])
 }

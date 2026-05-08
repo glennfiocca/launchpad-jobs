@@ -66,7 +66,7 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
     }
     try {
       await create({
-        name: "",
+        name: `New skill ${items.length + 1}`,
         category: "language",
         proficiency: 3,
         yearsUsed: null,
@@ -245,7 +245,7 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
     }
     try {
       await create({
-        name: "",
+        name: `New language ${items.length + 1}`,
         proficiency: "professional",
         order: 0,
       });

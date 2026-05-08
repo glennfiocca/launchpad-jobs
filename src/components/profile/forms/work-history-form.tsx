@@ -56,7 +56,7 @@ export function WorkHistoryForm({ initialData }: WorkHistoryFormProps) {
     try {
       await create({
         title: "New role",
-        company: "",
+        company: "New company",
         companyUrl: "",
         startDate: new Date().toISOString().slice(0, 10),
         endDate: null,

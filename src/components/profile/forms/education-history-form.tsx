@@ -35,7 +35,7 @@ export function EducationHistoryForm({ initialData }: Props) {
         universityId: null,
         schoolName: "New school",
         degree: "Bachelor's",
-        fieldOfStudy: "",
+        fieldOfStudy: "Field of study",
         startYear: null,
         endYear: null,
         gpa: null,

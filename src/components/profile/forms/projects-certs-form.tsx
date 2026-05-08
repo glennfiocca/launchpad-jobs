@@ -278,8 +278,8 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
     }
     try {
       await create({
-        name: "",
-        issuer: "",
+        name: "New certification",
+        issuer: "Issuer",
         issueDate: null,
         expiryDate: null,
         credentialUrl: "",

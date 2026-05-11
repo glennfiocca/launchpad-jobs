@@ -11,6 +11,14 @@ interface UniversityComboboxProps {
   universityId?: string;
   onSelect: (id: string, name: string) => void;
   onClear: () => void;
+  /**
+   * Optional free-text fallback. Fired on blur when the typed value differs
+   * from the controlled `value` and the user didn't pick a suggestion. Lets
+   * callers persist a schoolName for institutions missing from the
+   * University table (e.g. "ITT Tech"). When omitted, free-text edits are
+   * discarded on blur — preserving the legacy pick-only behavior.
+   */
+  onFreeText?: (text: string) => void;
   placeholder?: string;
   className?: string;
 }
@@ -19,6 +27,7 @@ export function UniversityCombobox({
   value,
   onSelect,
   onClear,
+  onFreeText,
   placeholder = "Search universities...",
   className,
 }: UniversityComboboxProps) {
@@ -82,6 +91,18 @@ export function UniversityCombobox({
     onClear();
   }, [onClear]);
 
+  // Free-text fallback: if the user typed something different from the
+  // controlled `value` and didn't pick a suggestion, surface it via
+  // `onFreeText` so the parent can persist a schoolName. Picks are excluded
+  // because handleSelect already resets `input` to the picked name, which the
+  // parent then mirrors back as `value` via the sync effect.
+  const handleBlur = useCallback(() => {
+    if (!onFreeText) return;
+    const trimmed = input.trim();
+    if (trimmed === value.trim()) return;
+    onFreeText(trimmed);
+  }, [input, value, onFreeText]);
+
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -103,6 +124,7 @@ export function UniversityCombobox({
             type="text"
             value={input}
             onChange={(e) => handleInput(e.target.value)}
+            onBlur={handleBlur}
             placeholder={placeholder}
             className={inputClass}
             autoComplete="off"

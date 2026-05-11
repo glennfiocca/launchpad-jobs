@@ -101,32 +101,37 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
   };
 
   return (
-    <div className={sectionClass}>
+    // `flex flex-col h-full` + the inner `flex-1` wrapper pin the Add button
+    // to the bottom of the card, so it aligns with the paired Certifications
+    // Add button regardless of differing helper-text wrap heights.
+    <div className={`${sectionClass} flex flex-col h-full`}>
       <h2 className={sectionTitleClass}>Projects</h2>
       <p className="text-xs text-zinc-500 -mt-2">
         Side projects, open-source contributions, or notable work outside of
         full-time roles.
       </p>
 
-      {loading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
-      ) : (
-        <ListEditor<ProjectRow>
-          items={items}
-          onAdd={handleAdd}
-          onRemove={handleRemove}
-          onItemUpdate={handleUpdate}
-          recentlySavedIds={recentlySavedIds}
-          autoFocusItemId={lastCreatedId}
-          onAutoFocusConsumed={consumeLastCreatedId}
-          addLabel="Add project"
-          emptyState={<EmptyState content={EMPTY_STATES.projects} />}
-          itemLabel={(item) => item.name || "(unnamed project)"}
-          renderItem={(item, _index, patch) => (
-            <ProjectFields item={item} patch={patch} />
-          )}
-        />
-      )}
+      <div className="flex-1 flex flex-col">
+        {loading ? (
+          <p className="text-sm text-zinc-500">Loading…</p>
+        ) : (
+          <ListEditor<ProjectRow>
+            items={items}
+            onAdd={handleAdd}
+            onRemove={handleRemove}
+            onItemUpdate={handleUpdate}
+            recentlySavedIds={recentlySavedIds}
+            autoFocusItemId={lastCreatedId}
+            onAutoFocusConsumed={consumeLastCreatedId}
+            addLabel="Add project"
+            emptyState={<EmptyState content={EMPTY_STATES.projects} />}
+            itemLabel={(item) => item.name || "(unnamed project)"}
+            renderItem={(item, _index, patch) => (
+              <ProjectFields item={item} patch={patch} />
+            )}
+          />
+        )}
+      </div>
 
       {error && (
         <p className="text-sm text-red-400" role="alert">
@@ -333,31 +338,33 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
   };
 
   return (
-    <div className={sectionClass}>
+    <div className={`${sectionClass} flex flex-col h-full`}>
       <h2 className={sectionTitleClass}>Certifications</h2>
       <p className="text-xs text-zinc-500 -mt-2">
         Industry credentials, licenses, and professional certifications.
       </p>
 
-      {loading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
-      ) : (
-        <ListEditor<CertificationRow>
-          items={items}
-          onAdd={handleAdd}
-          onRemove={handleRemove}
-          onItemUpdate={handleUpdate}
-          recentlySavedIds={recentlySavedIds}
-          autoFocusItemId={lastCreatedId}
-          onAutoFocusConsumed={consumeLastCreatedId}
-          addLabel="Add certification"
-          emptyState={<EmptyState content={EMPTY_STATES.certifications} />}
-          itemLabel={(item) => item.name || "(unnamed certification)"}
-          renderItem={(item, _index, patch) => (
-            <CertificationFields item={item} patch={patch} />
-          )}
-        />
-      )}
+      <div className="flex-1 flex flex-col">
+        {loading ? (
+          <p className="text-sm text-zinc-500">Loading…</p>
+        ) : (
+          <ListEditor<CertificationRow>
+            items={items}
+            onAdd={handleAdd}
+            onRemove={handleRemove}
+            onItemUpdate={handleUpdate}
+            recentlySavedIds={recentlySavedIds}
+            autoFocusItemId={lastCreatedId}
+            onAutoFocusConsumed={consumeLastCreatedId}
+            addLabel="Add certification"
+            emptyState={<EmptyState content={EMPTY_STATES.certifications} />}
+            itemLabel={(item) => item.name || "(unnamed certification)"}
+            renderItem={(item, _index, patch) => (
+              <CertificationFields item={item} patch={patch} />
+            )}
+          />
+        )}
+      </div>
 
       {error && (
         <p className="text-sm text-red-400" role="alert">

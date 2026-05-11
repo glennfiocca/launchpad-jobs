@@ -144,37 +144,42 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
   };
 
   return (
-    <div className={sectionClass}>
+    // `flex flex-col h-full` + the inner `flex-1` wrapper let the Add button
+    // sink to the bottom of the card so it aligns with the paired card's Add
+    // button regardless of differing helper-text wrap heights.
+    <div className={`${sectionClass} flex flex-col h-full`}>
       <h2 className={sectionTitleClass}>Skills</h2>
       <p className="text-xs text-zinc-500 -mt-2">
         Languages, frameworks, tools, and domains you work with.
       </p>
 
-      {loading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
-      ) : (
-        <ListEditor<SkillRow>
-          items={items}
-          onAdd={handleAdd}
-          onRemove={handleRemove}
-          onItemUpdate={handleUpdate}
-          recentlySavedIds={recentlySavedIds}
-          autoFocusItemId={lastCreatedId}
-          onAutoFocusConsumed={consumeLastCreatedId}
-          addLabel="Add skill"
-          emptyState={<EmptyState content={EMPTY_STATES.skills} />}
-          itemLabel={(item) => item.name || "(unnamed skill)"}
-          renderItem={(item, _index, patch) => (
-            <SkillFields
-              item={item}
-              patch={patch}
-              isDuplicate={(candidate) =>
-                hasNameConflict(items, item.id, candidate)
-              }
-            />
-          )}
-        />
-      )}
+      <div className="flex-1 flex flex-col">
+        {loading ? (
+          <p className="text-sm text-zinc-500">Loading…</p>
+        ) : (
+          <ListEditor<SkillRow>
+            items={items}
+            onAdd={handleAdd}
+            onRemove={handleRemove}
+            onItemUpdate={handleUpdate}
+            recentlySavedIds={recentlySavedIds}
+            autoFocusItemId={lastCreatedId}
+            onAutoFocusConsumed={consumeLastCreatedId}
+            addLabel="Add skill"
+            emptyState={<EmptyState content={EMPTY_STATES.skills} />}
+            itemLabel={(item) => item.name || "(unnamed skill)"}
+            renderItem={(item, _index, patch) => (
+              <SkillFields
+                item={item}
+                patch={patch}
+                isDuplicate={(candidate) =>
+                  hasNameConflict(items, item.id, candidate)
+                }
+              />
+            )}
+          />
+        )}
+      </div>
 
       {error && (
         <p className="text-sm text-red-400" role="alert">
@@ -359,37 +364,39 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
   };
 
   return (
-    <div className={sectionClass}>
+    <div className={`${sectionClass} flex flex-col h-full`}>
       <h2 className={sectionTitleClass}>Languages</h2>
       <p className="text-xs text-zinc-500 -mt-2">
         Spoken languages used in your work, with proficiency level.
       </p>
 
-      {loading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
-      ) : (
-        <ListEditor<LanguageRow>
-          items={items}
-          onAdd={handleAdd}
-          onRemove={handleRemove}
-          onItemUpdate={handleUpdate}
-          recentlySavedIds={recentlySavedIds}
-          autoFocusItemId={lastCreatedId}
-          onAutoFocusConsumed={consumeLastCreatedId}
-          addLabel="Add language"
-          emptyState={<EmptyState content={EMPTY_STATES.languages} />}
-          itemLabel={(item) => item.name || "(unnamed language)"}
-          renderItem={(item, _index, patch) => (
-            <LanguageFields
-              item={item}
-              patch={patch}
-              isDuplicate={(candidate) =>
-                hasNameConflict(items, item.id, candidate)
-              }
-            />
-          )}
-        />
-      )}
+      <div className="flex-1 flex flex-col">
+        {loading ? (
+          <p className="text-sm text-zinc-500">Loading…</p>
+        ) : (
+          <ListEditor<LanguageRow>
+            items={items}
+            onAdd={handleAdd}
+            onRemove={handleRemove}
+            onItemUpdate={handleUpdate}
+            recentlySavedIds={recentlySavedIds}
+            autoFocusItemId={lastCreatedId}
+            onAutoFocusConsumed={consumeLastCreatedId}
+            addLabel="Add language"
+            emptyState={<EmptyState content={EMPTY_STATES.languages} />}
+            itemLabel={(item) => item.name || "(unnamed language)"}
+            renderItem={(item, _index, patch) => (
+              <LanguageFields
+                item={item}
+                patch={patch}
+                isDuplicate={(candidate) =>
+                  hasNameConflict(items, item.id, candidate)
+                }
+              />
+            )}
+          />
+        )}
+      </div>
 
       {error && (
         <p className="text-sm text-red-400" role="alert">

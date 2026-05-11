@@ -94,79 +94,87 @@ export function ListEditor<T extends { id: string }>({
   }, [autoFocusItemId, onAutoFocusConsumed]);
 
   return (
-    <div className="space-y-3">
-      {items.length === 0 && emptyState ? (
-        <div className="text-sm text-zinc-500">{emptyState}</div>
-      ) : null}
+    // `flex flex-col h-full` lets parents in a paired-section grid pin the
+    // Add button to the bottom of the card (so paired Add buttons align even
+    // when header heights differ). On single-column tabs the wrapper has no
+    // explicit height, so `h-full` is a no-op and layout is unchanged.
+    <div className="flex flex-col h-full">
+      <div className="space-y-3 flex-1">
+        {items.length === 0 && emptyState ? (
+          <div className="text-sm text-zinc-500">{emptyState}</div>
+        ) : null}
 
-      {items.map((item, index) => (
-        <div
-          key={item.id}
-          ref={(el) => {
-            if (el) rowRefs.current.set(item.id, el);
-            else rowRefs.current.delete(item.id);
-          }}
-          className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
-              <span>{itemLabel ? itemLabel(item, index) : `Entry ${index + 1}`}</span>
-              {recentlySavedIds?.has(item.id) && (
-                <span
-                  className="text-xs text-emerald-400 normal-case tracking-normal transition-opacity"
-                  aria-live="polite"
+        {items.map((item, index) => (
+          <div
+            key={item.id}
+            ref={(el) => {
+              if (el) rowRefs.current.set(item.id, el);
+              else rowRefs.current.delete(item.id);
+            }}
+            className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+                <span>{itemLabel ? itemLabel(item, index) : `Entry ${index + 1}`}</span>
+                {recentlySavedIds?.has(item.id) && (
+                  <span
+                    className="text-xs text-emerald-400 normal-case tracking-normal transition-opacity"
+                    aria-live="polite"
+                  >
+                    Saved
+                  </span>
+                )}
+              </span>
+              <div className="flex items-center gap-1">
+                {onReorder && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onReorder(index, index - 1)}
+                      disabled={busy || index === 0}
+                      aria-label="Move up"
+                      className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReorder(index, index + 1)}
+                      disabled={busy || index === items.length - 1}
+                      aria-label="Move down"
+                      className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      ↓
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  disabled={busy}
+                  aria-label="Remove entry"
+                  className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  Saved
-                </span>
-              )}
-            </span>
-            <div className="flex items-center gap-1">
-              {onReorder && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onReorder(index, index - 1)}
-                    disabled={busy || index === 0}
-                    aria-label="Move up"
-                    className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onReorder(index, index + 1)}
-                    disabled={busy || index === items.length - 1}
-                    aria-label="Move down"
-                    className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    ↓
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => onRemove(index)}
-                disabled={busy}
-                aria-label="Remove entry"
-                className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                Remove
-              </button>
+                  Remove
+                </button>
+              </div>
             </div>
+
+            {renderItem(item, index, (patch) => onItemUpdate(index, patch))}
           </div>
+        ))}
+      </div>
 
-          {renderItem(item, index, (patch) => onItemUpdate(index, patch))}
-        </div>
-      ))}
-
-      <button
-        type="button"
-        onClick={onAdd}
-        disabled={busy}
-        className="w-full rounded-xl border border-dashed border-white/15 bg-white/5 px-4 py-3 text-sm text-zinc-400 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50"
-      >
-        + {addLabel}
-      </button>
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={busy}
+          className="w-full rounded-xl border border-dashed border-white/15 bg-white/5 px-4 py-3 text-sm text-zinc-400 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50"
+        >
+          + {addLabel}
+        </button>
+      </div>
     </div>
   );
 }

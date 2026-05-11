@@ -3,6 +3,8 @@
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import type { EducationEntryInput } from "@/types";
+import { UniversityCombobox } from "@/components/ui/university-combobox";
+import type { EducationEntryUniversitySummary } from "@/app/api/profile/education-entries/_include";
 import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
 import { isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
@@ -15,7 +17,22 @@ import { EMPTY_STATES } from "./_shared/empty-states";
 // scalar fields on UserProfile are migrated forward into EducationEntry rows
 // by the GET handler in /api/profile/education-entries.
 
-type EducationEntryRow = EducationEntryInput & { id: string };
+// API rows carry the joined University summary (see _include.ts). The form
+// only needs the writable input fields plus that joined slice — extending
+// EducationEntryInput keeps the optimistic-update path in useChildResource
+// happy without leaking server-only columns (createdAt, profileId, etc.).
+type EducationEntryRow = EducationEntryInput & {
+  id: string;
+  university?: EducationEntryUniversitySummary | null;
+};
+
+// Resolves the display name to show in the combobox input and in the collapsed
+// row header. Prefer the joined university's canonical name when the row has a
+// linked University; fall back to free-text schoolName.
+function schoolDisplayName(row: EducationEntryRow): string {
+  if (row.university?.name) return row.university.name;
+  return row.schoolName ?? "";
+}
 
 interface Props {
   initialData: UserProfile | null;
@@ -100,7 +117,7 @@ export function EducationHistoryForm({ initialData }: Props) {
           addLabel="Add school / degree"
           emptyState={<EmptyState content={EMPTY_STATES["education-entries"]} />}
           itemLabel={(item) =>
-            [item.degree, item.fieldOfStudy, item.schoolName]
+            [item.degree, item.fieldOfStudy, schoolDisplayName(item)]
               .filter(Boolean)
               .join(" · ") || "(new entry)"
           }
@@ -125,18 +142,44 @@ interface FieldsProps {
 }
 
 function EducationEntryFields({ item, patch }: FieldsProps) {
+  // The combobox is the single source of truth for both linked-university and
+  // free-text school name. Either branch patches BOTH fields so the row never
+  // ends up with stale data on the other side (e.g. switching from a picked
+  // university back to free text must clear universityId).
+  const handlePickUniversity = (id: string, name: string) => {
+    // Optimistically populate the joined `university` slice so the collapsed
+    // header and combobox display name flip immediately to the picked name.
+    // The server PUT response (with the full `university` join) reconciles
+    // city/state on the next tick — see useChildResource.update.
+    patch({
+      universityId: id,
+      schoolName: null,
+      university: { id, name, city: null, state: null },
+    });
+  };
+  const handleClearUniversity = () => {
+    patch({ universityId: null, schoolName: null, university: null });
+  };
+  // Free-text fallback for institutions absent from the University table.
+  // Empty input collapses to `null` so the row stays close to the schema's
+  // optional contract — but the row-level XOR rule (universityId OR
+  // schoolName) means the server will reject a save where both are null.
+  const handleFreeTextSchool = (text: string) => {
+    const next = text.length > 0 ? text : null;
+    if (next === (item.schoolName ?? null) && !item.universityId) return;
+    patch({ universityId: null, schoolName: next, university: null });
+  };
   return (
     <>
       <div className={gridTwoCol}>
         <div>
           <label className={labelClass}>School name</label>
-          <input
-            className={inputClass}
-            defaultValue={item.schoolName ?? ""}
-            onBlur={(e) => {
-              const v = e.target.value;
-              if (v !== (item.schoolName ?? "")) patch({ schoolName: v || null });
-            }}
+          <UniversityCombobox
+            value={schoolDisplayName(item)}
+            universityId={item.universityId ?? undefined}
+            onSelect={handlePickUniversity}
+            onClear={handleClearUniversity}
+            onFreeText={handleFreeTextSchool}
             placeholder="Massachusetts Institute of Technology"
           />
         </div>

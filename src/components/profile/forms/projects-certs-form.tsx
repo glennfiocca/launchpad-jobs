@@ -45,8 +45,17 @@ export function ProjectsCertsForm({ initialData }: Props) {
 // ───────────────── Projects ─────────────────
 
 function ProjectsSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, recentlySavedIds, create, update, remove } =
-    useChildResource<ProjectRow>("projects");
+  const {
+    items,
+    loading,
+    error,
+    recentlySavedIds,
+    lastCreatedId,
+    consumeLastCreatedId,
+    create,
+    update,
+    remove,
+  } = useChildResource<ProjectRow>("projects");
 
   const handleAdd = async () => {
     if (!identityOk) {
@@ -108,6 +117,8 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           recentlySavedIds={recentlySavedIds}
+          autoFocusItemId={lastCreatedId}
+          onAutoFocusConsumed={consumeLastCreatedId}
           addLabel="Add project"
           emptyState={<EmptyState content={EMPTY_STATES.projects} />}
           itemLabel={(item) => item.name || "(unnamed project)"}
@@ -269,8 +280,17 @@ function ProjectFields({ item, patch }: ProjectFieldsProps) {
 // ───────────────── Certifications ─────────────────
 
 function CertificationsSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, recentlySavedIds, create, update, remove } =
-    useChildResource<CertificationRow>("certifications");
+  const {
+    items,
+    loading,
+    error,
+    recentlySavedIds,
+    lastCreatedId,
+    consumeLastCreatedId,
+    create,
+    update,
+    remove,
+  } = useChildResource<CertificationRow>("certifications");
 
   const handleAdd = async () => {
     if (!identityOk) {
@@ -325,6 +345,8 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           recentlySavedIds={recentlySavedIds}
+          autoFocusItemId={lastCreatedId}
+          onAutoFocusConsumed={consumeLastCreatedId}
           addLabel="Add certification"
           emptyState={<EmptyState content={EMPTY_STATES.certifications} />}
           itemLabel={(item) => item.name || "(unnamed certification)"}

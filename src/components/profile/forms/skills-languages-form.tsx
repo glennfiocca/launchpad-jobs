@@ -86,8 +86,17 @@ export function SkillsLanguagesForm({ initialData }: Props) {
 // ───────────────── Skills ─────────────────
 
 function SkillsSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, recentlySavedIds, create, update, remove } =
-    useChildResource<SkillRow>("skills");
+  const {
+    items,
+    loading,
+    error,
+    recentlySavedIds,
+    lastCreatedId,
+    consumeLastCreatedId,
+    create,
+    update,
+    remove,
+  } = useChildResource<SkillRow>("skills");
 
   const handleAdd = async () => {
     if (!identityOk) {
@@ -150,6 +159,8 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           recentlySavedIds={recentlySavedIds}
+          autoFocusItemId={lastCreatedId}
+          onAutoFocusConsumed={consumeLastCreatedId}
           addLabel="Add skill"
           emptyState={<EmptyState content={EMPTY_STATES.skills} />}
           itemLabel={(item) => item.name || "(unnamed skill)"}
@@ -296,8 +307,17 @@ function ProficiencyStars({
 // ───────────────── Languages ─────────────────
 
 function LanguagesSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, recentlySavedIds, create, update, remove } =
-    useChildResource<LanguageRow>("languages");
+  const {
+    items,
+    loading,
+    error,
+    recentlySavedIds,
+    lastCreatedId,
+    consumeLastCreatedId,
+    create,
+    update,
+    remove,
+  } = useChildResource<LanguageRow>("languages");
 
   const handleAdd = async () => {
     if (!identityOk) {
@@ -351,6 +371,8 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
           recentlySavedIds={recentlySavedIds}
+          autoFocusItemId={lastCreatedId}
+          onAutoFocusConsumed={consumeLastCreatedId}
           addLabel="Add language"
           emptyState={<EmptyState content={EMPTY_STATES.languages} />}
           itemLabel={(item) => item.name || "(unnamed language)"}

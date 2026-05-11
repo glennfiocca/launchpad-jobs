@@ -34,6 +34,7 @@ import {
   EQUITY_LABELS,
   SEARCH_STATUS_LABELS,
   TriStateRadio,
+  normalizeCountryCode,
   validateCountryCode,
 } from "./_shared/preferences-helpers";
 
@@ -507,9 +508,9 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           <ChipInput
             value={form.eligibleCountries}
             onChange={(next) => set("eligibleCountries", next)}
-            placeholder="US, GB, CA..."
+            placeholder="e.g. US, CA, GB"
             validate={validateCountryCode}
-            normalize={(raw) => raw.trim().toUpperCase()}
+            normalize={normalizeCountryCode}
             maxChips={50}
           />
         </div>

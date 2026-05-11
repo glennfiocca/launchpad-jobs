@@ -146,12 +146,19 @@ export function TriStateRadio({ label, value, onChange }: TriStateProps) {
   );
 }
 
-// ────────── Lightweight ISO country code validator ──────────
-// Server is the source of truth — this is just a UX nicety so users see
-// inline feedback before they save.
+// ────────── ISO country code normalization + validation ──────────
+// Server is the source of truth — these are UX niceties so users see
+// inline feedback before they save. `normalizeCountryCode` uppercases
+// and strips any non-letter characters; `validateCountryCode` then
+// enforces an exact 2-letter length.
+
+export function normalizeCountryCode(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z]/g, "");
+}
+
 export function validateCountryCode(chip: string): string | null {
-  if (!/^[a-zA-Z]{2}$/.test(chip)) {
-    return "Use a 2-letter ISO code (e.g. US, GB)";
+  if (!/^[A-Z]{2}$/.test(chip)) {
+    return "Use 2-letter ISO codes (e.g. US, CA, GB)";
   }
   return null;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import {
@@ -18,6 +19,35 @@ import { EMPTY_STATES } from "./_shared/empty-states";
 
 type SkillRow = SkillInput & { id: string };
 type LanguageRow = SpokenLanguageInput & { id: string };
+
+// Pick a unique placeholder name (case-insensitive) so we don't trip
+// the server's `@@unique([profileId, name])` constraint when the user
+// rapidly clicks Add. Increments the counter until a free slot is found.
+function nextPlaceholder(prefix: string, existing: readonly string[]): string {
+  const taken = new Set(existing.map((n) => n.toLowerCase().trim()));
+  let i = existing.length + 1;
+  // Bound the loop to avoid theoretical infinite — 1000 is way past any
+  // real-world list size and well under the maxChips/list caps.
+  while (i < existing.length + 1000) {
+    const candidate = `${prefix} ${i}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+    i += 1;
+  }
+  return `${prefix} ${Date.now()}`;
+}
+
+// Case-insensitive name conflict check excluding the row's own id.
+function hasNameConflict(
+  rows: readonly { id: string; name: string }[],
+  ownId: string,
+  candidate: string
+): boolean {
+  const normalized = candidate.toLowerCase().trim();
+  if (!normalized) return false;
+  return rows.some(
+    (r) => r.id !== ownId && r.name.toLowerCase().trim() === normalized
+  );
+}
 
 const SKILL_CATEGORY_LABELS: Record<SkillCategory, string> = {
   language: "Language",
@@ -66,7 +96,7 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
     }
     try {
       await create({
-        name: `New skill ${items.length + 1}`,
+        name: nextPlaceholder("New skill", items.map((s) => s.name)),
         category: "language",
         proficiency: 3,
         yearsUsed: null,
@@ -81,6 +111,12 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
   const handleUpdate = async (idx: number, patch: Partial<SkillRow>) => {
     const row = items[idx];
     if (!row) return;
+    // Pre-empt the server 409 — block name updates that collide with
+    // another row (case-insensitive) so the UI can surface an inline
+    // error and avoid a wasted round-trip.
+    if (typeof patch.name === "string" && hasNameConflict(items, row.id, patch.name)) {
+      return;
+    }
     try {
       await update(row.id, patch);
     } catch {
@@ -117,7 +153,13 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
           emptyState={<EmptyState content={EMPTY_STATES.skills} />}
           itemLabel={(item) => item.name || "(unnamed skill)"}
           renderItem={(item, _index, patch) => (
-            <SkillFields item={item} patch={patch} />
+            <SkillFields
+              item={item}
+              patch={patch}
+              isDuplicate={(candidate) =>
+                hasNameConflict(items, item.id, candidate)
+              }
+            />
           )}
         />
       )}
@@ -134,9 +176,11 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
 interface SkillFieldsProps {
   item: SkillRow;
   patch: (p: Partial<SkillRow>) => void;
+  isDuplicate: (candidate: string) => boolean;
 }
 
-function SkillFields({ item, patch }: SkillFieldsProps) {
+function SkillFields({ item, patch, isDuplicate }: SkillFieldsProps) {
+  const [nameError, setNameError] = useState<string | null>(null);
   return (
     <>
       <div className={gridTwoCol}>
@@ -145,12 +189,28 @@ function SkillFields({ item, patch }: SkillFieldsProps) {
           <input
             className={inputClass}
             defaultValue={item.name}
+            onChange={() => {
+              if (nameError) setNameError(null);
+            }}
             onBlur={(e) => {
               const v = e.target.value;
-              if (v !== item.name) patch({ name: v });
+              if (v === item.name) return;
+              if (isDuplicate(v)) {
+                setNameError("Already added");
+                // Restore the previous value so the UI matches DB state.
+                e.target.value = item.name;
+                return;
+              }
+              setNameError(null);
+              patch({ name: v });
             }}
             placeholder="TypeScript"
           />
+          {nameError && (
+            <p className="mt-1 text-xs text-red-400" role="alert">
+              {nameError}
+            </p>
+          )}
         </div>
         <div>
           <label className={labelClass}>Category</label>
@@ -245,7 +305,7 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
     }
     try {
       await create({
-        name: `New language ${items.length + 1}`,
+        name: nextPlaceholder("New language", items.map((l) => l.name)),
         proficiency: "professional",
         order: 0,
       });
@@ -257,6 +317,9 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
   const handleUpdate = async (idx: number, patch: Partial<LanguageRow>) => {
     const row = items[idx];
     if (!row) return;
+    if (typeof patch.name === "string" && hasNameConflict(items, row.id, patch.name)) {
+      return;
+    }
     try {
       await update(row.id, patch);
     } catch {
@@ -290,36 +353,13 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
           emptyState={<EmptyState content={EMPTY_STATES.languages} />}
           itemLabel={(item) => item.name || "(unnamed language)"}
           renderItem={(item, _index, patch) => (
-            <div className={gridTwoCol}>
-              <div>
-                <label className={labelClass}>Name</label>
-                <input
-                  className={inputClass}
-                  defaultValue={item.name}
-                  onBlur={(e) => {
-                    const v = e.target.value;
-                    if (v !== item.name) patch({ name: v });
-                  }}
-                  placeholder="Spanish"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Proficiency</label>
-                <select
-                  className={inputClass}
-                  value={item.proficiency}
-                  onChange={(e) =>
-                    patch({ proficiency: e.target.value as LanguageProficiency })
-                  }
-                >
-                  {LANGUAGE_PROFICIENCIES.map((p) => (
-                    <option key={p} value={p}>
-                      {LANGUAGE_PROFICIENCY_LABELS[p]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <LanguageFields
+              item={item}
+              patch={patch}
+              isDuplicate={(candidate) =>
+                hasNameConflict(items, item.id, candidate)
+              }
+            />
           )}
         />
       )}
@@ -329,6 +369,63 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+interface LanguageFieldsProps {
+  item: LanguageRow;
+  patch: (p: Partial<LanguageRow>) => void;
+  isDuplicate: (candidate: string) => boolean;
+}
+
+function LanguageFields({ item, patch, isDuplicate }: LanguageFieldsProps) {
+  const [nameError, setNameError] = useState<string | null>(null);
+  return (
+    <div className={gridTwoCol}>
+      <div>
+        <label className={labelClass}>Name</label>
+        <input
+          className={inputClass}
+          defaultValue={item.name}
+          onChange={() => {
+            if (nameError) setNameError(null);
+          }}
+          onBlur={(e) => {
+            const v = e.target.value;
+            if (v === item.name) return;
+            if (isDuplicate(v)) {
+              setNameError("Already added");
+              e.target.value = item.name;
+              return;
+            }
+            setNameError(null);
+            patch({ name: v });
+          }}
+          placeholder="Spanish"
+        />
+        {nameError && (
+          <p className="mt-1 text-xs text-red-400" role="alert">
+            {nameError}
+          </p>
+        )}
+      </div>
+      <div>
+        <label className={labelClass}>Proficiency</label>
+        <select
+          className={inputClass}
+          value={item.proficiency}
+          onChange={(e) =>
+            patch({ proficiency: e.target.value as LanguageProficiency })
+          }
+        >
+          {LANGUAGE_PROFICIENCIES.map((p) => (
+            <option key={p} value={p}>
+              {LANGUAGE_PROFICIENCY_LABELS[p]}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

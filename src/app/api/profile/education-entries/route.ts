@@ -3,11 +3,15 @@ import { buildCollectionRoute } from "@/lib/api/profile-child-route";
 import { educationEntrySchema } from "@/lib/validation/profile-children";
 import { db } from "@/lib/db";
 import { requireProfile } from "@/lib/api/require-profile";
+import { EDUCATION_ENTRY_INCLUDE } from "./_include";
 
 // POST stays delegated to the shared builder — validate + create + auto-order.
+// The shared `include` is forwarded so the created row carries its joined
+// University (mirrors the GET shape).
 const { POST } = buildCollectionRoute({
   model: "educationEntry",
   createSchema: educationEntrySchema,
+  include: EDUCATION_ENTRY_INCLUDE,
 });
 
 // Fallbacks when a legacy profile recorded one scalar but not the others.
@@ -78,6 +82,7 @@ export async function GET(): Promise<NextResponse> {
     const initial = await db.educationEntry.findMany({
       where: { profileId: auth.profileId },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      include: EDUCATION_ENTRY_INCLUDE,
     });
 
     if (initial.length > 0) {
@@ -97,6 +102,7 @@ export async function GET(): Promise<NextResponse> {
     const rows = await db.educationEntry.findMany({
       where: { profileId: auth.profileId },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      include: EDUCATION_ENTRY_INCLUDE,
     });
     return NextResponse.json({ data: rows });
   } catch (err) {

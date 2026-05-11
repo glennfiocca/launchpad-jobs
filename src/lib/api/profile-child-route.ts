@@ -15,20 +15,31 @@ import {
 // shape across all profile children. We keep the signatures permissive (input
 // types as `unknown`) because each schema infers its own narrower shape and
 // we don't gain anything by reproducing 6 generic parameter walls.
+// Optional `include` lets a specific resource opt into joining relations
+// without forcing every child route to do so. Typed permissively here for the
+// same reason input shapes are: each resource's caller knows its own narrower
+// shape and the builder treats the value as an opaque passthrough to Prisma.
+type IncludeArg = Record<string, unknown> | undefined;
+
 interface ChildDelegate {
   findMany: (args: {
     where: { profileId: string };
     orderBy: Array<Record<string, "asc" | "desc">>;
+    include?: IncludeArg;
   }) => Promise<unknown[]>;
   findFirst: (args: {
     where: { profileId: string };
     orderBy: { order: "desc" };
     select: { order: true };
   }) => Promise<{ order: number } | null>;
-  create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+  create: (args: {
+    data: Record<string, unknown>;
+    include?: IncludeArg;
+  }) => Promise<unknown>;
   update: (args: {
     where: { id: string };
     data: Record<string, unknown>;
+    include?: IncludeArg;
   }) => Promise<unknown>;
   delete: (args: { where: { id: string } }) => Promise<unknown>;
 }
@@ -67,6 +78,11 @@ interface CollectionRouteConfig<TCreate extends ZodTypeAny> {
   model: ProfileChildModel;
   createSchema: TCreate;
   uniqueResource?: boolean; // true → translate P2002 to 409
+  // Optional Prisma `include` applied to GET (findMany) and POST (create)
+  // responses. Lets a resource join a related row (e.g. EducationEntry →
+  // University) so the UI doesn't need a second round-trip to render display
+  // names. Pass-through; no validation here.
+  include?: Record<string, unknown>;
 }
 
 // GET /api/profile/<resource> — list rows for the authenticated user's
@@ -89,6 +105,7 @@ export function buildCollectionRoute<TCreate extends ZodTypeAny>(
         const rows = await delegate().findMany({
           where: { profileId: auth.profileId },
           orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+          include: cfg.include,
         });
         return NextResponse.json({ data: rows });
       } catch (err) {
@@ -126,6 +143,7 @@ export function buildCollectionRoute<TCreate extends ZodTypeAny>(
             order: nextOrder,
             profileId: auth.profileId,
           },
+          include: cfg.include,
         });
 
         return NextResponse.json({ data: row }, { status: 201 });
@@ -146,6 +164,9 @@ interface ItemRouteConfig<TUpdate extends ZodTypeAny> {
   model: ProfileChildModel;
   updateSchema: TUpdate;
   uniqueResource?: boolean;
+  // Mirrors CollectionRouteConfig.include — applied to PUT (update) responses
+  // so the client sees the same joined shape returned by GET/POST.
+  include?: Record<string, unknown>;
 }
 
 // PUT/DELETE /api/profile/<resource>/[id] — validate body, ownership-check,
@@ -184,6 +205,7 @@ export function buildItemRoute<TUpdate extends ZodTypeAny>(
         const row = await delegate().update({
           where: { id },
           data: parsed.data as Record<string, unknown>,
+          include: cfg.include,
         });
 
         return NextResponse.json({ data: row });

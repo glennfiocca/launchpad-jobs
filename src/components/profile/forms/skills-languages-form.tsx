@@ -361,6 +361,9 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
   return (
     <div className={sectionClass}>
       <h2 className={sectionTitleClass}>Languages</h2>
+      <p className="text-xs text-zinc-500 -mt-2">
+        Spoken languages used in your work, with proficiency level.
+      </p>
 
       {loading ? (
         <p className="text-sm text-zinc-500">Loading…</p>

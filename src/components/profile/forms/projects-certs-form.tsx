@@ -335,6 +335,9 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
   return (
     <div className={sectionClass}>
       <h2 className={sectionTitleClass}>Certifications</h2>
+      <p className="text-xs text-zinc-500 -mt-2">
+        Industry credentials, licenses, and professional certifications.
+      </p>
 
       {loading ? (
         <p className="text-sm text-zinc-500">Loading…</p>

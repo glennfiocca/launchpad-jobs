@@ -10,9 +10,10 @@ import { useChildResource } from "./_shared/use-child-resource";
 import { EmptyState } from "./_shared/empty-state";
 import { EMPTY_STATES } from "./_shared/empty-states";
 
-// Multi-degree history. Sits BELOW the legacy single-degree form on the
-// Education tab — the orchestrator mounts both components inside the same
-// <Tabs.Content value="education">.
+// Sole renderer of the Education tab. Mirrors the Work History UX:
+// list of cards with per-field onBlur autosave, no big Save button. Legacy
+// scalar fields on UserProfile are migrated forward into EducationEntry rows
+// by the GET handler in /api/profile/education-entries.
 
 type EducationEntryRow = EducationEntryInput & { id: string };
 
@@ -79,9 +80,10 @@ export function EducationHistoryForm({ initialData }: Props) {
 
   return (
     <div className={sectionClass}>
-      <h2 className={sectionTitleClass}>Additional Education</h2>
+      <h2 className={sectionTitleClass}>Education</h2>
       <p className="text-xs text-zinc-500 -mt-2">
-        Multiple degrees, ongoing studies, or schools beyond the primary one above.
+        Each degree, bootcamp, or program you&apos;ve completed — listed most
+        recent first.
       </p>
 
       {loading ? (

@@ -6,7 +6,6 @@ import type { UserProfile } from "@prisma/client";
 import { PersonalForm } from "./forms/personal-form";
 import { ProfessionalForm } from "./forms/professional-form";
 import { WorkHistoryForm } from "./forms/work-history-form";
-import { EducationForm } from "./forms/education-form";
 import { EducationHistoryForm } from "./forms/education-history-form";
 import { SkillsLanguagesForm } from "./forms/skills-languages-form";
 import { ProjectsCertsForm } from "./forms/projects-certs-form";
@@ -110,13 +109,7 @@ export function ProfileTabs({ profile }: ProfileTabsProps) {
           <Tabs.Content value="work-history" className="focus:outline-none">
             <WorkHistoryForm initialData={profile} />
           </Tabs.Content>
-          <Tabs.Content
-            value="education"
-            className="focus:outline-none space-y-6"
-          >
-            {/* Legacy single-degree fields stay mounted above the multi-entry list
-                editor so existing scalars on UserProfile keep round-tripping. */}
-            <EducationForm initialData={profile} />
+          <Tabs.Content value="education" className="focus:outline-none">
             <EducationHistoryForm initialData={profile} />
           </Tabs.Content>
           <Tabs.Content value="skills-languages" className="focus:outline-none">

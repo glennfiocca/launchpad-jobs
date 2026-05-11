@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 
 // Generic list editor for the profile child-resources (work history, projects,
 // skills, certifications, languages, education entries).
@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 // reach back into the parent's state. Parents typically pass a closure that
 // calls `useChildResource.update`.
 
-export interface ListEditorProps<T> {
+export interface ListEditorProps<T extends { id: string }> {
   items: T[];
   onAdd: () => void;
   onRemove: (index: number) => void;
@@ -38,9 +38,19 @@ export interface ListEditorProps<T> {
   itemLabel?: (item: T, index: number) => string;
   /** Disable mutating buttons while a network operation is in flight. */
   busy?: boolean;
+  /**
+   * Optional id of a row that should be scrolled into view and have its
+   * first focusable input auto-selected. Cleared by the consumer after
+   * the effect fires.
+   */
+  autoFocusItemId?: string | null;
+  /** Called once after the auto-focus effect has run, so the consumer can clear it. */
+  onAutoFocusConsumed?: () => void;
+  /** Ids whose last save succeeded recently — renders a transient "Saved" pill. */
+  recentlySavedIds?: Set<string>;
 }
 
-export function ListEditor<T>({
+export function ListEditor<T extends { id: string }>({
   items,
   onAdd,
   onRemove,
@@ -51,7 +61,38 @@ export function ListEditor<T>({
   addLabel = "Add",
   itemLabel,
   busy,
+  autoFocusItemId,
+  onAutoFocusConsumed,
+  recentlySavedIds,
 }: ListEditorProps<T>) {
+  // Refs to each row container, keyed by item id. Used to scroll the
+  // newly-added row into view and focus + select its first input.
+  const rowRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+
+  // Layout effect (not regular effect) so the focus/select runs after the
+  // row mounts in the same commit cycle — avoids setTimeout hacks.
+  useLayoutEffect(() => {
+    if (!autoFocusItemId) return;
+    const row = rowRefs.current.get(autoFocusItemId);
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    // Find the first text-like input inside the row. <select> and
+    // checkboxes are skipped since they can't be select()ed.
+    const focusable = row.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      'input[type="text"], input:not([type]), input[type="url"], input[type="email"], input[type="number"], input[type="search"], textarea'
+    );
+    if (focusable) {
+      focusable.focus();
+      // `select()` works on both <input> and <textarea>.
+      try {
+        focusable.select();
+      } catch {
+        // Some input types (e.g. number) reject select() in older browsers — safely ignore.
+      }
+    }
+    onAutoFocusConsumed?.();
+  }, [autoFocusItemId, onAutoFocusConsumed]);
+
   return (
     <div className="space-y-3">
       {items.length === 0 && emptyState ? (
@@ -60,12 +101,24 @@ export function ListEditor<T>({
 
       {items.map((item, index) => (
         <div
-          key={index}
+          key={item.id}
+          ref={(el) => {
+            if (el) rowRefs.current.set(item.id, el);
+            else rowRefs.current.delete(item.id);
+          }}
           className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3"
         >
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs uppercase tracking-wide text-zinc-500">
-              {itemLabel ? itemLabel(item, index) : `Entry ${index + 1}`}
+            <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+              <span>{itemLabel ? itemLabel(item, index) : `Entry ${index + 1}`}</span>
+              {recentlySavedIds?.has(item.id) && (
+                <span
+                  className="text-xs text-emerald-400 normal-case tracking-normal transition-opacity"
+                  aria-live="polite"
+                >
+                  Saved
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-1">
               {onReorder && (

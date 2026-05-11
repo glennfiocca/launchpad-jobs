@@ -22,7 +22,7 @@ interface Props {
 
 export function EducationHistoryForm({ initialData }: Props) {
   const identityOk = isIdentityComplete(initialData);
-  const { items, loading, error, create, update, remove } =
+  const { items, loading, error, recentlySavedIds, create, update, remove } =
     useChildResource<EducationEntryRow>("education-entries");
 
   const handleAdd = async () => {
@@ -83,6 +83,7 @@ export function EducationHistoryForm({ initialData }: Props) {
           onAdd={handleAdd}
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
+          recentlySavedIds={recentlySavedIds}
           addLabel="Add school / degree"
           emptyState={<EmptyState content={EMPTY_STATES["education-entries"]} />}
           itemLabel={(item) =>

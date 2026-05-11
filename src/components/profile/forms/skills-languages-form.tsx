@@ -86,7 +86,7 @@ export function SkillsLanguagesForm({ initialData }: Props) {
 // ───────────────── Skills ─────────────────
 
 function SkillsSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, create, update, remove } =
+  const { items, loading, error, recentlySavedIds, create, update, remove } =
     useChildResource<SkillRow>("skills");
 
   const handleAdd = async () => {
@@ -149,6 +149,7 @@ function SkillsSection({ identityOk }: { identityOk: boolean }) {
           onAdd={handleAdd}
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
+          recentlySavedIds={recentlySavedIds}
           addLabel="Add skill"
           emptyState={<EmptyState content={EMPTY_STATES.skills} />}
           itemLabel={(item) => item.name || "(unnamed skill)"}
@@ -295,7 +296,7 @@ function ProficiencyStars({
 // ───────────────── Languages ─────────────────
 
 function LanguagesSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, create, update, remove } =
+  const { items, loading, error, recentlySavedIds, create, update, remove } =
     useChildResource<LanguageRow>("languages");
 
   const handleAdd = async () => {
@@ -349,6 +350,7 @@ function LanguagesSection({ identityOk }: { identityOk: boolean }) {
           onAdd={handleAdd}
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
+          recentlySavedIds={recentlySavedIds}
           addLabel="Add language"
           emptyState={<EmptyState content={EMPTY_STATES.languages} />}
           itemLabel={(item) => item.name || "(unnamed language)"}

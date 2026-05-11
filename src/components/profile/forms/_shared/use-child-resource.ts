@@ -24,11 +24,25 @@ export interface ChildResource<T extends { id: string }> {
   items: T[];
   loading: boolean;
   error: string | null;
+  /**
+   * Id of the most recently created row, exposed so consumers can scroll
+   * + focus the new entry. Cleared after the consumer calls `consumeLastCreatedId`.
+   */
+  lastCreatedId: string | null;
+  consumeLastCreatedId: () => void;
+  /**
+   * Ids whose most recent PUT succeeded within the last ~2s. Used to
+   * render a transient "Saved" pill in the row header.
+   */
+  recentlySavedIds: Set<string>;
   create: (input: Omit<T, "id">) => Promise<void>;
   update: (id: string, patch: Partial<Omit<T, "id">>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
+
+// How long each id stays in `recentlySavedIds` after a successful PUT.
+const SAVED_PILL_MS = 2000;
 
 async function readError(res: Response): Promise<string> {
   try {
@@ -45,14 +59,51 @@ export function useChildResource<T extends { id: string }>(
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+  const [recentlySavedIds, setRecentlySavedIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   // Track if the component is still mounted to suppress stale state updates
   // — covers the case where a user changes tabs while a request is in flight.
   const mountedRef = useRef(true);
+  // Per-id timeout handles for the "Saved" pill so a fast re-save resets
+  // the countdown instead of stacking timers.
+  const savedTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      // Clear any pending pill timers on unmount.
+      savedTimersRef.current.forEach((t) => clearTimeout(t));
+      savedTimersRef.current.clear();
     };
+  }, []);
+
+  const consumeLastCreatedId = useCallback(() => {
+    setLastCreatedId(null);
+  }, []);
+
+  const markSaved = useCallback((id: string) => {
+    setRecentlySavedIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    const existing = savedTimersRef.current.get(id);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      if (!mountedRef.current) return;
+      setRecentlySavedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      savedTimersRef.current.delete(id);
+    }, SAVED_PILL_MS);
+    savedTimersRef.current.set(id, timer);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -87,7 +138,10 @@ export function useChildResource<T extends { id: string }>(
         });
         if (!res.ok) throw new Error(await readError(res));
         const body = (await res.json()) as ApiItemResponse<T>;
-        if (mountedRef.current) setItems((prev) => [...prev, body.data]);
+        if (mountedRef.current) {
+          setItems((prev) => [...prev, body.data]);
+          setLastCreatedId(body.data.id);
+        }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to create entry";
@@ -121,6 +175,7 @@ export function useChildResource<T extends { id: string }>(
           setItems((prev) =>
             prev.map((it) => (it.id === id ? body.data : it))
           );
+          markSaved(id);
         }
       } catch (err) {
         // Roll back to pre-mutation snapshot.
@@ -131,7 +186,7 @@ export function useChildResource<T extends { id: string }>(
         throw err;
       }
     },
-    [items, slug]
+    [items, slug, markSaved]
   );
 
   const remove = useCallback(
@@ -156,5 +211,16 @@ export function useChildResource<T extends { id: string }>(
     [items, slug]
   );
 
-  return { items, loading, error, create, update, remove, refresh };
+  return {
+    items,
+    loading,
+    error,
+    lastCreatedId,
+    consumeLastCreatedId,
+    recentlySavedIds,
+    create,
+    update,
+    remove,
+    refresh,
+  };
 }

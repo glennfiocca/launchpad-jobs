@@ -45,7 +45,7 @@ export function ProjectsCertsForm({ initialData }: Props) {
 // ───────────────── Projects ─────────────────
 
 function ProjectsSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, create, update, remove } =
+  const { items, loading, error, recentlySavedIds, create, update, remove } =
     useChildResource<ProjectRow>("projects");
 
   const handleAdd = async () => {
@@ -107,6 +107,7 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
           onAdd={handleAdd}
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
+          recentlySavedIds={recentlySavedIds}
           addLabel="Add project"
           emptyState={<EmptyState content={EMPTY_STATES.projects} />}
           itemLabel={(item) => item.name || "(unnamed project)"}
@@ -268,7 +269,7 @@ function ProjectFields({ item, patch }: ProjectFieldsProps) {
 // ───────────────── Certifications ─────────────────
 
 function CertificationsSection({ identityOk }: { identityOk: boolean }) {
-  const { items, loading, error, create, update, remove } =
+  const { items, loading, error, recentlySavedIds, create, update, remove } =
     useChildResource<CertificationRow>("certifications");
 
   const handleAdd = async () => {
@@ -323,6 +324,7 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
           onAdd={handleAdd}
           onRemove={handleRemove}
           onItemUpdate={handleUpdate}
+          recentlySavedIds={recentlySavedIds}
           addLabel="Add certification"
           emptyState={<EmptyState content={EMPTY_STATES.certifications} />}
           itemLabel={(item) => item.name || "(unnamed certification)"}

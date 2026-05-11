@@ -45,7 +45,7 @@ interface WorkHistoryFormProps {
 
 export function WorkHistoryForm({ initialData }: WorkHistoryFormProps) {
   const identityOk = isIdentityComplete(initialData);
-  const { items, loading, error, create, update, remove } =
+  const { items, loading, error, recentlySavedIds, create, update, remove } =
     useChildResource<WorkExperienceRow>("work-experience");
 
   const handleAdd = async () => {
@@ -128,6 +128,7 @@ export function WorkHistoryForm({ initialData }: WorkHistoryFormProps) {
             onRemove={handleRemove}
             onReorder={handleReorder}
             onItemUpdate={handleUpdate}
+            recentlySavedIds={recentlySavedIds}
             addLabel="Add role"
             emptyState={<EmptyState content={EMPTY_STATES["work-experience"]} />}
             itemLabel={(item) =>

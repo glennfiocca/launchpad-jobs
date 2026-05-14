@@ -42,7 +42,7 @@ export function Footer() {
               href="/"
               className="inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
             >
-              <PipelineLogo aria-label="Pipeline" className="h-10 w-auto opacity-95" />
+              <PipelineLogo aria-label="Pipeline" className="h-10 w-auto opacity-95 shrink-0" />
             </Link>
             <p className="mt-4 text-[13.5px] text-[#a1a1aa] leading-relaxed">
               One profile. Every application. AI-powered tracking so you can focus on landing the
@@ -171,7 +171,7 @@ export function CompactSiteFooter() {
             href="/"
             className="inline-flex shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 rounded-sm"
           >
-            <PipelineLogo aria-label="Pipeline" className="h-7 w-auto opacity-90" />
+            <PipelineLogo aria-label="Pipeline" className="h-9 w-auto opacity-90 shrink-0" />
           </Link>
           <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link href="/jobs" className={compactLink}>

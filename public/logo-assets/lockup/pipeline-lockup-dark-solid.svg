@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 56" width="220" height="56">
+  <g transform="translate(0 6) scale(0.36666666666666664)">
+    <defs>
+      <clipPath id="my6og-0"><circle cx="60" cy="38" r="36"></circle></clipPath>
+      <clipPath id="my6og-1"><circle cx="60" cy="82" r="36"></circle></clipPath>
+      <clipPath id="my6og-2"><circle cx="38" cy="60" r="36"></circle></clipPath>
+      <clipPath id="my6og-3"><circle cx="82" cy="60" r="36"></circle></clipPath>
+    </defs>
+    <g clip-path="url(#my6og-0)">
+      <g clip-path="url(#my6og-1)">
+        <g clip-path="url(#my6og-2)">
+          <g clip-path="url(#my6og-3)">
+            <rect width="120" height="120" fill="#6366f1"></rect>
+          </g>
+        </g>
+      </g>
+    </g>
+    <circle cx="60" cy="38" r="36" fill="none" stroke="#6366f1" stroke-width="3"></circle>
+    <circle cx="60" cy="82" r="36" fill="none" stroke="#6366f1" stroke-width="3"></circle>
+    <circle cx="38" cy="60" r="36" fill="none" stroke="#6366f1" stroke-width="3"></circle>
+    <circle cx="82" cy="60" r="36" fill="none" stroke="#6366f1" stroke-width="3"></circle>
+  </g>
+  <text x="56" y="38" fill="#fafafa" font-family="Inter, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-weight="700" font-size="32" letter-spacing="-0.025em">pipeline</text>
+</svg>

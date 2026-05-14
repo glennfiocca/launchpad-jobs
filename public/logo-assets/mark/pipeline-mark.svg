@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <clipPath id="cp0"><circle cx="60" cy="38" r="36"></circle></clipPath>
+    <clipPath id="cp1"><circle cx="60" cy="82" r="36"></circle></clipPath>
+    <clipPath id="cp2"><circle cx="38" cy="60" r="36"></circle></clipPath>
+    <clipPath id="cp3"><circle cx="82" cy="60" r="36"></circle></clipPath>
+  </defs>
+  <g style="mix-blend-mode: screen" fill-opacity="0.55">
+    <circle cx="60" cy="38" r="36" fill="#6366f1"></circle>
+    <circle cx="60" cy="82" r="36" fill="#6366f1"></circle>
+    <circle cx="38" cy="60" r="36" fill="#6366f1"></circle>
+    <circle cx="82" cy="60" r="36" fill="#6366f1"></circle>
+  </g>
+  <g clip-path="url(#cp0)">
+    <g clip-path="url(#cp1)">
+      <g clip-path="url(#cp2)">
+        <g clip-path="url(#cp3)">
+          <rect width="120" height="120" fill="#6366f1"></rect>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

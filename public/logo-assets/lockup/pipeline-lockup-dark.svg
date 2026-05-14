@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 56" width="220" height="56">
+  <g transform="translate(0 6) scale(0.36666666666666664)">
+    <defs>
+      <clipPath id="mhm3n-0"><circle cx="60" cy="38" r="36"></circle></clipPath>
+      <clipPath id="mhm3n-1"><circle cx="60" cy="82" r="36"></circle></clipPath>
+      <clipPath id="mhm3n-2"><circle cx="38" cy="60" r="36"></circle></clipPath>
+      <clipPath id="mhm3n-3"><circle cx="82" cy="60" r="36"></circle></clipPath>
+    </defs>
+    <g style="mix-blend-mode: screen" fill-opacity="0.55">
+      <circle cx="60" cy="38" r="36" fill="#6366f1"></circle>
+      <circle cx="60" cy="82" r="36" fill="#6366f1"></circle>
+      <circle cx="38" cy="60" r="36" fill="#6366f1"></circle>
+      <circle cx="82" cy="60" r="36" fill="#6366f1"></circle>
+    </g>
+    <g clip-path="url(#mhm3n-0)">
+      <g clip-path="url(#mhm3n-1)">
+        <g clip-path="url(#mhm3n-2)">
+          <g clip-path="url(#mhm3n-3)">
+            <rect width="120" height="120" fill="#6366f1"></rect>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <text x="56" y="38" fill="#fafafa" font-family="Inter, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-weight="700" font-size="32" letter-spacing="-0.025em">pipeline</text>
+</svg>

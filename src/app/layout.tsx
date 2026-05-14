@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { Inter, Bricolage_Grotesque, Geist_Mono } from "next/font/google";
 import Script from "next/script";
+import { getServerSession } from "next-auth";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ProgressBar } from "@/components/layout/progress-bar";
 import { FeedbackTab } from "@/components/layout/feedback-tab";
 import { Toaster } from "sonner";
+import { authOptions } from "@/lib/auth";
 import { isGpcRequest } from "@/lib/gpc/detect";
 
 // Plausible stub-and-init snippet. Queues `plausible(...)` calls until the
@@ -57,6 +59,10 @@ export default async function RootLayout({
   // Suppress non-essential analytics when the user's browser sends the
   // Global Privacy Control signal (CCPA/CPRA universal opt-out).
   const gpc = await isGpcRequest();
+  // Server-fetched session hydrates SessionProvider so useSession() on
+  // the first client render returns the authenticated state immediately
+  // — no flash of "Sign In" while /api/auth/session round-trips.
+  const session = await getServerSession(authOptions);
 
   return (
     <html lang="en" className={`dark ${bricolage.variable} ${geistMono.variable}`}>
@@ -94,7 +100,7 @@ export default async function RootLayout({
       </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
         <ProgressBar />
-        <Providers>
+        <Providers session={session}>
           {children}
         </Providers>
         {/* Persistent right-edge feedback widget. Mounted once at the

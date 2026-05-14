@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import {
   buildSankeyFromApplications,
   buildDemoSankeyData,
+  STAGE_LABELS,
 } from "@/lib/sankey";
 import { PipelineSankey } from "@/components/sankey/pipeline-sankey";
 import { HomeHero } from "@/components/home/home-hero";
@@ -58,12 +59,20 @@ export default async function HomePage() {
   // as /jobs listing + sitemap (Job.isActive=true) so the number is consistent.
   const roleCount = await db.job.count({ where: { isActive: true } });
 
-  // Stats-legend cells: pull the five forward stages from the sankey nodes,
-  // skip any that are missing (live data may not yet have all stages).
+  // Stats-legend cells: always emit a cell for every forward stage. If the
+  // sankey data is missing a stage (defensive belt-and-suspenders even though
+  // buildSankeyFromApplications now guarantees all 5 forward stages), fall
+  // back to a synthetic zero-count entry so the legend shape stays constant.
   const nodesById = new Map(sankeyData.nodes.map((n) => [n.id, n]));
-  const legendStages = LEGEND_STAGE_IDS.flatMap((id) => {
-    const n = nodesById.get(id);
-    return n ? [n] : [];
+  const legendStages = LEGEND_STAGE_IDS.map((id) => {
+    const existing = nodesById.get(id);
+    if (existing) return existing;
+    return {
+      id,
+      label: STAGE_LABELS[id],
+      color: EDITORIAL_STAGE_COLORS[id] ?? "#6366f1",
+      count: 0,
+    };
   });
 
   const totalApplications = sankeyData.totalApplications;

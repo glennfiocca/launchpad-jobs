@@ -4,17 +4,43 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
+// Editorial footer treatment — see design_handoff_homepage_redesign/README.md §Footer.
+// Visual rules:
+//   - Border-top: rgba(245,244,241,0.06)
+//   - Radial glow at bottom-center: rgba(99,102,241,0.14) → transparent 60%
+//   - Mono (Geist Mono via font-mono) for column labels + copyright micro-copy
+//   - Body links sans-serif, ~13.5px, #a1a1aa → #f5f4f1 on hover; accent #c4b5fd
+//   - 150ms ease transitions
+// All existing link routes and conditional (signed-in / signed-out) sections preserved.
+
+const FOOTER_BORDER = "border-t border-[rgba(245,244,241,0.06)]";
+const GLOW_LAYER =
+  "pointer-events-none absolute inset-x-0 bottom-0 h-[260px] " +
+  "bg-[radial-gradient(ellipse_at_50%_100%,rgba(99,102,241,0.14),transparent_60%)]";
+
+const linkBase =
+  "text-[#a1a1aa] hover:text-[#f5f4f1] transition-colors duration-150 ease-out " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 rounded-sm";
+
+const columnLabel =
+  "font-mono text-[11.5px] font-medium uppercase tracking-[0.14em] text-[#71717a] mb-4";
+
+const bodyLink = `${linkBase} text-[13.5px] leading-relaxed`;
+
+const microCopy = "font-mono text-[11.5px] text-[#71717a]";
+
 export function Footer() {
   const { data: session } = useSession();
 
   return (
-    <footer className="mt-auto border-t border-white/8 bg-black">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14">
+    <footer className={`relative mt-auto overflow-hidden bg-black ${FOOTER_BORDER}`}>
+      <div className={GLOW_LAYER} aria-hidden="true" />
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14">
         <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           <div className="max-w-md">
             <Link
               href="/"
-              className="inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
+              className="inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
             >
               <Image
                 src="/pipeline-logo.png"
@@ -24,7 +50,7 @@ export function Footer() {
                 className="h-7 w-auto opacity-95"
               />
             </Link>
-            <p className="mt-4 text-sm text-zinc-500 leading-relaxed">
+            <p className="mt-4 text-[13.5px] text-[#a1a1aa] leading-relaxed">
               One profile. Every application. AI-powered tracking so you can focus on landing the
               role.
             </p>
@@ -32,43 +58,29 @@ export function Footer() {
 
           <div className="flex flex-col gap-10 sm:flex-row sm:gap-16">
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
-                Product
-              </h3>
+              <h3 className={columnLabel}>Product</h3>
               <ul className="space-y-3">
                 <li>
-                  <Link
-                    href="/jobs"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <Link href="/jobs" className={bodyLink}>
                     Browse jobs
                   </Link>
                 </li>
                 {session ? (
                   <>
                     <li>
-                      <Link
-                        href="/dashboard"
-                        className="text-sm text-zinc-400 hover:text-white transition-colors"
-                      >
+                      <Link href="/dashboard" className={bodyLink}>
                         Dashboard
                       </Link>
                     </li>
                     <li>
-                      <Link
-                        href="/profile"
-                        className="text-sm text-zinc-400 hover:text-white transition-colors"
-                      >
+                      <Link href="/profile" className={bodyLink}>
                         Profile
                       </Link>
                     </li>
                   </>
                 ) : (
                   <li>
-                    <Link
-                      href="/auth/signin"
-                      className="text-sm text-zinc-400 hover:text-white transition-colors"
-                    >
+                    <Link href="/auth/signin" className={bodyLink}>
                       Sign in
                     </Link>
                   </li>
@@ -78,47 +90,30 @@ export function Footer() {
 
             {/* Support — rendered for both authenticated and anonymous users. */}
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
-                Support
-              </h3>
+              <h3 className={columnLabel}>Support</h3>
               <ul className="space-y-3">
                 <li>
-                  <Link
-                    href="/contact"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <Link href="/contact" className={bodyLink}>
                     Contact
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href="/terms"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <Link href="/terms" className={bodyLink}>
                     Terms of Service
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href="/privacy"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <Link href="/privacy" className={bodyLink}>
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href="/cookies"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <Link href="/cookies" className={bodyLink}>
                     Cookie Policy
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href="/privacy/do-not-sell"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <Link href="/privacy/do-not-sell" className={bodyLink}>
                     Do Not Sell or Share
                   </Link>
                 </li>
@@ -129,10 +124,7 @@ export function Footer() {
                     do not rename. Plain <a> (not next/link) so the SDK's click
                     handler runs without router interception.
                   */}
-                  <a
-                    href="#"
-                    className="termly-display-preferences text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
+                  <a href="#" className={`termly-display-preferences ${bodyLink}`}>
                     Consent Preferences
                   </a>
                 </li>
@@ -141,17 +133,19 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-white/8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div
+          className={`mt-12 pt-8 border-t border-[rgba(245,244,241,0.06)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4`}
+        >
           <div className="flex items-center gap-4">
-            <p className="text-xs text-zinc-600">Built for job seekers who move fast.</p>
+            <p className={microCopy}>Built for job seekers who move fast.</p>
             <a
               href="https://logo.dev"
-              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+              className={`${microCopy} hover:text-[#a1a1aa] transition-colors duration-150 ease-out`}
             >
               Logos provided by Logo.dev
             </a>
           </div>
-          <p className="text-xs text-zinc-600">
+          <p className={microCopy}>
             © {new Date().getFullYear()} Pipeline. All rights reserved.
           </p>
         </div>
@@ -160,15 +154,24 @@ export function Footer() {
   );
 }
 
-const compactLinkClass =
-  "text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 rounded-sm";
+// Compact variant rendered inside (main) and (dashboard) layouts (including the
+// editorial homepage). Same editorial treatment but condensed to a single row.
+const compactLink =
+  "font-mono text-[11.5px] text-[#a1a1aa] hover:text-[#f5f4f1] transition-colors duration-150 ease-out " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 rounded-sm";
 
 export function CompactSiteFooter() {
   const { data: session } = useSession();
 
   return (
-    <footer className="shrink-0 border-t border-zinc-800 bg-black px-4 py-3 sm:px-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2">
+    <footer
+      className={`relative shrink-0 overflow-hidden bg-black px-4 py-3 sm:px-6 ${FOOTER_BORDER}`}
+    >
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[140px] bg-[radial-gradient(ellipse_at_50%_100%,rgba(99,102,241,0.14),transparent_60%)]"
+        aria-hidden="true"
+      />
+      <div className="relative flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
             href="/"
@@ -182,51 +185,51 @@ export function CompactSiteFooter() {
               className="h-5 w-auto opacity-90"
             />
           </Link>
-          <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <Link href="/jobs" className={compactLinkClass}>
+          <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link href="/jobs" className={compactLink}>
               Browse jobs
             </Link>
             {session ? (
               <>
-                <Link href="/dashboard" className={compactLinkClass}>
+                <Link href="/dashboard" className={compactLink}>
                   Dashboard
                 </Link>
-                <Link href="/profile" className={compactLinkClass}>
+                <Link href="/profile" className={compactLink}>
                   Profile
                 </Link>
               </>
             ) : (
-              <Link href="/auth/signin" className={compactLinkClass}>
+              <Link href="/auth/signin" className={compactLink}>
                 Sign in
               </Link>
             )}
             {/* Always rendered (auth-agnostic) — referenced from the public Terms of Service. */}
-            <Link href="/contact" className={compactLinkClass}>
+            <Link href="/contact" className={compactLink}>
               Contact
             </Link>
-            <Link href="/terms" className={compactLinkClass}>
+            <Link href="/terms" className={compactLink}>
               Terms
             </Link>
-            <Link href="/privacy" className={compactLinkClass}>
+            <Link href="/privacy" className={compactLink}>
               Privacy
             </Link>
-            <Link href="/cookies" className={compactLinkClass}>
+            <Link href="/cookies" className={compactLink}>
               Cookies
             </Link>
             {/* Termly preference-center trigger — see Footer for explanation. */}
-            <a href="#" className={`termly-display-preferences ${compactLinkClass}`}>
+            <a href="#" className={`termly-display-preferences ${compactLink}`}>
               Preferences
             </a>
           </nav>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 text-xs text-zinc-600">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <a
             href="https://logo.dev"
-            className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"
+            className={`${microCopy} shrink-0 hover:text-[#a1a1aa] transition-colors duration-150 ease-out`}
           >
             Logos provided by Logo.dev
           </a>
-          <p>© {new Date().getFullYear()} Pipeline. All rights reserved.</p>
+          <p className={microCopy}>© {new Date().getFullYear()} Pipeline. All rights reserved.</p>
         </div>
       </div>
     </footer>

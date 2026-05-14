@@ -15,21 +15,32 @@ function app(
 }
 
 describe("buildSankeyFromApplications", () => {
-  it("returns empty graph for no applications", () => {
+  it("returns all forward stages with zero counts when no applications", () => {
     const result = buildSankeyFromApplications([])
-    expect(result).toEqual({
-      nodes: [],
-      links: [],
-      totalApplications: 0,
-    })
+    expect(result.totalApplications).toBe(0)
+    expect(result.links).toEqual([])
+    // Always emit the 5 forward stages so downstream renderers stay stable.
+    expect(result.nodes.map((n) => n.id)).toEqual([
+      "APPLIED",
+      "REVIEWING",
+      "PHONE_SCREEN",
+      "INTERVIEWING",
+      "OFFER",
+    ])
+    for (const n of result.nodes) {
+      expect(n.count).toBe(0)
+    }
   })
 
   it("handles a single applied application", () => {
     const result = buildSankeyFromApplications([app("APPLIED")])
     expect(result.totalApplications).toBe(1)
-    expect(result.nodes).toHaveLength(1)
-    expect(result.nodes[0].id).toBe("APPLIED")
-    expect(result.nodes[0].count).toBe(1)
+    // All 5 forward stages should be present; only APPLIED has a non-zero count.
+    expect(result.nodes).toHaveLength(5)
+    const applied = result.nodes.find((n) => n.id === "APPLIED")
+    expect(applied?.count).toBe(1)
+    const reviewing = result.nodes.find((n) => n.id === "REVIEWING")
+    expect(reviewing?.count).toBe(0)
     expect(result.links).toHaveLength(0)
   })
 

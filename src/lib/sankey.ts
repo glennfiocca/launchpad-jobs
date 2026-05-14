@@ -136,7 +136,19 @@ export function buildSankeyFromApplications(
 ): SankeyGraphData {
   const total = applications.length;
   if (total === 0) {
-    return { nodes: [], links: [], totalApplications: 0 };
+    // Even with no applications, emit a node for every forward stage so
+    // downstream renderers (legend cells, manifold markers) always have the
+    // full 5-stage shape to draw — counts are simply zero.
+    return {
+      nodes: PIPELINE_STAGES.map((stage) => ({
+        id: stage,
+        label: STAGE_LABELS[stage],
+        color: STAGE_COLORS[stage],
+        count: 0,
+      })),
+      links: [],
+      totalApplications: 0,
+    };
   }
 
   // Count how many applications passed through each forward stage
@@ -164,19 +176,19 @@ export function buildSankeyFromApplications(
     }
   }
 
-  // Build nodes — only include stages with at least 1 application
+  // Build nodes — always emit every forward stage (count: 0 when empty) so
+  // the homepage manifold + legend can render all 5 cells consistently.
+  // Terminal stages remain conditional (only emitted when count > 0).
   const nodeMap = new Map<string, SankeyNode>();
 
   for (const stage of PIPELINE_STAGES) {
     const count = passedThrough[stage] ?? 0;
-    if (count > 0) {
-      nodeMap.set(stage, {
-        id: stage,
-        label: STAGE_LABELS[stage],
-        color: STAGE_COLORS[stage],
-        count,
-      });
-    }
+    nodeMap.set(stage, {
+      id: stage,
+      label: STAGE_LABELS[stage],
+      color: STAGE_COLORS[stage],
+      count,
+    });
   }
 
   for (const stage of TERMINAL_STAGES) {

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Pipeline">
+  <defs>
+    <clipPath id="i1"><circle cx="60" cy="38" r="36"></circle></clipPath>
+    <clipPath id="i2"><circle cx="60" cy="82" r="36"></circle></clipPath>
+    <clipPath id="i3"><circle cx="38" cy="60" r="36"></circle></clipPath>
+    <clipPath id="i4"><circle cx="82" cy="60" r="36"></circle></clipPath>
+  </defs>
+  
+  <g style="mix-blend-mode:screen" fill="#6366f1" fill-opacity="0.55">
+    <circle cx="60" cy="38" r="36"></circle>
+    <circle cx="60" cy="82" r="36"></circle>
+    <circle cx="38" cy="60" r="36"></circle>
+    <circle cx="82" cy="60" r="36"></circle>
+  </g>
+  
+  <g clip-path="url(#i1)"><g clip-path="url(#i2)"><g clip-path="url(#i3)"><g clip-path="url(#i4)">
+    <rect x="0" y="0" width="120" height="120" fill="#6366f1"></rect>
+  </g></g></g></g>
+</svg>

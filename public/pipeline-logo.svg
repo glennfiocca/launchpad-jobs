@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 96" role="img" aria-label="Pipeline">
+  <defs>
+    <clipPath id="L1"><circle cx="48" cy="26" r="36"></circle></clipPath>
+    <clipPath id="L2"><circle cx="48" cy="70" r="36"></circle></clipPath>
+    <clipPath id="L3"><circle cx="26" cy="48" r="36"></circle></clipPath>
+    <clipPath id="L4"><circle cx="70" cy="48" r="36"></circle></clipPath>
+  </defs>
+  
+  <g transform="translate(4 4)">
+    <g style="mix-blend-mode:screen" fill="#6366f1" fill-opacity="0.55">
+      <circle cx="48" cy="26" r="36"></circle>
+      <circle cx="48" cy="70" r="36"></circle>
+      <circle cx="26" cy="48" r="36"></circle>
+      <circle cx="70" cy="48" r="36"></circle>
+    </g>
+    <g clip-path="url(#L1)"><g clip-path="url(#L2)"><g clip-path="url(#L3)"><g clip-path="url(#L4)">
+      <rect x="0" y="0" width="96" height="96" fill="#6366f1"></rect>
+    </g></g></g></g>
+  </g>
+  
+  <text x="112" y="67" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-weight="900" font-size="56" letter-spacing="-1.4" fill="#fafafa">pipeline</text>
+</svg>

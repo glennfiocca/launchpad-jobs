@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { PipelineLogo } from "@/components/brand/PipelineLogo";
 import { CreditsBadge } from "@/components/billing/credits-badge";
 import { ReferBadge } from "@/components/billing/refer-badge";
 import { UpgradePill } from "@/components/layout/upgrade-pill";
@@ -86,14 +86,7 @@ export function Navbar() {
           href="/"
           className="flex items-center shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
-          <Image
-            src="/pipeline-logo.png"
-            alt="Pipeline"
-            width={200}
-            height={44}
-            className="h-8 w-auto"
-            priority
-          />
+          <PipelineLogo aria-label="Pipeline" className="h-8 w-auto" />
         </Link>
 
         {/* Tabs pill — absolutely centered, hidden under 1080px. */}

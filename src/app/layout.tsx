@@ -48,6 +48,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Pipeline — One-Click Job Applications",
   description: "Apply to top tech jobs in one click. Track your applications, communicate with recruiters, and land your dream job.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export default async function RootLayout({

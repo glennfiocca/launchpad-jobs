@@ -21,7 +21,7 @@ export default async function SettingsLayout({
   if (user?.deletedAt) redirect("/auth/signin");
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div>
       <div className="max-w-5xl mx-auto p-4 md:p-8 md:flex md:gap-8">
         <SettingsSidenav />
         <main className="flex-1 min-w-0 space-y-6">{children}</main>

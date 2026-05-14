@@ -149,7 +149,7 @@ export default async function CompanyHubPage({ params }: CompanyPageProps) {
   ];
 
   return (
-    <div className="h-full overflow-y-auto bg-black text-zinc-100">
+    <div className="bg-black text-zinc-100">
       <article className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <Breadcrumbs items={breadcrumbs} />
 

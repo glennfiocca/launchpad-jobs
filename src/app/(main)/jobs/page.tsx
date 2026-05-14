@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default function JobsPage() {
   return (
-    <div className="h-full overflow-hidden bg-black flex flex-col">
+    <div className="bg-black flex flex-col flex-1 min-h-0">
       {/* JobBoard fills all remaining height */}
       <div className="flex-1 min-h-0 px-4 sm:px-6 lg:px-8 pt-8 pb-6">
         <Suspense fallback={<div className="text-zinc-500">Loading jobs...</div>}>

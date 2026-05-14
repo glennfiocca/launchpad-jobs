@@ -1,5 +1,48 @@
 @import "tailwindcss";
 
+/* ============================================
+   EDITORIAL HOMEPAGE REDESIGN — DESIGN TOKENS
+   Tailwind v4 @theme exposes these as utility colors
+   (e.g. bg-bg, text-text-muted, border-border-strong).
+   Sourced from design_handoff_homepage_redesign/README.md.
+   ============================================ */
+@theme {
+  /* Surfaces / text */
+  --color-bg: #0a0a0b;
+  --color-bg-elev: #131318;
+  --color-bg-chart: #07070a;
+  --color-text: #f5f4f1;
+  --color-text-muted: #a1a1aa;
+  --color-text-dim: #71717a;
+  --color-border: rgba(245, 244, 241, 0.08);
+  --color-border-strong: rgba(245, 244, 241, 0.18);
+
+  /* Accent palette */
+  --color-accent: #6366f1;
+  --color-accent-light: #818cf8;
+  --color-accent-lavender: #c4b5fd;
+  --color-accent-cyan: #22d3ee;
+
+  /* Stage palette — manifold visualization */
+  --color-stage-applied: #6366f1;
+  --color-stage-applied-accent: #818cf8;
+  --color-stage-reviewing: #8b5cf6;
+  --color-stage-reviewing-accent: #a78bfa;
+  --color-stage-phone: #a855f7;
+  --color-stage-phone-accent: #c084fc;
+  --color-stage-interview: #d946ef;
+  --color-stage-interview-accent: #e879f9;
+  --color-stage-offer: #22d3ee;
+  --color-stage-offer-accent: #67e8f9;
+
+  /* Typography — wired to next/font CSS variables in layout.tsx */
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  /* Radii */
+  --radius-pill: 999px;
+}
+
 :root {
   --background: #000000;
   --foreground: #fafafa;

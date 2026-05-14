@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Bricolage_Grotesque, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -22,6 +22,26 @@ const TERMLY_WEBSITE_UUID = "cab779b8-1bd3-4a4c-b9ff-51123bbcd9c4";
 
 const inter = Inter({ subsets: ["latin"] });
 
+// Editorial homepage redesign typography. Both exposed as CSS variables so
+// they can be referenced from globals.css's @theme block (--font-display,
+// --font-mono) without coupling individual components to next/font imports.
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+
+// Distinct variable name (--font-geist-mono) avoids a self-referencing
+// circular fallback inside globals.css @theme, where Tailwind v4 also
+// defines --font-mono as a typography token.
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Pipeline — One-Click Job Applications",
   description: "Apply to top tech jobs in one click. Track your applications, communicate with recruiters, and land your dream job.",
@@ -38,7 +58,7 @@ export default async function RootLayout({
   const gpc = await isGpcRequest();
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={`dark ${bricolage.variable} ${geistMono.variable}`}>
       <head>
         {isProd && (
           <Script

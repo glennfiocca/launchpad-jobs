@@ -86,7 +86,7 @@ export function Navbar() {
           href="/"
           className="flex items-center shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
-          <PipelineLogo aria-label="Pipeline" className="h-8 w-auto" />
+          <PipelineLogo aria-label="Pipeline" className="h-11 w-auto" />
         </Link>
 
         {/* Tabs pill — absolutely centered, hidden under 1080px. */}

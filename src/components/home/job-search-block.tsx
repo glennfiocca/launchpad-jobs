@@ -4,8 +4,9 @@ import { useState, useCallback, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ArrowRight } from "lucide-react";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
-import Link from "next/link";
 
+// Editorial restyle (W3): grid + dark elev surface + indigo shadow. All
+// query/filter logic is preserved untouched from the previous revision.
 export function JobSearchBlock() {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -54,62 +55,56 @@ export function JobSearchBlock() {
   );
 
   return (
-    <section
+    <form
       role="search"
       aria-label="Search jobs"
-      className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-0 pb-6"
+      onSubmit={handleSubmit}
+      className="w-full max-w-[780px] mx-auto grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 p-2 rounded-[14px] bg-bg-elev border border-[rgba(245,244,241,0.1)] text-left"
+      style={{ boxShadow: "0 20px 60px -20px rgba(99,102,241,0.4)" }}
     >
-      <form onSubmit={handleSubmit}>
-        <div className="flex flex-col md:flex-row gap-3">
-          {/* Keyword input */}
-          <div className="relative flex-1">
-            <label htmlFor="hero-search-query" className="sr-only">
-              Job title or keyword
-            </label>
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 pointer-events-none" />
-            <input
-              id="hero-search-query"
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Job title or keyword"
-              autoComplete="off"
-              className="w-full pl-11 pr-4 py-3.5 text-base rounded-xl border border-white/10 bg-black text-white placeholder:text-zinc-500 transition-all duration-200 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
-
-          {/* Location */}
-          <div className="md:w-64">
-            <CityStateCombobox
-              value={locationDisplay}
-              onSelect={handleLocationSelect}
-              onFreeText={handleLocationFreeText}
-              onClear={handleLocationClear}
-              placeholder="City, State"
-              size="lg"
-            />
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            className="w-full md:w-auto px-8 py-3.5 rounded-xl bg-white text-black font-semibold text-base hover:bg-white/90 transition-colors"
-          >
-            Search
-          </button>
-        </div>
-      </form>
-
-      {/* Secondary action */}
-      <div className="text-center mt-4">
-        <Link
-          href="/jobs"
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-white transition-colors"
-        >
-          Browse all jobs
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
+      {/* Keyword field */}
+      <div
+        className="flex items-center gap-2.5 px-4 py-[13px] rounded-[10px] border border-transparent bg-black/30 transition-colors focus-within:border-[rgba(129,140,248,0.5)] min-w-0"
+      >
+        <label htmlFor="hero-search-query" className="sr-only">
+          Job title or keyword
+        </label>
+        <Search
+          className="w-4 h-4 text-text-dim flex-none"
+          aria-hidden="true"
+        />
+        <input
+          id="hero-search-query"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Job title or keyword"
+          autoComplete="off"
+          className="flex-1 min-w-0 w-full bg-transparent border-0 outline-none text-text text-[15px] placeholder:text-text-dim"
+        />
       </div>
-    </section>
+
+      {/* Location field — CityStateCombobox brings its own styling, wrapped
+          so its rounded edges align with the editorial card */}
+      <div className="min-w-0">
+        <CityStateCombobox
+          value={locationDisplay}
+          onSelect={handleLocationSelect}
+          onFreeText={handleLocationFreeText}
+          onClear={handleLocationClear}
+          placeholder="City, state, or remote"
+          size="lg"
+        />
+      </div>
+
+      {/* Submit */}
+      <button
+        type="submit"
+        className="inline-flex items-center justify-center gap-2 px-6 py-[13px] rounded-[10px] bg-[#f5f4f1] text-[#0a0a0b] font-semibold text-[14.5px] hover:bg-white hover:-translate-y-px transition-all duration-200"
+      >
+        Search
+        <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+      </button>
+    </form>
   );
 }

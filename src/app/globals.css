@@ -84,6 +84,81 @@ body {
   animation: status-pulse 2s ease-in-out infinite;
 }
 
+/* ============================================
+   MANIFOLD VISUALIZATION
+   Particle tier flow keyframes + marker pulse.
+   Each tier (t0..t4) fades just before crossing into a gap
+   it isn't allowed to enter, so no particle is ever visible
+   inside a "closed" drop-off shape.
+   ---
+   --travel: total horizontal distance per cycle (set inline per particle)
+   --dur:    cycle duration (uniform 8s for velocity consistency)
+   --delay:  negative pre-stagger across the cycle
+   ============================================ */
+@keyframes manifold-flow-t0 {
+  0%   { transform: translateX(0); opacity: 0; }
+  4%   { opacity: 1; }
+  24%  { opacity: 1; }
+  28%  { opacity: 0; }
+  100% { transform: translateX(var(--travel, 1056px)); opacity: 0; }
+}
+@keyframes manifold-flow-t1 {
+  0%   { transform: translateX(0); opacity: 0; }
+  4%   { opacity: 1; }
+  47%  { opacity: 1; }
+  51%  { opacity: 0; }
+  100% { transform: translateX(var(--travel, 1056px)); opacity: 0; }
+}
+@keyframes manifold-flow-t2 {
+  0%   { transform: translateX(0); opacity: 0; }
+  4%   { opacity: 1; }
+  70%  { opacity: 1; }
+  74%  { opacity: 0; }
+  100% { transform: translateX(var(--travel, 1056px)); opacity: 0; }
+}
+@keyframes manifold-flow-t3 {
+  0%   { transform: translateX(0); opacity: 0; }
+  4%   { opacity: 1; }
+  93%  { opacity: 1; }
+  97%  { opacity: 0; }
+  100% { transform: translateX(var(--travel, 1056px)); opacity: 0; }
+}
+@keyframes manifold-flow-t4 {
+  0%   { transform: translateX(0); opacity: 0; }
+  4%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateX(var(--travel, 1056px)); opacity: 0; }
+}
+
+.manifold-particle {
+  animation-duration: var(--dur, 8s);
+  animation-delay: var(--delay, 0s);
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  will-change: transform, opacity;
+}
+.manifold-particle.t0 { animation-name: manifold-flow-t0; }
+.manifold-particle.t1 { animation-name: manifold-flow-t1; }
+.manifold-particle.t2 { animation-name: manifold-flow-t2; }
+.manifold-particle.t3 { animation-name: manifold-flow-t3; }
+.manifold-particle.t4 { animation-name: manifold-flow-t4; }
+
+@keyframes manifold-marker-pulse {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 0.45; }
+}
+.manifold-marker-glow {
+  animation: manifold-marker-pulse 2.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manifold-particle,
+  .manifold-marker-glow {
+    animation: none;
+  }
+}
+
 /* Job content HTML from Greenhouse */
 
 .job-content {

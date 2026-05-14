@@ -154,6 +154,16 @@ export interface ApiResponse<T> {
   };
 }
 
+// Homepage live stats — served by GET /api/stats/today.
+// `displayCount` is `max(baseline, applicationsToday)` so the editorial
+// hero's "Live · N applications today" eyebrow never visually regresses
+// while real volume catches up to the baseline floor.
+export interface TodayStats {
+  applicationsToday: number;
+  baseline: number;
+  displayCount: number;
+}
+
 // Billing
 export interface CreditStatus {
   isSubscribed: boolean;

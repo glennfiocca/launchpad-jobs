@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ProgressBar } from "@/components/layout/progress-bar";
+import { FeedbackTab } from "@/components/layout/feedback-tab";
 import { Toaster } from "sonner";
 import { isGpcRequest } from "@/lib/gpc/detect";
 
@@ -96,6 +97,11 @@ export default async function RootLayout({
         <Providers>
           {children}
         </Providers>
+        {/* Persistent right-edge feedback widget. Mounted once at the
+            root so it survives route transitions and applies to both
+            signed-in and signed-out users; the component itself hides
+            on /auth/* routes via usePathname(). */}
+        <FeedbackTab />
         <Toaster theme="dark" richColors position="top-right" />
       </body>
     </html>

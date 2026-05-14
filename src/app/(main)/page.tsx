@@ -1,6 +1,4 @@
-import Link from "next/link";
-import { ArrowRight, Zap, BarChart3, MessageSquare } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Zap, BarChart3, MessageSquare } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -9,14 +7,37 @@ import {
   buildDemoSankeyData,
 } from "@/lib/sankey";
 import { PipelineSankey } from "@/components/sankey/pipeline-sankey";
-import { JobSearchBlock } from "@/components/home/job-search-block";
+import { HomeHero } from "@/components/home/home-hero";
 
 export const dynamic = "force-dynamic";
+
+// Editorial palette — used for the stats-legend swatches so the legend tracks
+// the manifold colors regardless of the canonical STAGE_COLORS in sankey.ts.
+// Keyed by SankeyNode.id (the ApplicationStatus enum value).
+const EDITORIAL_STAGE_COLORS: Record<string, string> = {
+  APPLIED: "#6366f1",
+  REVIEWING: "#8b5cf6",
+  PHONE_SCREEN: "#a855f7",
+  INTERVIEWING: "#d946ef",
+  OFFER: "#22d3ee",
+};
+
+// The five forward-progress stages shown in the stats legend. Order matters —
+// matches the manifold left-to-right.
+const LEGEND_STAGE_IDS = [
+  "APPLIED",
+  "REVIEWING",
+  "PHONE_SCREEN",
+  "INTERVIEWING",
+  "OFFER",
+] as const;
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
 
-  // Load real application data for signed-in users
+  // Load real application data for signed-in users; demo for everyone else.
+  // The pipeline visualization is shown in both modes — signed-out users see
+  // a "Sample" pill above the heading so the demo intent is clear.
   const sankeyData = session?.user?.id
     ? buildSankeyFromApplications(
         await db.application.findMany({
@@ -31,99 +52,176 @@ export default async function HomePage() {
       )
     : buildDemoSankeyData();
 
-  const mode = session?.user?.id ? "live" : "demo";
+  const mode: "live" | "demo" = session?.user?.id ? "live" : "demo";
+
+  // Active job count for the hero's "open roles" meta. Uses the same predicate
+  // as /jobs listing + sitemap (Job.isActive=true) so the number is consistent.
+  const roleCount = await db.job.count({ where: { isActive: true } });
+
+  // Stats-legend cells: pull the five forward stages from the sankey nodes,
+  // skip any that are missing (live data may not yet have all stages).
+  const nodesById = new Map(sankeyData.nodes.map((n) => [n.id, n]));
+  const legendStages = LEGEND_STAGE_IDS.flatMap((id) => {
+    const n = nodesById.get(id);
+    return n ? [n] : [];
+  });
+
+  const totalApplications = sankeyData.totalApplications;
 
   return (
-    <div className="h-full overflow-y-auto bg-black">
-      {/* Hero */}
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Subtle radial glow behind hero text */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 flex items-start justify-center overflow-hidden"
-        >
-          <div className="mt-8 w-[500px] h-[250px] rounded-full bg-blue-500/10 blur-[120px]" />
-        </div>
+    <main className="min-h-full bg-bg">
+      <div className="max-w-[1180px] mx-auto px-6 pt-8 pb-16">
+        <HomeHero roleCount={roleCount} />
 
-        <div className="relative text-center pt-8 pb-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-sm font-medium mb-4">
-            <Zap className="w-3.5 h-3.5 text-blue-400" />
-            One-click applications powered by AI
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-semibold leading-tight mb-4 tracking-tight">
-            <span className="bg-gradient-to-r from-white via-white to-zinc-400 bg-clip-text text-transparent">
-              Apply to your dream job
-            </span>
-            <br />
-            <span className="bg-gradient-to-r from-indigo-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              in one click.
-            </span>
-          </h1>
-          <p className="text-base text-zinc-400 max-w-2xl mx-auto mb-6 leading-relaxed">
-            Fill your profile once. Apply everywhere instantly. AI tracks your applications
-            and keeps you informed — no more spreadsheets.
-          </p>
-
-          {/* Sankey visualization */}
-          <div className="max-w-xl mx-auto mb-6 bg-[#0a0a0a] border border-white/8 rounded-xl p-3">
-            <PipelineSankey mode={mode} data={sankeyData} />
-          </div>
-
-          {/* CTA for anonymous users */}
-          {!session && (
-            <div className="flex items-center justify-center mb-4">
-              <Link
-                href="/auth/signin"
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-semibold hover:bg-white/90 transition-colors text-base"
+        {/* ─── Pipeline section ─────────────────────────────────────── */}
+        <section className="mt-16">
+          {mode === "demo" && (
+            <div className="mb-2.5">
+              <span
+                className="inline-block font-mono text-[10.5px] uppercase tracking-[0.06em] text-accent-lavender"
+                style={{
+                  background: "rgba(196,181,253,0.12)",
+                  padding: "3px 8px",
+                  borderRadius: "999px",
+                }}
               >
-                Get Started
-                <ArrowRight className="w-5 h-5" />
-              </Link>
+                Sample
+              </span>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Job Search */}
-      <JobSearchBlock />
-
-      {/* Features */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {[
-            {
-              icon: <Zap className="w-5 h-5 text-blue-400" />,
-              iconBg: "bg-blue-500/10",
-              title: "One-Click Apply",
-              desc: "Your profile auto-fills every application. What used to take 20 minutes takes 1 second.",
-            },
-            {
-              icon: <BarChart3 className="w-5 h-5 text-green-400" />,
-              iconBg: "bg-green-500/10",
-              title: "Smart Tracking",
-              desc: "AI reads your recruiting emails and automatically updates your application status.",
-            },
-            {
-              icon: <MessageSquare className="w-5 h-5 text-purple-400" />,
-              iconBg: "bg-purple-500/10",
-              title: "In-App Messaging",
-              desc: "All recruiter communications live in one place. Never lose track of a conversation.",
-            },
-          ].map((feature) => (
-            <div
-              key={feature.title}
-              className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 hover:border-white/15 transition-colors"
+          <div className="flex justify-between items-baseline mb-3.5">
+            <h3
+              className="m-0 font-display font-semibold text-text leading-none inline-flex items-baseline gap-[0.18em]"
+              style={{
+                fontSize: "30px",
+                letterSpacing: "-0.04em",
+                fontVariationSettings: "'opsz' 72, 'wdth' 100",
+              }}
             >
-              <div className={cn("relative w-8 h-8 rounded-lg flex items-center justify-center mb-2", feature.iconBg)}>
-                <div className={cn("absolute inset-0 rounded-lg blur-md opacity-60", feature.iconBg)} />
-                <div className="relative">{feature.icon}</div>
+              Your{" "}
+              <em className="not-italic font-medium text-accent-lavender">
+                pipeline
+              </em>
+            </h3>
+            <span className="font-mono text-[11px] text-text-dim tabular-nums">
+              {totalApplications.toLocaleString()} application
+              {totalApplications === 1 ? "" : "s"} · updated 2s ago
+            </span>
+          </div>
+
+          {/* Chart card */}
+          <div className="bg-bg-chart border border-border rounded-[14px] overflow-hidden">
+            <PipelineSankey data={sankeyData} mode={mode} />
+          </div>
+
+          {/* Stats legend — 5-cell grid */}
+          <div
+            className="mt-3.5 grid grid-cols-2 md:grid-cols-5 gap-px border border-border rounded-[12px] overflow-hidden"
+            style={{ background: "rgba(245,244,241,0.08)" }}
+          >
+            {legendStages.map((s) => {
+              const pct =
+                totalApplications > 0 ? (s.count / totalApplications) * 100 : 0;
+              const swatch = EDITORIAL_STAGE_COLORS[s.id] ?? s.color;
+              return (
+                <div
+                  key={s.id}
+                  className="relative bg-bg px-4 py-3.5"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-3.5 right-4 block h-1.5 w-1.5 rounded-full"
+                    style={{
+                      background: swatch,
+                      boxShadow: `0 0 6px ${swatch}`,
+                    }}
+                  />
+                  <div className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-dim">
+                    {s.label}
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1.5 font-display font-medium text-text tabular-nums tracking-[-0.02em] text-[22px] leading-tight">
+                    {s.count.toLocaleString()}
+                    <span className="font-mono text-[11px] text-text-dim font-normal">
+                      {pct.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ─── Feature cards ────────────────────────────────────────── */}
+        <section className="mt-9 grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {FEATURE_CARDS.map((f) => (
+            <article
+              key={f.title}
+              className="bg-bg border border-border rounded-[12px] px-[22px] py-5 transition-colors duration-200 hover:border-border-strong"
+            >
+              <div
+                className="inline-flex items-center justify-center w-8 h-8 rounded-[9px]"
+                style={{ background: f.iconBg, color: f.iconFg }}
+              >
+                <f.Icon className="w-4 h-4" aria-hidden="true" />
               </div>
-              <h3 className="text-base font-semibold text-white mb-2">{feature.title}</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">{feature.desc}</p>
-            </div>
+              <h3
+                className="mt-3.5 mb-1 text-[18px] font-medium tracking-[-0.02em] text-text font-display"
+              >
+                {f.titlePrefix}{" "}
+                <em className="not-italic font-medium text-accent-lavender">
+                  {f.titleAccent}
+                </em>
+              </h3>
+              <p className="m-0 text-text-muted text-[13.5px] leading-[1.55]">
+                {f.body}
+              </p>
+            </article>
           ))}
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
+
+// Static feature-card config — externalized so the JSX stays a flat map.
+const FEATURE_CARDS: ReadonlyArray<{
+  Icon: typeof Zap;
+  iconBg: string;
+  iconFg: string;
+  titlePrefix: string;
+  titleAccent: string;
+  title: string;
+  body: string;
+}> = [
+  {
+    Icon: Zap,
+    iconBg: "rgba(129,140,248,0.14)",
+    iconFg: "#a5b4fc",
+    titlePrefix: "One-Click",
+    titleAccent: "Apply",
+    title: "One-Click Apply",
+    body:
+      "Your profile auto-fills every application. What used to take 20 minutes takes 20 seconds.",
+  },
+  {
+    Icon: BarChart3,
+    iconBg: "rgba(34,197,94,0.14)",
+    iconFg: "#86efac",
+    titlePrefix: "Smart",
+    titleAccent: "Tracking",
+    title: "Smart Tracking",
+    body:
+      "Status updates itself as recruiters reply. No spreadsheets, no copy-paste.",
+  },
+  {
+    Icon: MessageSquare,
+    iconBg: "rgba(168,85,247,0.14)",
+    iconFg: "#d8b4fe",
+    titlePrefix: "In-App",
+    titleAccent: "Messaging",
+    title: "In-App Messaging",
+    body:
+      "Every recruiter conversation in one place. Never lose track of a thread.",
+  },
+];

@@ -25,6 +25,7 @@ import { EmailThread } from "@/components/dashboard/email-thread";
 import type { ApiResponse } from "@/types";
 
 import { ClosedLoopComposer } from "./closed-loop-composer";
+import { StatusPill } from "./status-pill";
 
 interface EmailThreadModalProps {
   applicationId: string;
@@ -45,11 +46,8 @@ type FetchState =
 
 export function EmailThreadModal({
   applicationId,
-  // applicationStatus and jobTitle are accepted today for header context;
-  // they're not yet rendered in this minimal header, but kept on the props
-  // surface so Phase 4 can light them up without re-plumbing parents.
-  applicationStatus: _applicationStatus,
-  jobTitle: _jobTitle,
+  applicationStatus,
+  jobTitle,
   companyName,
   companyLogoUrl,
   companyWebsite,
@@ -153,23 +151,28 @@ export function EmailThreadModal({
         >
           {/* ── Header ─────────────────────────────────────────────── */}
           <div className="px-5 py-4 border-b border-border flex items-center gap-3">
-            <div className="rounded-lg bg-white/8 h-8 w-8 flex items-center justify-center text-zinc-400 font-bold text-xs overflow-hidden shrink-0">
+            <div className="rounded-lg bg-white/8 h-9 w-9 flex items-center justify-center text-zinc-400 font-bold text-xs overflow-hidden shrink-0">
               <CompanyLogo
                 name={companyName}
                 logoUrl={companyLogoUrl ?? null}
                 website={companyWebsite ?? null}
               />
             </div>
-            <Dialog.Title className="text-text text-[14px] font-medium flex items-center gap-2 min-w-0">
-              <span className="truncate">{companyName}</span>
-              <span className="text-text-dim shrink-0">·</span>
-              <span className="text-text-muted shrink-0 font-mono text-[11px] tabular-nums">
-                {effectiveFetchState.kind === "ready"
-                  ? `${emails.length} message${emails.length === 1 ? "" : "s"}`
-                  : "—"}
-              </span>
-            </Dialog.Title>
-            <div className="flex-1" />
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-text text-[14px] font-semibold truncate">
+                {jobTitle}
+              </Dialog.Title>
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <span className="text-text-muted text-[12px] truncate">{companyName}</span>
+                <span className="text-text-dim shrink-0">·</span>
+                <span className="text-text-dim shrink-0 font-mono text-[11px] tabular-nums">
+                  {effectiveFetchState.kind === "ready"
+                    ? `${emails.length} message${emails.length === 1 ? "" : "s"}`
+                    : "—"}
+                </span>
+              </div>
+            </div>
+            <StatusPill status={applicationStatus} />
             <Dialog.Close asChild>
               <button
                 type="button"

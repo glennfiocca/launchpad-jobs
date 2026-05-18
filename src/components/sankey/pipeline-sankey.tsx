@@ -72,6 +72,20 @@ interface PipelineSankeyProps {
   chartHeight?: number;
   /** Hide the optional header caption above the chart. */
   hideCaption?: boolean;
+  /**
+   * When set, dim all stage markers except this one (opacity × 0.4).
+   * Default: null (no highlight — all markers at full opacity).
+   * Used by the dashboard cockpit to spotlight the active/hovered stage.
+   */
+  highlightStage?: ApplicationStatus | null;
+  /** Fires on stage-marker mouseenter (stage id) and mouseleave (null). */
+  onStageHover?: (stage: ApplicationStatus | null) => void;
+  /** Fires on stage-marker click. Adds cursor:pointer to the hit area when set. */
+  onStageClick?: (stage: ApplicationStatus) => void;
+  /** When false, hide per-stage text labels above the band. Default true. */
+  showLabels?: boolean;
+  /** When false, hide the "−N closed" labels below drop-off shapes. Default true. */
+  showDropoffLabels?: boolean;
   // The following props are accepted for backward compatibility with the
   // previous d3-sankey implementation but are no longer used by the
   // manifold renderer. They remain in the signature so existing call-sites
@@ -294,6 +308,11 @@ export function PipelineSankey({
   className,
   chartHeight = DEFAULT_VIEW_HEIGHT,
   hideCaption = false,
+  highlightStage = null,
+  onStageHover,
+  onStageClick,
+  showLabels = true,
+  showDropoffLabels = true,
 }: PipelineSankeyProps): ReactElement {
   const prefersReducedMotion = useReducedMotion();
   const skipMotion = !!prefersReducedMotion;
@@ -455,10 +474,14 @@ export function PipelineSankey({
             filter={`url(#${glowFilterId})`}
           />
 
-          {/* Stage markers — solid 4px bar + pulsing soft glow rect. */}
+          {/* Stage markers — solid 4px bar + pulsing soft glow rect.
+              When `highlightStage` is set, non-matching markers fade to 0.4
+              opacity so the dashboard cockpit can spotlight active filter. */}
           {stages.map((s, i) => {
             const x = geom.colX(i);
             const h = geom.bandH(s.count);
+            const dimmed = highlightStage !== null && s.id !== highlightStage;
+            const barOpacity = dimmed ? 0.95 * 0.4 : 0.95;
             return (
               <g key={`mk-${s.id}`}>
                 <rect
@@ -467,7 +490,7 @@ export function PipelineSankey({
                   width="4"
                   height={h}
                   fill={s.color}
-                  opacity="0.95"
+                  opacity={barOpacity}
                 />
                 <rect
                   className="manifold-marker-glow"
@@ -477,7 +500,25 @@ export function PipelineSankey({
                   height={h + 4}
                   fill={s.color}
                   filter={`url(#${glowFilterId})`}
-                  style={{ animationDelay: `${i * MARKER_STAGGER_SECONDS}s` }}
+                  style={{
+                    animationDelay: `${i * MARKER_STAGGER_SECONDS}s`,
+                    opacity: dimmed ? 0.4 : undefined,
+                  }}
+                />
+                {/* Invisible hit area — full vertical strip of the marker column.
+                    fill="transparent" keeps it click/hover-active without paint.
+                    Sized to match the prototype's <rect x={x-6} ... width=12> proxy. */}
+                <rect
+                  x={x - 6}
+                  y={PAD_TOP - 4}
+                  width={12}
+                  height={height - 14 - (PAD_TOP - 4)}
+                  fill="transparent"
+                  style={onStageClick ? { cursor: "pointer" } : undefined}
+                  onMouseEnter={onStageHover ? () => onStageHover(s.id) : undefined}
+                  onMouseLeave={onStageHover ? () => onStageHover(null) : undefined}
+                  onClick={onStageClick ? () => onStageClick(s.id) : undefined}
+                  aria-label={onStageClick ? `Filter to ${s.label} (${s.count} applications)` : undefined}
                 />
               </g>
             );
@@ -512,7 +553,7 @@ export function PipelineSankey({
         </g>
 
         {/* Stage labels — name + mono count, above each column. */}
-        {stages.map((s, i) => {
+        {showLabels && stages.map((s, i) => {
           const x = geom.colX(i);
           const h = geom.bandH(s.count);
           const yTop = geom.centerY - h / 2;
@@ -545,7 +586,7 @@ export function PipelineSankey({
         })}
 
         {/* Drop-off labels — "−N closed" below each gap. */}
-        {dropOffs.map((dp, i) =>
+        {showDropoffLabels && dropOffs.map((dp, i) =>
           dp ? (
             <text
               key={`dlbl-${stages[i].id}`}

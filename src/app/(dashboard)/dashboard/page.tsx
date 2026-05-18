@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { countPendingQuestions } from "@/lib/applications/pending-questions";
+import type { ApplicationWithDashboardData } from "@/types";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -12,18 +14,32 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
 
-  const [applications, profile] = await Promise.all([
+  const [rawApplications, profile] = await Promise.all([
     db.application.findMany({
       where: { userId: session.user.id },
+      // applicationSnapshot is a JSON column on Application — included by
+      // default because no `select` is specified. We rely on that here to
+      // compute `pendingQuestionsCount` server-side without an extra query.
       include: {
         job: { include: { company: true } },
+        // Latest email only — the inline-expanded row body shows just the
+        // most recent message. `_count.emails` below gives the true total.
         emails: { orderBy: { receivedAt: "desc" }, take: 1 },
         statusHistory: { orderBy: { createdAt: "desc" } },
+        _count: { select: { emails: true } },
       },
       orderBy: { appliedAt: "desc" },
     }),
     db.userProfile.findUnique({ where: { userId: session.user.id } }),
   ]);
+
+  // Decorate with the pending-question count for the cockpit interrupt pill.
+  // Computed here (not in DashboardClient) so the count is available at the
+  // server-rendered HTML edge and survives hydration without a flicker.
+  const applications: ApplicationWithDashboardData[] = rawApplications.map((app) => ({
+    ...app,
+    pendingQuestionsCount: countPendingQuestions(app),
+  }));
 
   return (
     <div className="flex flex-col h-full">

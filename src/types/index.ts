@@ -41,6 +41,21 @@ export type ApplicationWithJob = Application & {
   }[];
 };
 
+/**
+ * Dashboard-cockpit shape: ApplicationWithJob extended with the two pieces of
+ * derived data the new editorial dashboard renders inline on each row.
+ *
+ * - `_count.emails` is the *real* email total (the dashboard query still
+ *   `take: 1` on the emails relation for the latest-email preview body).
+ * - `pendingQuestionsCount` is the number of unanswered entries in
+ *   `applicationSnapshot.pendingQuestions[]` — see
+ *   src/lib/applications/pending-questions.ts.
+ */
+export type ApplicationWithDashboardData = ApplicationWithJob & {
+  _count: { emails: number };
+  pendingQuestionsCount: number;
+};
+
 // Greenhouse API types
 export interface GreenhouseJob {
   id: number;

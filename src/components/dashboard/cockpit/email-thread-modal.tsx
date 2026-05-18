@@ -190,7 +190,11 @@ export function EmailThreadModal({
               </div>
             )}
             {effectiveFetchState.kind === "ready" && (
+              // Keyed by appended-count so newly sent emails force a
+              // remount — EmailThread's internal state seeds from
+              // initialEmails only on first mount.
               <EmailThread
+                key={`${applicationId}:${appended.length}`}
                 applicationId={applicationId}
                 initialEmails={emails}
                 readOnly

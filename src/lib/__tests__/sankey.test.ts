@@ -2,16 +2,22 @@ import { describe, it, expect } from "vitest"
 import {
   buildSankeyFromApplications,
   buildDemoSankeyData,
-  type SankeyGraphData,
+  type SankeyApplicationInput,
 } from "../sankey"
 import type { ApplicationStatus } from "@prisma/client"
 
-// Helper to create a test application
+// Helper to create a test application. Defaults to an active job; pass
+// `isActive: false` to simulate a job removed from the source board.
 function app(
   status: ApplicationStatus,
   history: Array<{ fromStatus: ApplicationStatus | null; toStatus: ApplicationStatus }> = [],
-) {
-  return { status, statusHistory: history }
+  options: { jobIsActive?: boolean } = {},
+): SankeyApplicationInput {
+  return {
+    status,
+    statusHistory: history,
+    job: { isActive: options.jobIsActive ?? true },
+  }
 }
 
 describe("buildSankeyFromApplications", () => {
@@ -30,44 +36,69 @@ describe("buildSankeyFromApplications", () => {
     for (const n of result.nodes) {
       expect(n.count).toBe(0)
     }
+    // Empty closure map is still keyed by every forward stage.
+    expect(result.closedAtStage).toEqual({
+      APPLIED: 0,
+      REVIEWING: 0,
+      PHONE_SCREEN: 0,
+      INTERVIEWING: 0,
+      OFFER: 0,
+    })
   })
 
-  it("handles a single applied application", () => {
+  it("counts an APPLIED app with an active job as in-flight at APPLIED", () => {
     const result = buildSankeyFromApplications([app("APPLIED")])
     expect(result.totalApplications).toBe(1)
-    // All 5 forward stages should be present; only APPLIED has a non-zero count.
     expect(result.nodes).toHaveLength(5)
-    const applied = result.nodes.find((n) => n.id === "APPLIED")
-    expect(applied?.count).toBe(1)
-    const reviewing = result.nodes.find((n) => n.id === "REVIEWING")
-    expect(reviewing?.count).toBe(0)
+    expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "REVIEWING")?.count).toBe(0)
+    // No closures — the app is still active.
+    expect(result.closedAtStage.APPLIED).toBe(0)
     expect(result.links).toHaveLength(0)
   })
 
-  it("builds forward flow from applications at different stages", () => {
+  it("counts an APPLIED app with an inactive job as a closure at APPLIED", () => {
+    // Job was removed from the source board — even though status is still
+    // APPLIED, the app counts as closed in the manifold.
+    const result = buildSankeyFromApplications([
+      app("APPLIED", [], { jobIsActive: false }),
+    ])
+    expect(result.totalApplications).toBe(1)
+    // No in-flight count — the app is closed.
+    expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(0)
+    // Drop-off attributed to APPLIED.
+    expect(result.closedAtStage.APPLIED).toBe(1)
+    expect(result.closedAtStage.REVIEWING).toBe(0)
+  })
+
+  it("counts in-flight apps at their CURRENT stage, not cumulatively", () => {
     const result = buildSankeyFromApplications([
       app("APPLIED"),
       app("REVIEWING"),
       app("INTERVIEWING"),
     ])
     expect(result.totalApplications).toBe(3)
+    // Each app is in-flight at exactly its current stage — no cumulative
+    // "passed through" counting here.
+    expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "REVIEWING")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "PHONE_SCREEN")?.count).toBe(0)
+    expect(result.nodes.find((n) => n.id === "INTERVIEWING")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "OFFER")?.count).toBe(0)
 
-    // All 3 passed through APPLIED
-    const applied = result.nodes.find((n) => n.id === "APPLIED")
-    expect(applied?.count).toBe(3)
-
-    // 2 passed through REVIEWING (REVIEWING + INTERVIEWING)
-    const reviewing = result.nodes.find((n) => n.id === "REVIEWING")
-    expect(reviewing?.count).toBe(2)
-
-    // Forward links should exist
-    const appliedToReviewing = result.links.find(
-      (l) => l.source === "APPLIED" && l.target === "REVIEWING",
-    )
-    expect(appliedToReviewing?.value).toBe(2)
+    // No closures — all three are still active.
+    for (const stage of [
+      "APPLIED",
+      "REVIEWING",
+      "PHONE_SCREEN",
+      "INTERVIEWING",
+      "OFFER",
+    ] as const) {
+      expect(result.closedAtStage[stage]).toBe(0)
+    }
   })
 
-  it("creates exit links for rejected applications", () => {
+  it("attributes a REJECTED app to the highest stage it reached", () => {
     const result = buildSankeyFromApplications([
       app("REJECTED", [
         { fromStatus: null, toStatus: "APPLIED" },
@@ -76,31 +107,29 @@ describe("buildSankeyFromApplications", () => {
       ]),
     ])
 
-    // Should have APPLIED, REVIEWING nodes and REJECTED terminal
-    expect(result.nodes.find((n) => n.id === "REJECTED")).toBeDefined()
+    // Closure attributed to REVIEWING (the highest forward stage reached).
+    expect(result.closedAtStage.REVIEWING).toBe(1)
+    expect(result.closedAtStage.APPLIED).toBe(0)
 
-    // Exit link from REVIEWING → REJECTED
-    const exitLink = result.links.find(
-      (l) => l.source === "REVIEWING" && l.target === "REJECTED",
-    )
-    expect(exitLink?.value).toBe(1)
+    // Terminal REJECTED node carries the same count for legacy consumers.
+    expect(result.nodes.find((n) => n.id === "REJECTED")?.count).toBe(1)
+
+    // Exit link from REVIEWING → REJECTED.
+    expect(
+      result.links.find((l) => l.source === "REVIEWING" && l.target === "REJECTED")?.value,
+    ).toBe(1)
   })
 
-  it("handles applications that skip stages (APPLIED → REJECTED directly)", () => {
-    const result = buildSankeyFromApplications([
-      app("REJECTED"), // no history, rejected from APPLIED
-    ])
-
+  it("attributes a REJECTED app with no history to APPLIED", () => {
+    const result = buildSankeyFromApplications([app("REJECTED")])
     expect(result.totalApplications).toBe(1)
-
-    const exitLink = result.links.find(
-      (l) => l.source === "APPLIED" && l.target === "REJECTED",
-    )
-    expect(exitLink?.value).toBe(1)
+    expect(result.closedAtStage.APPLIED).toBe(1)
+    expect(
+      result.links.find((l) => l.source === "APPLIED" && l.target === "REJECTED")?.value,
+    ).toBe(1)
   })
 
-  it("uses statusHistory to determine highest stage reached", () => {
-    // Application is rejected but went through PHONE_SCREEN
+  it("uses statusHistory to determine highest stage reached for rejections", () => {
     const result = buildSankeyFromApplications([
       app("REJECTED", [
         { fromStatus: null, toStatus: "APPLIED" },
@@ -110,36 +139,61 @@ describe("buildSankeyFromApplications", () => {
       ]),
     ])
 
-    // Should exit from PHONE_SCREEN, not APPLIED
-    const exitFromScreen = result.links.find(
-      (l) => l.source === "PHONE_SCREEN" && l.target === "REJECTED",
-    )
-    expect(exitFromScreen?.value).toBe(1)
-
-    // Should NOT have an exit from APPLIED → REJECTED
-    const exitFromApplied = result.links.find(
-      (l) => l.source === "APPLIED" && l.target === "REJECTED",
-    )
-    expect(exitFromApplied).toBeUndefined()
+    expect(result.closedAtStage.PHONE_SCREEN).toBe(1)
+    expect(result.closedAtStage.APPLIED).toBe(0)
+    expect(result.closedAtStage.REVIEWING).toBe(0)
   })
 
-  it("handles withdrawn applications", () => {
+  it("excludes WITHDRAWN applications from the manifold entirely", () => {
+    // WITHDRAWN is user-initiated and is intentionally invisible in the
+    // manifold — neither in-flight nor a closure. See sankey.ts.
     const result = buildSankeyFromApplications([
       app("WITHDRAWN", [
         { fromStatus: null, toStatus: "APPLIED" },
         { fromStatus: "APPLIED", toStatus: "WITHDRAWN" },
       ]),
+      app("APPLIED"),
     ])
 
-    expect(result.nodes.find((n) => n.id === "WITHDRAWN")).toBeDefined()
-    const exitLink = result.links.find(
-      (l) => l.source === "APPLIED" && l.target === "WITHDRAWN",
-    )
-    expect(exitLink?.value).toBe(1)
+    // totalApplications still includes the WITHDRAWN row (it's the input
+    // count), but no stage count or closure picks it up.
+    expect(result.totalApplications).toBe(2)
+    expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "WITHDRAWN")).toBeUndefined()
+    for (const stage of [
+      "APPLIED",
+      "REVIEWING",
+      "PHONE_SCREEN",
+      "INTERVIEWING",
+      "OFFER",
+    ] as const) {
+      // Only the APPLIED in-flight app contributes — WITHDRAWN is invisible.
+      expect(result.closedAtStage[stage]).toBe(0)
+    }
   })
 
-  it("builds a complete funnel with multiple applications", () => {
+  it("treats job-removed applications as closures at the highest reached stage", () => {
+    // App is currently at REVIEWING but the underlying job was removed
+    // from the source board — counts as a closure at REVIEWING.
     const result = buildSankeyFromApplications([
+      app(
+        "REVIEWING",
+        [
+          { fromStatus: null, toStatus: "APPLIED" },
+          { fromStatus: "APPLIED", toStatus: "REVIEWING" },
+        ],
+        { jobIsActive: false },
+      ),
+    ])
+    expect(result.closedAtStage.REVIEWING).toBe(1)
+    expect(result.closedAtStage.APPLIED).toBe(0)
+    // Not in-flight anywhere — the job is gone.
+    expect(result.nodes.find((n) => n.id === "REVIEWING")?.count).toBe(0)
+  })
+
+  it("builds a mixed funnel correctly", () => {
+    const result = buildSankeyFromApplications([
+      // Reached OFFER, still in flight.
       app("OFFER", [
         { fromStatus: null, toStatus: "APPLIED" },
         { fromStatus: "APPLIED", toStatus: "REVIEWING" },
@@ -147,33 +201,45 @@ describe("buildSankeyFromApplications", () => {
         { fromStatus: "PHONE_SCREEN", toStatus: "INTERVIEWING" },
         { fromStatus: "INTERVIEWING", toStatus: "OFFER" },
       ]),
+      // Currently INTERVIEWING.
       app("INTERVIEWING", [
         { fromStatus: null, toStatus: "APPLIED" },
         { fromStatus: "APPLIED", toStatus: "REVIEWING" },
         { fromStatus: "REVIEWING", toStatus: "PHONE_SCREEN" },
         { fromStatus: "PHONE_SCREEN", toStatus: "INTERVIEWING" },
       ]),
+      // Rejected at REVIEWING.
       app("REJECTED", [
         { fromStatus: null, toStatus: "APPLIED" },
         { fromStatus: "APPLIED", toStatus: "REVIEWING" },
         { fromStatus: "REVIEWING", toStatus: "REJECTED" },
       ]),
+      // Still at APPLIED, active job.
       app("APPLIED"),
+      // Withdrawn — invisible.
+      app("WITHDRAWN", [
+        { fromStatus: null, toStatus: "APPLIED" },
+        { fromStatus: "APPLIED", toStatus: "WITHDRAWN" },
+      ]),
     ])
 
-    expect(result.totalApplications).toBe(4)
+    expect(result.totalApplications).toBe(5)
 
-    // All 4 pass through APPLIED
-    expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(4)
-    // 3 pass through REVIEWING
-    expect(result.nodes.find((n) => n.id === "REVIEWING")?.count).toBe(3)
-    // 2 pass through PHONE_SCREEN
-    expect(result.nodes.find((n) => n.id === "PHONE_SCREEN")?.count).toBe(2)
-    // 2 pass through INTERVIEWING
-    expect(result.nodes.find((n) => n.id === "INTERVIEWING")?.count).toBe(2)
-    // 1 reaches OFFER
+    // In-flight counts (current stage, active job, not closed).
+    expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "REVIEWING")?.count).toBe(0)
+    expect(result.nodes.find((n) => n.id === "PHONE_SCREEN")?.count).toBe(0)
+    expect(result.nodes.find((n) => n.id === "INTERVIEWING")?.count).toBe(1)
     expect(result.nodes.find((n) => n.id === "OFFER")?.count).toBe(1)
-    // 1 rejected
+
+    // Closures.
+    expect(result.closedAtStage.APPLIED).toBe(0)
+    expect(result.closedAtStage.REVIEWING).toBe(1)
+    expect(result.closedAtStage.PHONE_SCREEN).toBe(0)
+    expect(result.closedAtStage.INTERVIEWING).toBe(0)
+    expect(result.closedAtStage.OFFER).toBe(0)
+
+    // REJECTED terminal node has the count.
     expect(result.nodes.find((n) => n.id === "REJECTED")?.count).toBe(1)
   })
 
@@ -185,11 +251,14 @@ describe("buildSankeyFromApplications", () => {
 })
 
 describe("buildDemoSankeyData", () => {
-  it("returns valid graph data", () => {
+  it("returns valid graph data with closure map", () => {
     const result = buildDemoSankeyData()
     expect(result.totalApplications).toBe(48)
     expect(result.nodes.length).toBeGreaterThan(0)
     expect(result.links.length).toBeGreaterThan(0)
+    // Demo data must populate closedAtStage so the renderer can size
+    // drop-off shapes for anonymous visitors.
+    expect(result.closedAtStage.APPLIED).toBeGreaterThan(0)
   })
 
   it("has all forward flow links", () => {
@@ -208,16 +277,5 @@ describe("buildDemoSankeyData", () => {
     const result = buildDemoSankeyData()
     const rejectionLinks = result.links.filter((l) => l.target === "REJECTED")
     expect(rejectionLinks.length).toBeGreaterThan(0)
-  })
-
-  it("link values are consistent (forward + exit <= source count)", () => {
-    const result = buildDemoSankeyData()
-    for (const node of result.nodes) {
-      const outgoing = result.links
-        .filter((l) => l.source === node.id)
-        .reduce((sum, l) => sum + l.value, 0)
-      // Outgoing should not exceed the node count
-      expect(outgoing).toBeLessThanOrEqual(node.count)
-    }
   })
 })

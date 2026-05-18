@@ -100,7 +100,14 @@ interface PipelineSankeyProps {
 // ---------------------------------------------------------------------------
 
 interface ManifoldStage extends StagePaletteEntry {
+  /** Applications currently in flight at this stage (not closed). */
   count: number;
+  /**
+   * Applications closed at this stage — REJECTED or job-removed. The
+   * manifold renders this as the gray drop-off shape between this stage
+   * and the next. Stages with zero closures render no shape.
+   */
+  closed: number;
 }
 
 interface Particle {
@@ -139,6 +146,7 @@ function deriveStages(data: SankeyGraphData): ReadonlyArray<ManifoldStage> {
   return STAGE_PALETTE.map((entry) => ({
     ...entry,
     count: countById.get(entry.id) ?? 0,
+    closed: data.closedAtStage[entry.id] ?? 0,
   }));
 }
 
@@ -190,7 +198,15 @@ function buildFlowPath(stages: ReadonlyArray<ManifoldStage>, geom: BandGeometry)
   return d;
 }
 
-/** Closed shape for the gray drop-off between adjacent stages where count falls. */
+/**
+ * Closed shape for the gray drop-off between adjacent stages.
+ *
+ * `lost` is the count of applications that *closed* at stage `i` —
+ * REJECTED status or `job.isActive === false` (job removed from the
+ * source board). Applications still in flight at stage `i` are NOT
+ * counted here; they appear in the flow band. See sankey.ts for the
+ * full closure-semantics contract.
+ */
 function buildDropOff(
   stages: ReadonlyArray<ManifoldStage>,
   geom: BandGeometry,
@@ -199,7 +215,7 @@ function buildDropOff(
 ): DropOffShape | null {
   const s0 = stages[i];
   const s1 = stages[i + 1];
-  const lost = s0.count - s1.count;
+  const lost = s0.closed;
   if (lost <= 0) return null;
 
   const x0 = geom.colX(i);

@@ -48,6 +48,11 @@ export default async function HomePage() {
             statusHistory: {
               select: { fromStatus: true, toStatus: true },
             },
+            // `job.isActive` drives the "closed" bucket in the manifold —
+            // an inactive job (removed from the source board) counts as a
+            // closure regardless of the application's own status. See
+            // src/lib/sankey.ts for the closure-semantics contract.
+            job: { select: { isActive: true } },
           },
         }),
       )

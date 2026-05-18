@@ -7,19 +7,18 @@
  *
  * Closure semantics (see fix/sankey-closure-semantics):
  *   An application is considered "closed" — and contributes to a drop-off
- *   between two stages — only when EITHER:
- *     (a) `application.status === "REJECTED"` (company-side rejection), OR
- *     (b) `application.job.isActive === false` (the underlying job was
+ *   between two stages — when ANY of:
+ *     (a) `application.status === "REJECTED"` (company-side rejection),
+ *     (b) `application.status === "WITHDRAWN"` (user-initiated exit), OR
+ *     (c) `application.job.isActive === false` (the underlying job was
  *         removed from the source board during sync).
  *
  *   Applications currently sitting at APPLIED, REVIEWING, PHONE_SCREEN,
  *   INTERVIEWING, or OFFER (with an active job) are still in flight —
  *   they appear in their current stage's `count`, NOT in a drop-off.
  *
- *   `WITHDRAWN` is user-initiated (the user pulled out). It is neither
- *   "closed by company" nor "job removed" and is excluded from the
- *   manifold visualization entirely. We may want to surface withdrawn
- *   applications separately in a future iteration.
+ *   Each closure is attributed to the highest forward stage the application
+ *   reached before it closed (via REJECTED, WITHDRAWN, or LISTING_REMOVED).
  */
 
 import type { ApplicationStatus } from "@prisma/client";
@@ -48,9 +47,10 @@ export interface SankeyGraphData {
   totalApplications: number;
   /**
    * Per forward-stage count of applications that *closed* at that stage —
-   * either REJECTED (status) or via `job.isActive === false` (job removed
-   * from the source board). Keyed by `ApplicationStatus` for the five
-   * forward stages: APPLIED, REVIEWING, PHONE_SCREEN, INTERVIEWING, OFFER.
+   * REJECTED (company-rejected), WITHDRAWN (user-pulled-out), or via
+   * `job.isActive === false` (job removed from the source board). Keyed
+   * by `ApplicationStatus` for the five forward stages: APPLIED,
+   * REVIEWING, PHONE_SCREEN, INTERVIEWING, OFFER.
    *
    * The renderer uses this to size and label the gray drop-off shapes
    * between adjacent stages. Stages with zero closures render no shape.
@@ -165,10 +165,8 @@ function emptyClosedAtStage(): Record<string, number> {
  * Build manifold graph data from a user's real applications.
  *
  * Bucketing rules:
- *   - WITHDRAWN: skipped entirely (neither in-flight nor a closure). May
- *     be surfaced separately in a future iteration.
- *   - REJECTED or `job.isActive === false`: counted as a CLOSURE at the
- *     highest forward stage the application reached.
+ *   - REJECTED, WITHDRAWN, or `job.isActive === false`: counted as a
+ *     CLOSURE at the highest forward stage the application reached.
  *   - Otherwise: counted as IN FLIGHT at the application's current stage.
  *
  * Stage counts represent in-flight applications at that exact stage.
@@ -200,7 +198,7 @@ export function buildSankeyFromApplications(
   const inflightAt: Record<string, number> = {};
   for (const stage of PIPELINE_STAGES) inflightAt[stage] = 0;
 
-  // Closures attributed to each forward stage (REJECTED + job-removed).
+  // Closures attributed to each forward stage (REJECTED + WITHDRAWN + job-removed).
   const closedAtStage = emptyClosedAtStage();
 
   // Closure breakdown by terminal-stage label — kept around so the existing
@@ -208,23 +206,24 @@ export function buildSankeyFromApplications(
   const closedByTerminal: Record<string, Record<string, number>> = {};
 
   for (const app of applications) {
-    // WITHDRAWN — user-initiated exit. Skipped from the manifold; may be
-    // surfaced separately in the future (e.g. a small badge near the legend).
-    if (app.status === "WITHDRAWN") continue;
-
     const jobInactive = app.job.isActive === false;
     const isRejected = app.status === "REJECTED";
+    const isWithdrawn = app.status === "WITHDRAWN";
     const isInflightStage = PIPELINE_STAGES.includes(app.status);
 
-    if (isRejected || jobInactive) {
+    if (isRejected || isWithdrawn || jobInactive) {
       // Closure — attribute to the highest forward stage reached.
       const exitStage = highestForwardStage(app.status, app.statusHistory);
       closedAtStage[exitStage] = (closedAtStage[exitStage] ?? 0) + 1;
 
       // Bucket by terminal "kind" so the optional terminal node retains a count.
-      // job-removed closures share the REJECTED swatch in the manifold; the
-      // LISTING_REMOVED enum value remains reserved for explicit status migrations.
-      const terminalKey: ApplicationStatus = isRejected ? "REJECTED" : "LISTING_REMOVED";
+      // REJECTED / WITHDRAWN use their own enum keys; job-removed closures fall
+      // back to LISTING_REMOVED (reserved for explicit status migrations).
+      const terminalKey: ApplicationStatus = isRejected
+        ? "REJECTED"
+        : isWithdrawn
+          ? "WITHDRAWN"
+          : "LISTING_REMOVED";
       if (!closedByTerminal[exitStage]) closedByTerminal[exitStage] = {};
       closedByTerminal[exitStage][terminalKey] =
         (closedByTerminal[exitStage][terminalKey] ?? 0) + 1;
@@ -236,7 +235,7 @@ export function buildSankeyFromApplications(
       inflightAt[app.status] = (inflightAt[app.status] ?? 0) + 1;
     }
     // Anything else (e.g. a status outside the forward set that isn't
-    // a closure or WITHDRAWN) is intentionally skipped — defensive default.
+    // a closure) is intentionally skipped — defensive default.
   }
 
   // Build forward-stage nodes — always emit every forward stage so the

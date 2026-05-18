@@ -144,9 +144,10 @@ describe("buildSankeyFromApplications", () => {
     expect(result.closedAtStage.REVIEWING).toBe(0)
   })
 
-  it("excludes WITHDRAWN applications from the manifold entirely", () => {
-    // WITHDRAWN is user-initiated and is intentionally invisible in the
-    // manifold — neither in-flight nor a closure. See sankey.ts.
+  it("counts WITHDRAWN applications as closures at the highest reached stage", () => {
+    // WITHDRAWN is user-initiated but still represents the application ending.
+    // It contributes to the drop-off at the stage the app reached before
+    // being withdrawn. See sankey.ts.
     const result = buildSankeyFromApplications([
       app("WITHDRAWN", [
         { fromStatus: null, toStatus: "APPLIED" },
@@ -155,21 +156,15 @@ describe("buildSankeyFromApplications", () => {
       app("APPLIED"),
     ])
 
-    // totalApplications still includes the WITHDRAWN row (it's the input
-    // count), but no stage count or closure picks it up.
     expect(result.totalApplications).toBe(2)
     expect(result.nodes.find((n) => n.id === "APPLIED")?.count).toBe(1)
-    expect(result.nodes.find((n) => n.id === "WITHDRAWN")).toBeUndefined()
-    for (const stage of [
-      "APPLIED",
-      "REVIEWING",
-      "PHONE_SCREEN",
-      "INTERVIEWING",
-      "OFFER",
-    ] as const) {
-      // Only the APPLIED in-flight app contributes — WITHDRAWN is invisible.
+    // WITHDRAWN closure attributed to APPLIED (the highest forward stage reached).
+    expect(result.closedAtStage.APPLIED).toBe(1)
+    for (const stage of ["REVIEWING", "PHONE_SCREEN", "INTERVIEWING", "OFFER"] as const) {
       expect(result.closedAtStage[stage]).toBe(0)
     }
+    // Terminal WITHDRAWN node retains its count for any caller that surfaces it.
+    expect(result.nodes.find((n) => n.id === "WITHDRAWN")?.count).toBe(1)
   })
 
   it("treats job-removed applications as closures at the highest reached stage", () => {
@@ -232,15 +227,16 @@ describe("buildSankeyFromApplications", () => {
     expect(result.nodes.find((n) => n.id === "INTERVIEWING")?.count).toBe(1)
     expect(result.nodes.find((n) => n.id === "OFFER")?.count).toBe(1)
 
-    // Closures.
-    expect(result.closedAtStage.APPLIED).toBe(0)
+    // Closures: REJECTED at REVIEWING + WITHDRAWN at APPLIED.
+    expect(result.closedAtStage.APPLIED).toBe(1)
     expect(result.closedAtStage.REVIEWING).toBe(1)
     expect(result.closedAtStage.PHONE_SCREEN).toBe(0)
     expect(result.closedAtStage.INTERVIEWING).toBe(0)
     expect(result.closedAtStage.OFFER).toBe(0)
 
-    // REJECTED terminal node has the count.
+    // Terminal nodes have their counts.
     expect(result.nodes.find((n) => n.id === "REJECTED")?.count).toBe(1)
+    expect(result.nodes.find((n) => n.id === "WITHDRAWN")?.count).toBe(1)
   })
 
   it("assigns correct colors from STATUS_CONFIG", () => {

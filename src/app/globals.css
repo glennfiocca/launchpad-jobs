@@ -50,6 +50,17 @@
   --border: rgba(255, 255, 255, 0.08);
   --accent: #6366f1;
   --accent-glow: rgba(99, 102, 241, 0.15);
+
+  /* Desktop navbar height — Navbar uses h-16 (64px) logo + py-[18px] (36px) = 100px.
+     Consumed by the sticky compact strip in the dashboard cockpit (Phase 2). */
+  --navbar-h: 100px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    /* Mobile navbar height — Navbar uses h-11 (44px) logo + py-[18px] (36px) = 80px. */
+    --navbar-h: 80px;
+  }
 }
 
 body {

@@ -42,10 +42,11 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Compact header — profile warning + actions only */}
+    <>
+      {/* Compact header — profile warning sits ABOVE the new editorial hero and
+          BELOW the sticky navbar. It scrolls away normally. */}
       {(!profile?.isComplete) && (
-        <div className="border-b border-white/8 bg-black px-6 lg:px-8 py-3 shrink-0">
+        <div className="border-b border-white/8 bg-black px-6 lg:px-8 py-3">
           <div className="flex items-center justify-end gap-3">
             <Link
               href="/profile"
@@ -57,9 +58,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Content */}
-      <div className="flex-1 min-h-0 p-6 lg:p-8">
-        {applications.length === 0 ? (
+      {applications.length === 0 ? (
+        <div className="px-6 lg:px-8 py-8">
           <div className="text-center py-24 bg-[#0a0a0a] rounded-xl border border-white/8">
             <div className="w-16 h-16 bg-white/8 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,14 +75,14 @@ export default async function DashboardPage() {
               Browse Jobs
             </Link>
           </div>
-        ) : (
-          <Suspense fallback={null}>
-            <DashboardClient
-              initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]}
-            />
-          </Suspense>
-        )}
-      </div>
-    </div>
+        </div>
+      ) : (
+        <Suspense fallback={null}>
+          <DashboardClient
+            initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }

@@ -3,7 +3,23 @@
  *
  * Transforms application data (live or demo) into a graph of
  * nodes (pipeline stages) and links (transition flows) that
- * d3-sankey can lay out.
+ * the manifold renderer lays out.
+ *
+ * Closure semantics (see fix/sankey-closure-semantics):
+ *   An application is considered "closed" — and contributes to a drop-off
+ *   between two stages — only when EITHER:
+ *     (a) `application.status === "REJECTED"` (company-side rejection), OR
+ *     (b) `application.job.isActive === false` (the underlying job was
+ *         removed from the source board during sync).
+ *
+ *   Applications currently sitting at APPLIED, REVIEWING, PHONE_SCREEN,
+ *   INTERVIEWING, or OFFER (with an active job) are still in flight —
+ *   they appear in their current stage's `count`, NOT in a drop-off.
+ *
+ *   `WITHDRAWN` is user-initiated (the user pulled out). It is neither
+ *   "closed by company" nor "job removed" and is excluded from the
+ *   manifold visualization entirely. We may want to surface withdrawn
+ *   applications separately in a future iteration.
  */
 
 import type { ApplicationStatus } from "@prisma/client";
@@ -16,7 +32,7 @@ export interface SankeyNode {
   id: string;
   label: string;
   color: string;
-  /** Count of applications currently at this stage */
+  /** Count of applications currently in flight at this stage. */
   count: number;
 }
 
@@ -30,6 +46,16 @@ export interface SankeyGraphData {
   nodes: SankeyNode[];
   links: SankeyLink[];
   totalApplications: number;
+  /**
+   * Per forward-stage count of applications that *closed* at that stage —
+   * either REJECTED (status) or via `job.isActive === false` (job removed
+   * from the source board). Keyed by `ApplicationStatus` for the five
+   * forward stages: APPLIED, REVIEWING, PHONE_SCREEN, INTERVIEWING, OFFER.
+   *
+   * The renderer uses this to size and label the gray drop-off shapes
+   * between adjacent stages. Stages with zero closures render no shape.
+   */
+  closedAtStage: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +113,9 @@ function stageIndex(status: ApplicationStatus): number {
  * Determine the highest pipeline stage an application reached.
  * Uses statusHistory to find the deepest forward stage, falling back to
  * the current status if no history is available.
+ *
+ * Returns APPLIED as the default floor — every application starts there,
+ * so an entry that never recorded history is still attributed to APPLIED.
  */
 function highestForwardStage(
   currentStatus: ApplicationStatus,
@@ -101,44 +130,59 @@ function highestForwardStage(
     if (toIdx > maxIdx) maxIdx = toIdx;
   }
 
-  // If the current status is terminal but we found a forward stage, use that
   if (maxIdx >= 0) return PIPELINE_STAGES[maxIdx];
 
-  // Application might only have terminal status with no history
-  return currentStatus;
+  // Current status is terminal and no forward history exists — attribute
+  // to APPLIED, the implicit entry point for every application.
+  return "APPLIED";
 }
 
 // ---------------------------------------------------------------------------
 // Builder: live data
 // ---------------------------------------------------------------------------
 
-interface ApplicationInput {
+/**
+ * Structural subset of Application + Job required by the manifold builder.
+ * `job.isActive: false` means the underlying job was removed from the
+ * source board (LISTING_REMOVED-ish but tracked via the Job table).
+ */
+export interface SankeyApplicationInput {
   status: ApplicationStatus;
   statusHistory: ReadonlyArray<{
     fromStatus: ApplicationStatus | null;
     toStatus: ApplicationStatus;
   }>;
+  job: { isActive: boolean };
+}
+
+function emptyClosedAtStage(): Record<string, number> {
+  const acc: Record<string, number> = {};
+  for (const stage of PIPELINE_STAGES) acc[stage] = 0;
+  return acc;
 }
 
 /**
- * Build Sankey graph data from a user's real applications.
+ * Build manifold graph data from a user's real applications.
  *
- * Model:
- * - Every application enters at "Applied"
- * - It flows forward through pipeline stages it passed through
- * - If it ended in a terminal state, it exits from the deepest
- *   forward stage it reached
- * - Applications still active at a forward stage stay there
- *   (no exit link — they're "in the pipe")
+ * Bucketing rules:
+ *   - WITHDRAWN: skipped entirely (neither in-flight nor a closure). May
+ *     be surfaced separately in a future iteration.
+ *   - REJECTED or `job.isActive === false`: counted as a CLOSURE at the
+ *     highest forward stage the application reached.
+ *   - Otherwise: counted as IN FLIGHT at the application's current stage.
+ *
+ * Stage counts represent in-flight applications at that exact stage.
+ * Drop-off counts (closedAtStage) attribute each closure to a stage
+ * the application had reached before it closed.
  */
 export function buildSankeyFromApplications(
-  applications: ReadonlyArray<ApplicationInput>,
+  applications: ReadonlyArray<SankeyApplicationInput>,
 ): SankeyGraphData {
   const total = applications.length;
   if (total === 0) {
     // Even with no applications, emit a node for every forward stage so
-    // downstream renderers (legend cells, manifold markers) always have the
-    // full 5-stage shape to draw — counts are simply zero.
+    // downstream renderers (legend cells, manifold markers) always have
+    // the full 5-stage shape to draw — counts are simply zero.
     return {
       nodes: PIPELINE_STAGES.map((stage) => ({
         id: stage,
@@ -148,81 +192,98 @@ export function buildSankeyFromApplications(
       })),
       links: [],
       totalApplications: 0,
+      closedAtStage: emptyClosedAtStage(),
     };
   }
 
-  // Count how many applications passed through each forward stage
-  const passedThrough: Record<string, number> = {};
-  // Count how many exited to a terminal state from each forward stage
-  const exitedFrom: Record<string, Record<string, number>> = {};
+  // In-flight count per forward stage (current status, active job, not closed).
+  const inflightAt: Record<string, number> = {};
+  for (const stage of PIPELINE_STAGES) inflightAt[stage] = 0;
+
+  // Closures attributed to each forward stage (REJECTED + job-removed).
+  const closedAtStage = emptyClosedAtStage();
+
+  // Closure breakdown by terminal-stage label — kept around so the existing
+  // terminal-node emission (REJECTED node, etc.) still has counts to display.
+  const closedByTerminal: Record<string, Record<string, number>> = {};
 
   for (const app of applications) {
-    const highest = highestForwardStage(app.status, app.statusHistory);
-    const highestIdx = stageIndex(highest);
-    const isTerminal = TERMINAL_STAGES.includes(app.status);
-    const isForward = PIPELINE_STAGES.includes(app.status);
+    // WITHDRAWN — user-initiated exit. Skipped from the manifold; may be
+    // surfaced separately in the future (e.g. a small badge near the legend).
+    if (app.status === "WITHDRAWN") continue;
 
-    // Mark all stages this application passed through (up to and including highest)
-    for (let i = 0; i <= Math.max(highestIdx, 0); i++) {
-      const stage = PIPELINE_STAGES[i];
-      passedThrough[stage] = (passedThrough[stage] ?? 0) + 1;
+    const jobInactive = app.job.isActive === false;
+    const isRejected = app.status === "REJECTED";
+    const isInflightStage = PIPELINE_STAGES.includes(app.status);
+
+    if (isRejected || jobInactive) {
+      // Closure — attribute to the highest forward stage reached.
+      const exitStage = highestForwardStage(app.status, app.statusHistory);
+      closedAtStage[exitStage] = (closedAtStage[exitStage] ?? 0) + 1;
+
+      // Bucket by terminal "kind" so the optional terminal node retains a count.
+      // job-removed closures share the REJECTED swatch in the manifold; the
+      // LISTING_REMOVED enum value remains reserved for explicit status migrations.
+      const terminalKey: ApplicationStatus = isRejected ? "REJECTED" : "LISTING_REMOVED";
+      if (!closedByTerminal[exitStage]) closedByTerminal[exitStage] = {};
+      closedByTerminal[exitStage][terminalKey] =
+        (closedByTerminal[exitStage][terminalKey] ?? 0) + 1;
+      continue;
     }
 
-    if (isTerminal) {
-      // Exited from the highest forward stage reached
-      const exitStage = highestIdx >= 0 ? PIPELINE_STAGES[highestIdx] : "APPLIED";
-      if (!exitedFrom[exitStage]) exitedFrom[exitStage] = {};
-      exitedFrom[exitStage][app.status] = (exitedFrom[exitStage][app.status] ?? 0) + 1;
+    if (isInflightStage) {
+      // In-flight — count at the application's CURRENT stage.
+      inflightAt[app.status] = (inflightAt[app.status] ?? 0) + 1;
     }
+    // Anything else (e.g. a status outside the forward set that isn't
+    // a closure or WITHDRAWN) is intentionally skipped — defensive default.
   }
 
-  // Build nodes — always emit every forward stage (count: 0 when empty) so
-  // the homepage manifold + legend can render all 5 cells consistently.
-  // Terminal stages remain conditional (only emitted when count > 0).
+  // Build forward-stage nodes — always emit every forward stage so the
+  // homepage manifold + legend can render all 5 cells consistently.
   const nodeMap = new Map<string, SankeyNode>();
 
   for (const stage of PIPELINE_STAGES) {
-    const count = passedThrough[stage] ?? 0;
     nodeMap.set(stage, {
       id: stage,
       label: STAGE_LABELS[stage],
       color: STAGE_COLORS[stage],
-      count,
+      count: inflightAt[stage] ?? 0,
     });
   }
 
-  for (const stage of TERMINAL_STAGES) {
-    // Sum all exits to this terminal stage from any forward stage
-    let terminalCount = 0;
-    for (const exits of Object.values(exitedFrom)) {
-      terminalCount += exits[stage] ?? 0;
+  // Terminal nodes — conditional on having any closure attributed to them.
+  for (const terminal of TERMINAL_STAGES) {
+    let count = 0;
+    for (const exits of Object.values(closedByTerminal)) {
+      count += exits[terminal] ?? 0;
     }
-    if (terminalCount > 0) {
-      nodeMap.set(stage, {
-        id: stage,
-        label: STAGE_LABELS[stage],
-        color: STAGE_COLORS[stage],
-        count: terminalCount,
+    if (count > 0) {
+      nodeMap.set(terminal, {
+        id: terminal,
+        label: STAGE_LABELS[terminal],
+        color: STAGE_COLORS[terminal],
+        count,
       });
     }
   }
 
-  // Build links
+  // Build links — forward flow + closure exits.
   const links: SankeyLink[] = [];
 
-  // Forward flow: stage[i] → stage[i+1]
+  // Forward flow: stage[i] → stage[i+1] uses the destination's in-flight count.
   for (let i = 0; i < PIPELINE_STAGES.length - 1; i++) {
     const from = PIPELINE_STAGES[i];
     const to = PIPELINE_STAGES[i + 1];
-    const fromCount = passedThrough[from] ?? 0;
-    const toCount = passedThrough[to] ?? 0;
+    const fromCount = inflightAt[from] ?? 0;
+    const toCount = inflightAt[to] ?? 0;
     if (fromCount > 0 && toCount > 0) {
       links.push({ source: from, target: to, value: toCount });
     }
   }
 
-  // Exit links: forward stage → terminal stage
-  for (const [fromStage, exits] of Object.entries(exitedFrom)) {
+  // Closure exits: forward stage → terminal stage.
+  for (const [fromStage, exits] of Object.entries(closedByTerminal)) {
     for (const [terminalStage, count] of Object.entries(exits)) {
       if (count > 0 && nodeMap.has(fromStage) && nodeMap.has(terminalStage)) {
         links.push({ source: fromStage, target: terminalStage, value: count });
@@ -234,6 +295,7 @@ export function buildSankeyFromApplications(
     nodes: Array.from(nodeMap.values()),
     links,
     totalApplications: total,
+    closedAtStage,
   };
 }
 
@@ -244,22 +306,26 @@ export function buildSankeyFromApplications(
 /**
  * Realistic sample funnel for anonymous visitors.
  * Numbers represent a plausible 3-month job search.
+ *
+ * Stage counts here are "currently in flight at this stage" (matching the
+ * live-data semantics), and closedAtStage carries the per-stage drop-offs
+ * that the manifold renders as gray exit shapes.
  */
 export function buildDemoSankeyData(): SankeyGraphData {
   const nodes: SankeyNode[] = [
-    { id: "APPLIED", label: "Applied", color: STAGE_COLORS.APPLIED, count: 48 },
-    { id: "REVIEWING", label: "Reviewing", color: STAGE_COLORS.REVIEWING, count: 31 },
-    { id: "PHONE_SCREEN", label: "Screen", color: STAGE_COLORS.PHONE_SCREEN, count: 14 },
-    { id: "INTERVIEWING", label: "Interview", color: STAGE_COLORS.INTERVIEWING, count: 7 },
+    { id: "APPLIED", label: "Applied", color: STAGE_COLORS.APPLIED, count: 17 },
+    { id: "REVIEWING", label: "Reviewing", color: STAGE_COLORS.REVIEWING, count: 14 },
+    { id: "PHONE_SCREEN", label: "Screen", color: STAGE_COLORS.PHONE_SCREEN, count: 7 },
+    { id: "INTERVIEWING", label: "Interview", color: STAGE_COLORS.INTERVIEWING, count: 3 },
     { id: "OFFER", label: "Offer", color: STAGE_COLORS.OFFER, count: 3 },
     { id: "REJECTED", label: "Rejected", color: STAGE_COLORS.REJECTED, count: 28 },
   ];
 
   const links: SankeyLink[] = [
-    // Forward flow
-    { source: "APPLIED", target: "REVIEWING", value: 31 },
-    { source: "REVIEWING", target: "PHONE_SCREEN", value: 14 },
-    { source: "PHONE_SCREEN", target: "INTERVIEWING", value: 7 },
+    // Forward flow (in-flight stage → in-flight stage)
+    { source: "APPLIED", target: "REVIEWING", value: 14 },
+    { source: "REVIEWING", target: "PHONE_SCREEN", value: 7 },
+    { source: "PHONE_SCREEN", target: "INTERVIEWING", value: 3 },
     { source: "INTERVIEWING", target: "OFFER", value: 3 },
     // Rejection exits at each stage
     { source: "APPLIED", target: "REJECTED", value: 17 },
@@ -268,7 +334,18 @@ export function buildDemoSankeyData(): SankeyGraphData {
     { source: "INTERVIEWING", target: "REJECTED", value: 4 },
   ];
 
-  return { nodes, links, totalApplications: 48 };
+  return {
+    nodes,
+    links,
+    totalApplications: 48,
+    closedAtStage: {
+      APPLIED: 17,
+      REVIEWING: 4,
+      PHONE_SCREEN: 3,
+      INTERVIEWING: 4,
+      OFFER: 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

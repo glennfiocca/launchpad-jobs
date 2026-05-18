@@ -76,6 +76,8 @@ export function DashboardClient({
             fromStatus: h.fromStatus,
             toStatus: h.toStatus,
           })),
+          // `job.isActive` drives the "closed" bucket — see sankey.ts.
+          job: { isActive: a.job.isActive },
         })),
       ),
     [applications],

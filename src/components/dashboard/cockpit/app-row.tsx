@@ -9,10 +9,11 @@
  * action row (Reply / Open thread / Withdraw) and an optional pending-Q
  * strip when the application has unanswered ATS questions.
  *
- * Reply and "Open thread" are intentionally no-op stubs in Phase 2 — Phase
- * 3 will wire them to the upcoming EmailThreadModal. Withdraw is fully
- * wired against PATCH/DELETE /api/applications/[id] using the same
- * inline-confirm state machine as application-detail.tsx.
+ * Reply and "Open thread" both call onOpenThread(app.id) — they're the
+ * same action in the closed-loop model (there's no separate compose
+ * surface). The modal is a single instance owned by DashboardClient.
+ * Withdraw is wired against PATCH/DELETE /api/applications/[id] using
+ * the same inline-confirm state machine as application-detail.tsx.
  */
 
 import { useState } from "react";
@@ -29,6 +30,8 @@ interface AppRowProps {
   open: boolean;
   onToggle: () => void;
   onWithdrawn?: (updated: ApplicationWithJob) => void;
+  /** Opens the EmailThreadModal owned by DashboardClient. */
+  onOpenThread: (applicationId: string) => void;
 }
 
 type WithdrawState =
@@ -56,7 +59,13 @@ function publicId(id: string): string {
   return id.slice(0, 8).toUpperCase();
 }
 
-export function AppRow({ app, open, onToggle, onWithdrawn }: AppRowProps) {
+export function AppRow({
+  app,
+  open,
+  onToggle,
+  onWithdrawn,
+  onOpenThread,
+}: AppRowProps) {
   const [withdrawState, setWithdrawState] = useState<WithdrawState>({
     kind: "idle",
   });
@@ -213,18 +222,14 @@ export function AppRow({ app, open, onToggle, onWithdrawn }: AppRowProps) {
                   <button
                     type="button"
                     className={BTN_PRIMARY}
-                    onClick={() => {
-                      /* TODO: Phase 3 — EmailThreadModal */
-                    }}
+                    onClick={() => onOpenThread(app.id)}
                   >
                     Reply
                   </button>
                   <button
                     type="button"
                     className={BTN_GHOST}
-                    onClick={() => {
-                      /* TODO: Phase 3 — EmailThreadModal */
-                    }}
+                    onClick={() => onOpenThread(app.id)}
                   >
                     Open thread
                   </button>

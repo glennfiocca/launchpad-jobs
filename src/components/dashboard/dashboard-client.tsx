@@ -28,6 +28,7 @@ import { CompactStrip } from "./cockpit/compact-strip";
 import { Eyebrow } from "./cockpit/eyebrow";
 import { LegendFilterRow } from "./cockpit/legend-filter-row";
 import { AppRow } from "./cockpit/app-row";
+import { EmailThreadModal } from "./cockpit/email-thread-modal";
 import { Metric, Kbd } from "./cockpit/atoms";
 import {
   FORWARD_STAGES,
@@ -58,6 +59,10 @@ export function DashboardClient({
   );
   const [hoverStage, setHoverStage] = useState<ApplicationStatus | null>(null);
   const [openId, setOpenId] = useState<string | null>(initialAppParam);
+  // Modal state — a single instance lives at the DashboardClient level so
+  // there's only ever one open thread at a time. `openThreadId` is null
+  // when closed; non-null while open (and during the close transition).
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const reduced = useReducedMotion();
 
@@ -108,6 +113,14 @@ export function DashboardClient({
   const metrics = useMemo(() => deriveHeroMetrics(applications), [
     applications,
   ]);
+
+  const openThreadApp = useMemo(
+    () =>
+      openThreadId
+        ? applications.find((a) => a.id === openThreadId) ?? null
+        : null,
+    [openThreadId, applications],
+  );
 
   // ─── ?app=ID deep-link: scroll the matching row into view ──────────
   // `openId` is already initialized from the param on first render so the
@@ -246,6 +259,7 @@ export function DashboardClient({
                     setOpenId((prev) => (prev === app.id ? null : app.id))
                   }
                   onWithdrawn={handleWithdrawn}
+                  onOpenThread={(id) => setOpenThreadId(id)}
                 />
               </div>
             ))}
@@ -254,6 +268,19 @@ export function DashboardClient({
       </section>
 
       <div style={{ height: 60 }} />
+
+      {openThreadApp && (
+        <EmailThreadModal
+          applicationId={openThreadApp.id}
+          applicationStatus={openThreadApp.status}
+          jobTitle={openThreadApp.job.title}
+          companyName={openThreadApp.job.company.name}
+          companyLogoUrl={openThreadApp.job.company.logoUrl ?? null}
+          companyWebsite={openThreadApp.job.company.website ?? null}
+          open={openThreadId !== null}
+          onOpenChange={(o) => setOpenThreadId(o ? openThreadId : null)}
+        />
+      )}
     </>
   );
 }

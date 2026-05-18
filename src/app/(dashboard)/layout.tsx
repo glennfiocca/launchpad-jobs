@@ -15,8 +15,10 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
-      <Navbar />
-      <main className="flex-1 flex flex-col">{children}</main>
+      <div className="sticky top-0 z-50">
+        <Navbar />
+      </div>
+      <main className="flex-1">{children}</main>
       <CompactSiteFooter />
       {/* Records GPC opt-out once per browser session for authed users. */}
       <GpcPinger />

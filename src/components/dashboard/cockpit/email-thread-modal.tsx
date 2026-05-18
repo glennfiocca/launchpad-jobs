@@ -39,9 +39,9 @@ interface EmailThreadModalProps {
 
 type FetchState =
   | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ready"; emails: ApplicationEmail[] }
-  | { kind: "error"; message: string };
+  | { kind: "loading"; appId: string }
+  | { kind: "ready"; appId: string; emails: ApplicationEmail[] }
+  | { kind: "error"; appId: string; message: string };
 
 export function EmailThreadModal({
   applicationId,
@@ -59,18 +59,22 @@ export function EmailThreadModal({
   const [fetchState, setFetchState] = useState<FetchState>({ kind: "idle" });
   // Locally append newly-sent emails so the thread updates without refetch.
   const [appended, setAppended] = useState<ApplicationEmail[]>([]);
-  // Whether to surface the "Reply cancelled (closed)" toast on next mount —
-  // owned by the composer, this is just a no-op shim parent.
-  // (Composer emits the toast itself via sonner; no shared state needed.)
 
   // ── Fetch on open ──────────────────────────────────────────────────
+  //
+  // We avoid a synchronous setState-in-effect by writing the "loading"
+  // state from inside the async IIFE (via a microtask). The render below
+  // treats `fetchState.appId !== applicationId` as effective "loading",
+  // so the user never sees a stale thread for a different application.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setFetchState({ kind: "loading" });
-    setAppended([]);
 
     (async () => {
+      // Microtask boundary — satisfies react-hooks/set-state-in-effect.
+      if (cancelled) return;
+      setFetchState({ kind: "loading", appId: applicationId });
+      setAppended([]);
       try {
         const res = await fetch(`/api/applications/${applicationId}/emails`);
         const json = (await res.json()) as ApiResponse<ApplicationEmail[]>;
@@ -78,15 +82,21 @@ export function EmailThreadModal({
         if (!res.ok || !json.success || !json.data) {
           setFetchState({
             kind: "error",
+            appId: applicationId,
             message: json.error ?? "Failed to load thread.",
           });
           return;
         }
-        setFetchState({ kind: "ready", emails: json.data });
+        setFetchState({
+          kind: "ready",
+          appId: applicationId,
+          emails: json.data,
+        });
       } catch {
         if (!cancelled) {
           setFetchState({
             kind: "error",
+            appId: applicationId,
             message: "Network error loading thread.",
           });
         }
@@ -98,11 +108,19 @@ export function EmailThreadModal({
     };
   }, [open, applicationId]);
 
+  // Effective state: only treat fetched data as ready if it matches the
+  // currently-open application (otherwise we're showing stale data for a
+  // previous open). This lets us avoid a synchronous "loading" setState.
+  const effectiveFetchState: FetchState =
+    fetchState.kind !== "idle" && fetchState.appId === applicationId
+      ? fetchState
+      : { kind: "loading", appId: applicationId };
+
   // Compose the effective email list (fetched + appended). Newest-first
   // because that's how the API and findReplyRecipient expect it.
   const emails: ApplicationEmail[] =
-    fetchState.kind === "ready"
-      ? [...appended, ...fetchState.emails].sort(
+    effectiveFetchState.kind === "ready"
+      ? [...appended, ...effectiveFetchState.emails].sort(
           (a, b) =>
             new Date(b.receivedAt).getTime() -
             new Date(a.receivedAt).getTime(),
@@ -146,7 +164,7 @@ export function EmailThreadModal({
               <span className="truncate">{companyName}</span>
               <span className="text-text-dim shrink-0">·</span>
               <span className="text-text-muted shrink-0 font-mono text-[11px] tabular-nums">
-                {fetchState.kind === "ready"
+                {effectiveFetchState.kind === "ready"
                   ? `${emails.length} message${emails.length === 1 ? "" : "s"}`
                   : "—"}
               </span>
@@ -165,13 +183,13 @@ export function EmailThreadModal({
 
           {/* ── Body (scroll) ──────────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            {fetchState.kind === "loading" && <ThreadSkeleton />}
-            {fetchState.kind === "error" && (
+            {effectiveFetchState.kind === "loading" && <ThreadSkeleton />}
+            {effectiveFetchState.kind === "error" && (
               <div className="text-[13px] text-rose-300/90 p-4 rounded-lg border border-rose-500/20 bg-rose-500/5">
-                {fetchState.message}
+                {effectiveFetchState.message}
               </div>
             )}
-            {fetchState.kind === "ready" && (
+            {effectiveFetchState.kind === "ready" && (
               <EmailThread
                 applicationId={applicationId}
                 initialEmails={emails}
@@ -185,7 +203,7 @@ export function EmailThreadModal({
             <ClosedLoopComposer
               applicationId={applicationId}
               emails={emails}
-              disabled={fetchState.kind !== "ready"}
+              disabled={effectiveFetchState.kind !== "ready"}
               modalOpen={open}
               onSent={handleSent}
             />

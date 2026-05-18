@@ -46,3 +46,36 @@ export const STATUS_BADGE_STYLES: Record<
     pulse: false,
   },
 };
+
+/**
+ * Human-readable labels for `ApplicationStatusHistory.triggeredBy` values.
+ * The dashboard cockpit journey timeline shows "via {label}" beneath each
+ * status step — kept in one place so we don't sprinkle string mappings
+ * across components.
+ *
+ * Keys here mirror the values written by:
+ *   - src/lib/greenhouse/auto-apply.ts → "pipeline_auto_apply"
+ *   - src/lib/ai.ts (email classifier) → "recruiter_email"
+ *   - user-initiated mutations → "user"
+ *   - greenhouse polling job → "greenhouse_poll"
+ *   - admin operator queue → "operator"
+ *   - default fallback in Prisma → "system"
+ */
+export const TRIGGER_LABELS: Record<string, string> = {
+  pipeline_auto_apply: "Pipeline auto-apply",
+  recruiter_email: "Recruiter email",
+  user: "You",
+  greenhouse_poll: "Greenhouse poll",
+  operator: "Operator",
+  system: "System",
+};
+
+/**
+ * Resolve a `triggeredBy` string to a human-readable label. Falls back to
+ * the underscore-stripped raw value so any new triggeredBy values added
+ * later render reasonably without a code change.
+ */
+export function triggerLabel(triggeredBy: string | null | undefined): string {
+  if (!triggeredBy) return "Unknown";
+  return TRIGGER_LABELS[triggeredBy] ?? triggeredBy.replace(/_/g, " ");
+}

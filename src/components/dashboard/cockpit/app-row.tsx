@@ -6,8 +6,7 @@
  *
  * Collapsed body: company logo + two-line meta + StatusPill + chevron.
  * Expanded body: latest message (left) + journey timeline (right) +
- * action row (Reply / Open thread / Withdraw) and an optional pending-Q
- * strip when the application has unanswered ATS questions.
+ * action row (Reply / Open thread / Withdraw).
  *
  * Reply and "Open thread" both call onOpenThread(app.id) — they're the
  * same action in the closed-loop model (there's no separate compose
@@ -165,15 +164,6 @@ export function AppRow({
                 </span>
               </>
             )}
-            {app.pendingQuestionsCount > 0 && (
-              <>
-                <SeparatorDot />
-                <span className="text-[var(--color-stage-interview-accent)]">
-                  ● {app.pendingQuestionsCount} pending Q
-                  {app.pendingQuestionsCount === 1 ? "" : "s"}
-                </span>
-              </>
-            )}
           </div>
         </div>
 
@@ -241,27 +231,6 @@ export function AppRow({
               </div>
             )}
 
-            {/* Pending Q strip */}
-            {app.pendingQuestionsCount > 0 && (
-              <div className="mt-[10px] px-3 py-[10px] rounded-[10px] bg-[rgba(217,70,239,0.06)] border border-[rgba(217,70,239,0.18)] flex items-center justify-between gap-3 flex-wrap">
-                <div className="text-[12.5px] text-[var(--color-stage-interview-accent)]">
-                  <strong className="text-[#fae8ff] font-semibold">
-                    {app.pendingQuestionsCount} question
-                    {app.pendingQuestionsCount === 1 ? "" : "s"}
-                  </strong>{" "}
-                  waiting · {app.job.company.name}
-                </div>
-                <Link
-                  href={`/applications/${app.id}/questions`}
-                  className={cn(
-                    BTN_PRIMARY,
-                    "no-underline bg-[var(--color-stage-interview)] hover:bg-[var(--color-stage-interview-accent)]",
-                  )}
-                >
-                  Answer →
-                </Link>
-              </div>
-            )}
           </div>
 
           {/* ── Right column: journey timeline + action links ──────────── */}

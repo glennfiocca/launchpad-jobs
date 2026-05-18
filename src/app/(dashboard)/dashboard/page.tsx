@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { countPendingQuestions } from "@/lib/applications/pending-questions";
+import { countRecentStatusUpdates } from "@/lib/applications/recent-status-updates";
 import type { ApplicationWithDashboardData } from "@/types";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -17,9 +17,6 @@ export default async function DashboardPage() {
   const [rawApplications, profile] = await Promise.all([
     db.application.findMany({
       where: { userId: session.user.id },
-      // applicationSnapshot is a JSON column on Application — included by
-      // default because no `select` is specified. We rely on that here to
-      // compute `pendingQuestionsCount` server-side without an extra query.
       include: {
         job: { include: { company: true } },
         // Latest email only — the inline-expanded row body shows just the
@@ -33,13 +30,12 @@ export default async function DashboardPage() {
     db.userProfile.findUnique({ where: { userId: session.user.id } }),
   ]);
 
-  // Decorate with the pending-question count for the cockpit interrupt pill.
-  // Computed here (not in DashboardClient) so the count is available at the
-  // server-rendered HTML edge and survives hydration without a flicker.
-  const applications: ApplicationWithDashboardData[] = rawApplications.map((app) => ({
-    ...app,
-    pendingQuestionsCount: countPendingQuestions(app),
-  }));
+  const applications: ApplicationWithDashboardData[] = rawApplications;
+
+  // Global "where are we at" signal — recruiter-driven status updates in the
+  // last 7 days. Computed server-side so the eyebrow chip is in the
+  // first-paint HTML and doesn't flicker on hydration.
+  const recentStatusUpdateCount = countRecentStatusUpdates(applications);
 
   return (
     <>
@@ -80,6 +76,7 @@ export default async function DashboardPage() {
         <Suspense fallback={null}>
           <DashboardClient
             initialApplications={applications as Parameters<typeof DashboardClient>[0]["initialApplications"]}
+            recentStatusUpdateCount={recentStatusUpdateCount}
           />
         </Suspense>
       )}

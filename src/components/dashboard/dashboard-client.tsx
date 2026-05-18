@@ -42,10 +42,17 @@ import {
 
 interface DashboardClientProps {
   initialApplications: ApplicationWithDashboardData[];
+  /**
+   * Count of recruiter-driven status updates in the last 7 days, computed
+   * server-side. Used by the eyebrow chip — a consolidated "where are we
+   * at" signal. Zero means the chip is hidden.
+   */
+  recentStatusUpdateCount: number;
 }
 
 export function DashboardClient({
   initialApplications,
+  recentStatusUpdateCount,
 }: DashboardClientProps) {
   const searchParams = useSearchParams();
   // Initialize `openId` from the ?app=ID deep-link so the matching row is
@@ -98,18 +105,6 @@ export function DashboardClient({
     );
   }, [applications, activeStage]);
 
-  const totalPendingQs = useMemo(
-    () =>
-      applications.reduce((sum, a) => sum + a.pendingQuestionsCount, 0),
-    [applications],
-  );
-
-  const firstPendingAppId = useMemo(
-    () =>
-      applications.find((a) => a.pendingQuestionsCount > 0)?.id ?? null,
-    [applications],
-  );
-
   const metrics = useMemo(() => deriveHeroMetrics(applications), [
     applications,
   ]);
@@ -150,7 +145,6 @@ export function DashboardClient({
           ? {
               ...updated,
               _count: a._count,
-              pendingQuestionsCount: a.pendingQuestionsCount,
             }
           : a,
       ),
@@ -172,8 +166,7 @@ export function DashboardClient({
       <section className="max-w-[1320px] mx-auto px-8 pt-11 pb-6">
         <Eyebrow
           totalActive={total}
-          totalPendingQuestions={totalPendingQs}
-          pendingFirstAppId={firstPendingAppId}
+          recentStatusUpdateCount={recentStatusUpdateCount}
         />
 
         {/* Editorial H1 — clamped responsive size, non-italic em in lavender */}

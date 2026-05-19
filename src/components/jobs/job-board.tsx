@@ -1,38 +1,54 @@
 "use client";
 
 /**
- * JobBoard — Phase 3 of the Browse Jobs editorial redesign.
+ * JobBoard — Browse Jobs editorial layout shell (container-scroll model).
  *
- * The layout shell. This file owns:
- *   - Window-level scroll (no nested overflow containers; the page is a
- *     natural-document block per the dashboard pattern).
- *   - The sticky filter shell — top control strip + filter card pinned
- *     under the navbar at `top: var(--navbar-h)` with backdrop-blur.
- *   - The two-pane grid — `1fr 560px` when a job is selected, `1fr` when
- *     not, with a 250ms cubic-bezier `grid-template-columns` transition.
- *   - The right pane's sticky positioning (desktop only). On mobile, the
- *     detail/apply replaces the list as a full-screen overlay.
- *   - The mobile filter sheet (Radix Dialog bottom-drawer).
+ * Scroll model:
+ *   - Desktop (`lg+`): the page wrapper is a fixed-height container
+ *     (`100dvh - var(--navbar-h)`). JobBoard splits that container into
+ *     a sticky-style filter shell (`shrink-0`) and a `flex-1 min-h-0`
+ *     two-pane row. EACH PANE OWNS ITS OWN SCROLLBAR — the left list
+ *     and right detail scroll independently. The window does NOT scroll.
+ *   - Mobile (`<lg`): natural-document window-scroll. The filter shell
+ *     stays sticky under the navbar; the detail/apply right pane opens
+ *     as a full-screen overlay instead of rendering in-grid.
+ *
+ * Why container-scroll on desktop:
+ *   - Reading a long job description without losing the list. Linear /
+ *     Gmail / nearly every two-pane app does this.
+ *   - The prior model used `<aside maxHeight=...>` + a child `h-full`
+ *     flex chain. `h-full` only resolves against a parent with a
+ *     definite height — `maxHeight` is a constraint, not a definite
+ *     value — so the inner `flex-1 overflow-y-auto` collapsed and the
+ *     description scrolled the window, escaping the visible box.
+ *
+ * Layout chain (memorize, this is load-bearing):
+ *   <Page lg:h-[calc(100dvh-var(--navbar-h))] lg:flex lg:flex-col>
+ *     <JobBoard.lg:h-full.lg:flex.lg:flex-col>
+ *       <FilterShell shrink-0 sticky-on-mobile>
+ *       <DesktopRow hidden lg:flex flex-1 min-h-0>
+ *         <Left flex-1 min-w-0 overflow-y-auto>      list scrolls here
+ *         <RightAside w-[560px] shrink-0 overflow-y-auto>  detail scrolls here
+ *       <MobileList lg:hidden>                       window-scroll on mobile
+ *
+ * IntersectionObserver root rebinds on breakpoint flip:
+ *   - lg+: `root = listEl` (container-scroll → sentinel relative to list)
+ *   - <lg: `root = null` (window-scroll → sentinel relative to viewport)
  *
  * What this file does NOT own:
- *   - JobCard / JobDetail / ApplyPane / AppliedCelebration internals
- *     (Phases 4 + 5 — `./job-card.tsx`, `./job-detail.tsx`, and the
- *     `./cockpit/*` modules).
- *   - Filter primitive styling (Phase 2 — `job-filters.tsx`).
+ *   - JobCard / JobDetail / ApplyPane / AppliedCelebration internals.
+ *   - Filter primitive styling (`./job-filters.tsx`).
  *   - Top-strip styling (`./cockpit/top-control-strip.tsx`).
- *
- * Phase 5 added:
- *   - `applyingJobId` + `celebratingApplicationId` state. The right
- *     pane is a ternary across {detail, apply, celebration}.
- *   - Session-cached `profile` (one fetch per session). The apply
- *     question hook reads it without a refetch on each open.
- *   - `creditsRemaining` refreshed after each successful application.
- *   - Silent close on `selected?.id` change — switching jobs while
- *     the apply pane is open just drops the pane and shows the new
- *     detail.
  */
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
@@ -60,13 +76,9 @@ import type { UserProfile } from "@prisma/client";
 
 const LIMIT = 20;
 
-// Approximate height reservation for the sticky filter bar when computing
-// the right-pane sticky offset. The bar's true height varies (active-filter
-// strip toggles, chip wrap, etc.). A fixed reservation accepts a few pixels
-// of imperfection in exchange for not measuring with ResizeObserver — the
-// detail pane stays visibly pinned in all states, which is the goal.
-const STICKY_FILTER_RESERVE_PX = 200;
-const STICKY_BOTTOM_RESERVE_PX = 220;
+// Tailwind `lg` — must match the breakpoint used in className strings.
+// Centralised so the JS media-query and the CSS classes can't drift apart.
+const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
 
 function jobMatchesUrlParam(job: JobWithCompany, param: string): boolean {
   if (job.id === param) return true;
@@ -113,6 +125,11 @@ export function JobBoard() {
   );
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Desktop list scroll container — the IntersectionObserver root at lg+.
+  // On mobile (`<lg`) this element doesn't exist; the observer uses
+  // `root: null` (viewport) instead. The ref + media-query effect below
+  // keep the two in sync across breakpoint flips.
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const jobsRef = useRef<JobWithCompany[]>([]);
   jobsRef.current = jobs;
   const filtersRef = useRef(filters);
@@ -121,6 +138,13 @@ export function JobBoard() {
   const isFetchingRef = useRef(false);
   const hasMoreRef = useRef(false);
   const hasAnimatedRef = useRef(false);
+
+  // Tracks whether we're at the `lg` breakpoint. Drives:
+  //   - Which DOM tree renders (desktop two-pane row vs mobile list).
+  //   - The IntersectionObserver root (list container vs viewport).
+  // Initialised SSR-safely to `false`; the first client effect snaps it
+  // to the real value before paint.
+  const [isDesktop, setIsDesktop] = useState(false);
   // AbortController for the in-flight /api/jobs fetch. When filters change
   // mid-flight we abort the prior request so its `finally` cleanup does not
   // stomp the new fetch's `loading`/`loadingMore` flags.
@@ -218,19 +242,35 @@ export function JobBoard() {
     [recheckSentinel]
   );
 
-  // Observer set up once. Root is the VIEWPORT (`null`) now that scroll
-  // is window-level — the prior `root: listRef.current` no longer applies.
-  // Wider `rootMargin` so paging triggers a screen earlier and the user
-  // doesn't hit a visible spinner on quick scrolls.
+  // Track the lg breakpoint client-side so the observer's `root` and the
+  // rendered DOM tree match. We listen for changes (resize/devtools) and
+  // re-run effects that depend on `isDesktop`.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(DESKTOP_MEDIA_QUERY);
+    setIsDesktop(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // IntersectionObserver — root depends on the scroll model:
+  //   - Desktop (container-scroll): root = list scroll container.
+  //   - Mobile (window-scroll):     root = null (viewport).
+  // Recreated when `isDesktop` flips so the observer always references
+  // the live scroll container. Wide `rootMargin` so paging triggers a
+  // screen ahead of time (no visible spinner on quick scrolls).
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
+
+    const root = isDesktop ? listScrollRef.current : null;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) loadNextPage();
       },
-      { root: null, rootMargin: "0px 0px 600px 0px" }
+      { root, rootMargin: "0px 0px 600px 0px" }
     );
 
     observer.observe(sentinel);
@@ -239,7 +279,7 @@ export function JobBoard() {
       observer.disconnect();
       observerRef.current = null;
     };
-  }, [loadNextPage]);
+  }, [loadNextPage, isDesktop]);
 
   // Filter change: reset to page 1 and fetch fresh. Use a key derived from
   // searchParams minus the ?job= param so selecting/deselecting a job does
@@ -557,15 +597,104 @@ export function JobBoard() {
     !loading && jobs.length === 0 && !showSavedEmptyState;
   const showList = !loading && jobs.length > 0;
 
-  return (
+  // List body shared between desktop scroll container and mobile natural
+  // flow. Rendered as a function so both call-sites get fresh subtrees —
+  // CRUCIAL: the IntersectionObserver sentinel lives inside this body, and
+  // React would assign a single ref to whichever rendered last if the JSX
+  // were memoised + shared. By rendering twice (once per breakpoint slot)
+  // each tree gets its own sentinel DOM node; only the visible one's
+  // bounding rect is non-zero, so the observer fires correctly.
+  //
+  // We gate on `isDesktop` to render ONLY ONE list tree at a time — that
+  // way the single `sentinelRef` is always bound to the active DOM node.
+  const renderListBody = (): ReactNode => (
     <>
-      {/* ── Sticky filter shell ────────────────────────────────────────
-          Pinned under the navbar. Backdrop-blurred so list rows scrolling
-          beneath are obscured cleanly. The negative `-mx-7` + `px-7` lets
-          the backdrop bleed to the page edges while content stays in the
-          1480-wide column. */}
+      {loading && (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-6 h-6 text-accent animate-spin" />
+        </div>
+      )}
+
+      {showSavedEmptyState && (
+        <EmptySavedState
+          onBrowseAll={() => updateFilters({ saved: undefined })}
+        />
+      )}
+
+      {showNoResults && (
+        <div className="text-center py-24">
+          <p className="text-text-muted text-lg">No jobs found</p>
+          <p className="text-text-dim text-sm mt-1">
+            Try adjusting your filters
+          </p>
+        </div>
+      )}
+
+      {showList && (
+        <div className="space-y-2">
+          {jobs.map((job, index) => {
+            const shouldAnimate =
+              !hasAnimatedRef.current && index < 10;
+            if (
+              index === jobs.length - 1 &&
+              !hasAnimatedRef.current
+            ) {
+              hasAnimatedRef.current = true;
+            }
+            return (
+              <motion.div
+                key={job.id}
+                initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.3,
+                  ease: "easeOut",
+                  delay: shouldAnimate
+                    ? Math.min(index * 0.04, 0.4)
+                    : 0,
+                }}
+              >
+                <JobCard
+                  job={job}
+                  selected={selected?.id === job.id}
+                  onClick={() => selectJob(job)}
+                  isSaved={savedJobIds.has(job.id)}
+                  onSaveToggle={handleSaveToggle}
+                />
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sentinel + bottom states */}
+      <div ref={sentinelRef} className="py-6 flex justify-center">
+        {!loading && loadingMore && (
+          <Loader2 className="w-5 h-5 text-accent animate-spin" />
+        )}
+        {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
+          <p className="text-xs text-text-dim">
+            All {total.toLocaleString()} jobs loaded
+          </p>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    // Container-scroll wrapper. At lg+ this fills the parent's fixed
+    // height (`100dvh - var(--navbar-h)`) and arranges the filter shell
+    // + two-pane row as a flex column. Below lg it's a normal block
+    // (natural-document flow) so the page reflows as one document.
+    <div className="lg:h-full lg:flex lg:flex-col lg:min-h-0">
+      {/* ── Filter shell ──────────────────────────────────────────────
+          On mobile: sticky under the navbar (window-scroll model).
+          On desktop: `shrink-0` flex child at the top of the container
+          scroll wrapper — the sticky positioning is harmless there
+          (already at the top of its parent). Backdrop-blur is preserved
+          so list rows obscure cleanly when they scroll under it. */}
       <div
-        className="sticky z-30 -mx-7 px-7 pt-3 pb-3 bg-bg/92 backdrop-blur-xl border-b border-border"
+        className="sticky lg:static lg:shrink-0 z-30 -mx-7 px-7 pt-3 pb-3 bg-bg/92 backdrop-blur-xl border-b border-border"
         style={{ top: "var(--navbar-h)" }}
       >
         <TopControlStrip
@@ -590,113 +719,57 @@ export function JobBoard() {
         </div>
       </div>
 
-      {/* ── Two-pane grid ─────────────────────────────────────────────
-          `grid-template-columns` transitions between `1fr` and `1fr 560px`
-          when the detail pane opens / closes. Right pane is hidden on
-          mobile; a full-screen overlay handles that case below. */}
-      <div
-        className="mt-4 grid gap-[18px] items-start transition-[grid-template-columns] duration-[250ms]"
-        style={{
-          gridTemplateColumns: selected ? "1fr 560px" : "1fr",
-          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-        }}
-      >
-        {/* LEFT — list */}
-        <div className="min-w-0">
-          {loading && (
-            <div className="flex items-center justify-center py-24">
-              <Loader2 className="w-6 h-6 text-accent animate-spin" />
-            </div>
-          )}
+      {/* ── Desktop two-pane row ─────────────────────────────────────
+          `flex-1 min-h-0` claims the remaining container height so each
+          child's `overflow-y-auto` has a definite track to constrain
+          to. Without `min-h-0`, flex children default to `min-height:
+          auto` (= content size), which silently disables the inner
+          scrollbars — the original bug.
 
-          {showSavedEmptyState && (
-            <EmptySavedState
-              onBrowseAll={() => updateFilters({ saved: undefined })}
-            />
-          )}
-
-          {showNoResults && (
-            <div className="text-center py-24">
-              <p className="text-text-muted text-lg">No jobs found</p>
-              <p className="text-text-dim text-sm mt-1">
-                Try adjusting your filters
-              </p>
-            </div>
-          )}
-
-          {showList && (
-            <div className="space-y-2">
-              {jobs.map((job, index) => {
-                const shouldAnimate =
-                  !hasAnimatedRef.current && index < 10;
-                if (
-                  index === jobs.length - 1 &&
-                  !hasAnimatedRef.current
-                ) {
-                  hasAnimatedRef.current = true;
-                }
-                return (
-                  <motion.div
-                    key={job.id}
-                    initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.3,
-                      ease: "easeOut",
-                      delay: shouldAnimate
-                        ? Math.min(index * 0.04, 0.4)
-                        : 0,
-                    }}
-                  >
-                    <JobCard
-                      job={job}
-                      selected={selected?.id === job.id}
-                      onClick={() => selectJob(job)}
-                      isSaved={savedJobIds.has(job.id)}
-                      onSaveToggle={handleSaveToggle}
-                    />
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Sentinel + bottom states */}
-          <div ref={sentinelRef} className="py-6 flex justify-center">
-            {!loading && loadingMore && (
-              <Loader2 className="w-5 h-5 text-accent animate-spin" />
-            )}
-            {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
-              <p className="text-xs text-text-dim">
-                All {total.toLocaleString()} jobs loaded
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT — detail / apply / celebration. Sticky-pinned beneath
-            the filter shell using a generous fixed offset; see comment
-            on STICKY_FILTER_RESERVE_PX above for rationale. The actual
-            pane choice is delegated to `renderRightPane`. */}
-        {selected && (
-          <aside
-            className="hidden lg:block w-[560px] sticky"
-            style={{
-              top: `calc(var(--navbar-h) + ${STICKY_FILTER_RESERVE_PX}px)`,
-              maxHeight: `calc(100vh - var(--navbar-h) - ${STICKY_BOTTOM_RESERVE_PX}px)`,
-              minHeight: 480,
-            }}
+          Gated on `isDesktop` (JS) rather than only on `hidden lg:flex`
+          (CSS) so the list body — and its IntersectionObserver sentinel
+          — render exactly once. Pre-hydration this is `false`, matching
+          SSR's mobile-first markup. */}
+      {isDesktop && (
+        <div className="flex flex-1 min-h-0 gap-[18px] pt-4">
+          {/* LEFT — list. Owns its own scrollbar. `min-w-0` allows the
+              flex child to shrink below its intrinsic content width when
+              the right pane opens. */}
+          <div
+            ref={listScrollRef}
+            className="flex-1 min-w-0 overflow-y-auto pr-1"
           >
-            {renderRightPane(selected)}
-          </aside>
-        )}
-      </div>
+            {renderListBody()}
+          </div>
 
-      {/* ── Mobile detail / apply / celebration — full-screen replace ─
-          On `< lg`, the right pane doesn't render in-grid. Instead the
-          same three-way ternary lives inside a viewport-cover overlay. */}
-      {selected && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-bg overflow-y-auto">
+          {/* RIGHT — detail / apply / celebration. Conditionally rendered
+              so the left list claims full width when nothing is selected.
+              Owns its own scrollbar (job-detail's inner `flex-1 min-h-0
+              overflow-y-auto` resolves correctly now that this aside has
+              a definite height via its `flex-1 min-h-0` row parent). */}
+          {selected && (
+            <aside className="w-[560px] shrink-0 overflow-y-auto">
+              {renderRightPane(selected)}
+            </aside>
+          )}
+        </div>
+      )}
+
+      {/* ── Mobile list ──────────────────────────────────────────────
+          Natural-document flow at `<lg`. Window-scroll. Sentinel is
+          observed against the viewport (`root: null`) per the
+          breakpoint media-query effect.
+
+          Also gated on `isDesktop` (JS) — see desktop block above. */}
+      {!isDesktop && <div className="mt-4">{renderListBody()}</div>}
+
+      {/* ── Mobile detail / apply / celebration — full-screen overlay ─
+          On `<lg`, the right pane replaces the list as a viewport-cover
+          overlay. Only rendered when we're actually below the lg
+          breakpoint — keeps the DOM lean and avoids any chance of
+          stale fixed-position layers above the desktop split. */}
+      {!isDesktop && selected && (
+        <div className="fixed inset-0 z-40 bg-bg overflow-y-auto">
           <div className="min-h-full">{renderRightPane(selected)}</div>
         </div>
       )}
@@ -713,6 +786,6 @@ export function JobBoard() {
         onClearAll={clearFilters}
         activeFilterCount={activeFilterCount}
       />
-    </>
+    </div>
   );
 }

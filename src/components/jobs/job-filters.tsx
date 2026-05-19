@@ -1,284 +1,270 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Search, Building2, X, ArrowUpDown } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { DatePostedChips } from "./filters/date-posted-chips";
 import { DepartmentCombobox } from "./filters/department-combobox";
 import { ExperienceLevelChips } from "./filters/experience-level-chips";
-import { WorkModeSegment } from "./filters/work-mode-segment";
+import { ModeChips } from "./filters/mode-chips";
+import { CompanyCombobox } from "./filters/company-combobox";
+import {
+  ActiveFilterStrip,
+  summarizeActiveFilters,
+} from "./filters/active-filter-strip";
 import { isExperienceFilterEnabledClient } from "@/lib/experience-level";
 import { isWorkModeFilterEnabledClient } from "@/lib/work-mode";
-import { useJobFilters } from "@/hooks/use-job-filters";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CityStateCombobox } from "@/components/ui/city-state-combobox";
-import type { DatePostedOption, JobFacets, SortOption } from "@/types";
+import type { DatePostedOption, JobFacets, JobFilters } from "@/types";
+
+/**
+ * Browse Jobs filter card — Phase 2 rebuild.
+ *
+ * Two stacked rows wrapped in a single card surface:
+ *   Row 1 (structured inputs): SEARCH | WHERE | COMPANY | TEAM — all 36px tall.
+ *   Row 2 (chip groups):       POSTED · LEVEL · MODE, centered with vertical
+ *                              dividers between groups.
+ *
+ * Below the card, an `ActiveFilterStrip` summarizes the current filter state
+ * with per-chip remove + a Clear all link (hidden when no filters are set).
+ *
+ * State ownership lives entirely in the parent — the card is a controlled
+ * surface that emits filter patches via `onChange`. Search input is the only
+ * locally-buffered field (debounced 400ms via the shared hook) so typing
+ * stays smooth without paying a per-keystroke router push.
+ *
+ * Sticky positioning is intentionally NOT applied here; Phase 3 wraps the
+ * card in the sticky shell.
+ */
 
 interface JobFiltersProps {
+  filters: JobFilters;
   facets?: JobFacets;
+  onChange: (next: Partial<JobFilters>) => void;
+  /** Called when the user hits "Clear all" in the active-filter strip. */
+  onClearAll: () => void;
+  className?: string;
 }
 
 const DEBOUNCE_MS = 400;
 
-const INPUT_CLASS =
-  "w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-black text-white " +
-  "placeholder:text-zinc-600 transition-all duration-200 focus:outline-none " +
-  "focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20";
+// Free-text search input — matches the design's input styling. 36px tall,
+// 10px radius, lavender focus glow, mono placeholder.
+const SEARCH_INPUT_CLASS =
+  "w-full h-9 pl-9 pr-3 text-[13px] rounded-[10px] bg-bg text-text " +
+  "placeholder:text-text-dim transition-colors duration-150 " +
+  "focus:outline-none focus:border-accent-lavender/40 " +
+  "focus:shadow-[0_0_0_4px_rgba(196,181,253,0.06)]";
 
-const SORT_CLASS =
-  "w-[150px] pl-9 pr-3 py-2 text-sm rounded-xl border border-white/10 bg-black text-white " +
-  "focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 " +
-  "appearance-none cursor-pointer";
+const VERTICAL_DIVIDER = "w-px h-[18px] bg-border mx-1";
 
-const VERTICAL_DIVIDER = "w-px h-5 bg-white/10";
-
-interface SortSelectProps {
-  value: SortOption;
-  onChange: (value: SortOption) => void;
-}
-
-function SortSelect({ value, onChange }: SortSelectProps) {
-  return (
-    <div className="relative">
-      <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 pointer-events-none" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as SortOption)}
-        className={SORT_CLASS}
-        aria-label="Sort jobs"
-      >
-        <option value="newest">Newest</option>
-        <option value="relevance">Relevance</option>
-      </select>
-    </div>
-  );
-}
-
-interface ClearAllButtonProps {
-  onClick: () => void;
-}
-
-function ClearAllButton({ onClick }: ClearAllButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors underline focus:outline-none focus:ring-2 focus:ring-indigo-500/40 rounded"
-    >
-      <X className="w-3 h-3" />
-      Clear all
-    </button>
-  );
-}
-
-export function JobFilters({ facets }: JobFiltersProps) {
-  const { filters, updateFilters, clearFilters, hasFilters } = useJobFilters();
-
-  // Local text state — provides instant UI feedback while debouncing API calls.
-  // `companies` is canonically a string[] (Phase 2 will swap this input for a
-  // multi-select chip group); for now this text input mirrors the first entry.
+export function JobFilters({
+  filters,
+  facets,
+  onChange,
+  onClearAll,
+  className,
+}: JobFiltersProps) {
+  // Local text state — provides instant UI feedback while debouncing
+  // router updates. Re-syncs whenever the URL changes externally
+  // (back/forward, programmatic clear) via the derived-state pattern
+  // (React docs: "Storing information from previous renders") — cheaper
+  // and lint-clean compared to useEffect + setState.
   const [localQuery, setLocalQuery] = useState(filters.query ?? "");
-  const [localCompany, setLocalCompany] = useState(filters.companies[0] ?? "");
+  const [prevExternalQuery, setPrevExternalQuery] = useState(filters.query);
+  if (filters.query !== prevExternalQuery) {
+    setPrevExternalQuery(filters.query);
+    setLocalQuery(filters.query ?? "");
+  }
 
-  // Sync local text state when URL changes externally (back/forward nav, clear)
-  useEffect(() => { setLocalQuery(filters.query ?? ""); }, [filters.query]);
-  useEffect(() => {
-    setLocalCompany(filters.companies[0] ?? "");
-  }, [filters.companies]);
-
-  const debouncedUpdate = useDebouncedCallback(
-    (patch: Parameters<typeof updateFilters>[0]) => updateFilters(patch),
+  const debouncedQueryChange = useDebouncedCallback(
+    (next: string) => onChange({ query: next || undefined }),
     DEBOUNCE_MS
   );
 
-  // Derived display value for the city/state combobox
+  const handleSearchInput = useCallback(
+    (raw: string) => {
+      setLocalQuery(raw);
+      debouncedQueryChange(raw);
+    },
+    [debouncedQueryChange]
+  );
+
+  // Derived display value for the city/state combobox trigger
   const locationDisplay =
     filters.locationCity && filters.locationState
       ? `${filters.locationCity}, ${filters.locationState}`
       : filters.locationCity ?? "";
 
+  // Stable callbacks for each filter primitive
   const handleDatePosted = useCallback(
-    (value: DatePostedOption) => updateFilters({ datePosted: value }),
-    [updateFilters]
+    (value: DatePostedOption) => onChange({ datePosted: value }),
+    [onChange]
   );
 
-  const handleSort = useCallback(
-    (value: SortOption) => updateFilters({ sort: value }),
-    [updateFilters]
+  const handleLevels = useCallback(
+    (next: string[]) => onChange({ experienceLevels: next }),
+    [onChange]
+  );
+
+  const handleMode = useCallback(
+    (value: string | undefined) => onChange({ workMode: value }),
+    [onChange]
   );
 
   const handleDepartment = useCallback(
-    (value: string | undefined) => updateFilters({ department: value }),
-    [updateFilters]
+    (value: string | undefined) => onChange({ department: value }),
+    [onChange]
   );
 
-  const handleExperienceLevel = useCallback(
-    (value: string | undefined) => updateFilters({ experienceLevel: value }),
-    [updateFilters]
+  const handleCompanies = useCallback(
+    (next: string[]) => onChange({ companies: next }),
+    [onChange]
   );
 
-  const handleWorkMode = useCallback(
-    (value: string | undefined) => updateFilters({ workMode: value }),
-    [updateFilters]
+  // CityStateCombobox callbacks — the existing component owns the
+  // Places-backed autocomplete. We restyle the trigger via the size="lg"
+  // path-less alternative: passing className that overrides the inner
+  // input's chrome. Easier: we leave it as-is and rely on its `size="sm"`
+  // input styling, which already lines up with the 36px-ish height once
+  // py is adjusted. The wrapping div below sets the field width.
+  const handleLocationSelect = useCallback(
+    (city: string, state: string) =>
+      onChange({ locationCity: city, locationState: state, location: undefined }),
+    [onChange]
+  );
+  const handleLocationFreeText = useCallback(
+    (text: string) =>
+      onChange({ location: text, locationCity: undefined, locationState: undefined }),
+    [onChange]
+  );
+  const handleLocationClear = useCallback(
+    () =>
+      onChange({
+        locationCity: undefined,
+        locationState: undefined,
+        location: undefined,
+      }),
+    [onChange]
   );
 
-  const departments = facets?.departments ?? [];
-  const experienceLevels = facets?.experienceLevels ?? [];
-  const workModes = facets?.workModes ?? [];
-  const sortValue = filters.sort ?? "newest";
   const showExperienceFilter = isExperienceFilterEnabledClient();
   const showWorkModeFilter = isWorkModeFilterEnabledClient();
 
+  const companyFacets = facets?.companies ?? [];
+  const departmentFacets = facets?.departments ?? [];
+
+  // Active-filter chips — used to gate the strip rendering and pass the
+  // count info to the strip itself. summarizeActiveFilters is the single
+  // source of truth for which filters are considered "active" in the UI.
+  const hasActive = summarizeActiveFilters(filters, onChange).length > 0;
+
   return (
-    <div className="bg-[#0a0a0a] border border-white/8 rounded-xl p-4 mb-4 space-y-3">
-      {/* Row 1 — primary inputs: Search / Location / Company */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-        <div className="relative md:col-span-6">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Job title, keyword, company..."
-            value={localQuery}
-            onChange={(e) => {
-              setLocalQuery(e.target.value);
-              debouncedUpdate({ query: e.target.value || undefined });
-            }}
-            className={INPUT_CLASS}
-            aria-label="Search jobs"
-          />
-        </div>
-        {/* Mobile: location + company side-by-side; desktop: each spans 3/12 */}
-        <div className="grid grid-cols-2 gap-3 md:contents">
-          <div className="md:col-span-3">
-            <CityStateCombobox
-              value={locationDisplay}
-              onSelect={(city, state) =>
-                updateFilters({ locationCity: city, locationState: state, location: undefined })
-              }
-              onFreeText={(text) =>
-                updateFilters({ location: text, locationCity: undefined, locationState: undefined })
-              }
-              onClear={() =>
-                updateFilters({ locationCity: undefined, locationState: undefined, location: undefined })
-              }
-              placeholder="City, State"
-            />
-          </div>
-          <div className="relative md:col-span-3">
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 pointer-events-none" />
+    <div className={cn("space-y-3", className)}>
+      <div
+        className={cn(
+          "bg-bg-elev border border-border rounded-[14px] p-3 space-y-2.5"
+        )}
+      >
+        {/* Row 1 — structured inputs (search, where, company, team) */}
+        <div className="flex flex-col md:flex-row gap-2">
+          {/* Search — fills remaining space */}
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-dim pointer-events-none" />
             <input
               type="text"
-              placeholder="Company"
-              value={localCompany}
-              onChange={(e) => {
-                setLocalCompany(e.target.value);
-                // Phase-1 shim: write 0 or 1 entry into the new companies[]
-                // filter. Phase 2 swaps this for a multi-select chip group.
-                debouncedUpdate({
-                  companies: e.target.value ? [e.target.value] : [],
-                });
-              }}
-              className={INPUT_CLASS}
-              aria-label="Filter by company"
+              placeholder="Job title, keyword, company…"
+              value={localQuery}
+              onChange={(e) => handleSearchInput(e.target.value)}
+              className={cn(
+                SEARCH_INPUT_CLASS,
+                localQuery
+                  ? "border border-accent-lavender/25"
+                  : "border border-border"
+              )}
+              aria-label="Search jobs"
             />
           </div>
-        </div>
-      </div>
 
-      {/* Row 2 — desktop: posted chips + department on the left, controls on the right */}
-      <div className="hidden md:flex items-center gap-3 flex-wrap">
-        <DatePostedChips
-          value={filters.datePosted}
-          onChange={handleDatePosted}
-          inlineLabel="Posted:"
-        />
-
-        {departments.length > 0 && (
-          <>
-            <span className={VERTICAL_DIVIDER} aria-hidden />
-            <DepartmentCombobox
-              value={filters.department}
-              onChange={handleDepartment}
-              options={departments}
-              className="w-[260px]"
+          {/* WHERE — wraps CityStateCombobox. The component owns its trigger,
+              we just constrain its width to match the design's 170px field. */}
+          <div className="md:w-[170px] shrink-0">
+            <CityStateCombobox
+              value={locationDisplay}
+              onSelect={handleLocationSelect}
+              onFreeText={handleLocationFreeText}
+              onClear={handleLocationClear}
+              placeholder="Where"
             />
-          </>
-        )}
+          </div>
 
-        {showExperienceFilter && (
-          <>
-            <span className={VERTICAL_DIVIDER} aria-hidden />
-            <ExperienceLevelChips
-              value={filters.experienceLevel}
-              onChange={handleExperienceLevel}
-              inlineLabel="Level:"
-              facets={experienceLevels}
+          {/* COMPANY — multi-select typeahead */}
+          <div className="md:w-[200px] shrink-0">
+            <CompanyCombobox
+              value={filters.companies}
+              options={companyFacets.map((c) => ({ value: c.name, count: c.count }))}
+              onChange={handleCompanies}
+              className="w-full"
             />
-          </>
-        )}
+          </div>
 
-        <div className="ml-auto flex items-center gap-3">
-          {showWorkModeFilter && (
-            <WorkModeSegment
-              value={filters.workMode}
-              onChange={handleWorkMode}
-              inlineLabel="Mode:"
-              facets={workModes}
-            />
+          {/* TEAM — single-select dropdown */}
+          {departmentFacets.length > 0 && (
+            <div className="md:w-[170px] shrink-0">
+              <DepartmentCombobox
+                value={filters.department}
+                onChange={handleDepartment}
+                options={departmentFacets}
+                className="w-full"
+              />
+            </div>
           )}
-          <SortSelect value={sortValue} onChange={handleSort} />
-          {hasFilters && <ClearAllButton onClick={clearFilters} />}
         </div>
-      </div>
 
-      {/* Row 2 — mobile: department, posted chips scroll horizontally, controls below */}
-      <div className="md:hidden space-y-3">
-        {departments.length > 0 && (
-          <DepartmentCombobox
-            value={filters.department}
-            onChange={handleDepartment}
-            options={departments}
-            className="w-full"
-          />
-        )}
-        <div className="-mx-1 px-1 overflow-x-auto">
+        {/* Row 2 — chip groups */}
+        <div className="flex items-center justify-center gap-2.5 flex-wrap">
+          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-dim">
+            POSTED
+          </span>
           <DatePostedChips
             value={filters.datePosted}
             onChange={handleDatePosted}
-            inlineLabel="Posted:"
-            nowrap
           />
+
+          {showExperienceFilter && (
+            <>
+              <span className={VERTICAL_DIVIDER} aria-hidden />
+              <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-dim">
+                LEVEL
+              </span>
+              <ExperienceLevelChips
+                value={filters.experienceLevels}
+                onChange={handleLevels}
+              />
+            </>
+          )}
+
+          {showWorkModeFilter && (
+            <>
+              <span className={VERTICAL_DIVIDER} aria-hidden />
+              <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-dim">
+                MODE
+              </span>
+              <ModeChips value={filters.workMode} onChange={handleMode} />
+            </>
+          )}
         </div>
-        {showExperienceFilter && (
-          <div className="-mx-1 px-1 overflow-x-auto">
-            <ExperienceLevelChips
-              value={filters.experienceLevel}
-              onChange={handleExperienceLevel}
-              inlineLabel="Level:"
-              facets={experienceLevels}
-              nowrap
-            />
-          </div>
-        )}
-        {showWorkModeFilter && (
-          <div className="-mx-1 px-1 overflow-x-auto">
-            <WorkModeSegment
-              value={filters.workMode}
-              onChange={handleWorkMode}
-              inlineLabel="Mode:"
-              facets={workModes}
-              nowrap
-            />
-          </div>
-        )}
-        <div className="flex items-center justify-end gap-3">
-          <SortSelect value={sortValue} onChange={handleSort} />
-        </div>
-        {hasFilters && (
-          <div className="flex justify-end">
-            <ClearAllButton onClick={clearFilters} />
-          </div>
-        )}
       </div>
+
+      {/* Active-filter strip — appears below the card when ≥1 filter is set */}
+      {hasActive && (
+        <ActiveFilterStrip
+          filters={filters}
+          onChange={onChange}
+          onClearAll={onClearAll}
+        />
+      )}
     </div>
   );
 }

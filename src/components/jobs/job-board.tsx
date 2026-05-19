@@ -25,7 +25,7 @@ export function JobBoard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
-  const { filters, updateFilters } = useJobFilters();
+  const { filters, updateFilters, clearFilters } = useJobFilters();
   const jobIdFromUrl = searchParams.get("job");
   const isAuthenticated = sessionStatus === "authenticated";
   const onSavedView = !!filters.saved;
@@ -368,7 +368,13 @@ export function JobBoard() {
           />
         </div>
 
-        <FiltersBar facets={facets} />
+        <FiltersBar
+          filters={filters}
+          facets={facets}
+          onChange={updateFilters}
+          onClearAll={clearFilters}
+          className="mb-4"
+        />
 
         <div
           ref={listRef}

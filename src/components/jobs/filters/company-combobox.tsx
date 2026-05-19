@@ -51,16 +51,23 @@ export function CompanyCombobox({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus the search input each time the popover opens so the user
-  // can start typing immediately.
+  // can start typing immediately. Radix mounts content asynchronously, so
+  // defer one frame before focusing.
   useEffect(() => {
-    if (open) {
-      // Defer one frame — Radix mounts content asynchronously.
-      const id = requestAnimationFrame(() => inputRef.current?.focus());
-      return () => cancelAnimationFrame(id);
-    }
-    setQuery("");
-    return undefined;
+    if (!open) return undefined;
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
   }, [open]);
+
+  // Reset the search filter as the popover transitions from open → closed.
+  // Derived state pattern (React docs: "Storing information from previous
+  // renders") avoids the setState-in-effect lint and the extra render that
+  // comes with synchronizing two sources of truth via useEffect.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) setQuery("");
+  }
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 

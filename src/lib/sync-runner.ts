@@ -1,4 +1,5 @@
 import type { AtsProvider } from "@prisma/client"
+import { ReviewStatus } from "@prisma/client"
 import * as Sentry from "@sentry/nextjs"
 import { db } from "@/lib/db"
 import { getActiveBoards } from "@/lib/greenhouse/sync"
@@ -186,7 +187,12 @@ export async function executeSyncWork(
     // through CompanyBoard.website + CompanyBoard.logoUrl as admin-curated
     // overrides — the sync resolver gives them priority over ATS metadata.
     const dbBoards = await db.companyBoard.findMany({
-      where: { isActive: true },
+      // Boards stay live during admin review. Only REJECTED is hidden;
+      // PENDING / NEEDS_REVIEW / APPROVED all sync and surface jobs.
+      where: {
+        isActive: true,
+        reviewStatus: { not: ReviewStatus.REJECTED },
+      },
       select: { boardToken: true, name: true, provider: true, logoUrl: true, website: true },
     })
 

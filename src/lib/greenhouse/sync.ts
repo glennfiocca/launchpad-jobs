@@ -8,7 +8,6 @@ import { decode } from "html-entities";
 import { inferEmploymentTypeFromTitle } from "@/lib/employment-type";
 import { inferExperienceLevelFromTitle } from "@/lib/experience-level";
 import { inferWorkModeFromJob } from "@/lib/work-mode";
-import { summarizeJobDescription } from "@/lib/jobs/summarize";
 
 interface SyncResult {
   companyName: string;
@@ -141,22 +140,11 @@ export async function syncGreenhouseBoard(
         });
         result.jobsUpdated++;
       } else {
-        // Editorial TL;DR — only generated on first ingest. Sequential await
-        // (not Promise.all batched across the whole sync) because each board
-        // typically contributes 0–50 new jobs per cycle, the summarizer
-        // already has its own per-call retry/timeout (~15s cap), and a
-        // sequential walk keeps the upsert loop's failure mode simple: one
-        // bad job can never poison the rest. Summarizer returns null on
-        // any failure — that's an acceptable retry-next-time state, because
-        // the next sync will create this row again only if it was never
-        // persisted (idempotent on success, retryable on failure).
-        const summary = ghJob.content
-          ? await summarizeJobDescription(decode(ghJob.content))
-          : null;
+        // TL;DR summaries are intentionally not generated at sync time;
+        // existing Job.summary values are preserved untouched.
         await db.job.create({
           data: {
             ...jobData,
-            summary,
             externalId,
             companyId: company.id,
             publicJobId: await generateUniquePublicJobId(),

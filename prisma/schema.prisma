@@ -73,9 +73,32 @@ enum AtsProvider {
   ASHBY
 }
 
+/// How the company exposes their ATS to job seekers. Drives autofill strategy
+/// in the browser extension: GREENHOUSE_HOSTED / ASHBY_HOSTED → generic
+/// per-ATS selector pack; SELF_HOSTED → look up CompanyBoard.applyHostname and
+/// fall back to per-company selectors. Populated at sync time from the
+/// hostnames returned in the ATS jobs feed.
+enum BoardHosting {
+  GREENHOUSE_HOSTED
+  ASHBY_HOSTED
+  SELF_HOSTED
+  UNKNOWN
+}
+
 enum Role {
   USER
   ADMIN
+}
+
+/// Manual review workflow state for board onboarding. Every CompanyBoard
+/// row and every BoardReviewMiss starts PENDING and must be touched by an
+/// admin. NEEDS_REVIEW is used when the slug derivation looked plausible
+/// but a human flagged it (e.g. suspiciousSlug=true).
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  NEEDS_REVIEW
+  REJECTED
 }
 
 /// Where a Company.logoUrl ultimately came from. Populated by the sync /
@@ -619,10 +642,76 @@ model CompanyBoard {
   logoUrl    String?
   website    String?
   isActive   Boolean     @default(true)
+  /// How this board is exposed to job seekers. See BoardHosting docs. Set
+  /// by syncBoard after the first successful jobs fetch (majority hostname
+  /// across active jobs). UNKNOWN until the first sync writes a definitive
+  /// classification.
+  hosting    BoardHosting @default(UNKNOWN)
+  /// Canonical apply-page hostname the extension will match against in the
+  /// browser URL bar (e.g. "job-boards.greenhouse.io" for hosted boards or
+  /// "careers.airbnb.com" for self-hosters). Populated at sync time from
+  /// the most common Job.absoluteUrl hostname. Null until first sync.
+  applyHostname String?
+  /// Manual gate before a board's jobs become visible. Defaults to PENDING
+  /// so newly-discovered boards are dark until an admin approves them.
+  reviewStatus   ReviewStatus @default(PENDING)
+  reviewedAt     DateTime?
+  /// Admin User.id captured as a plain string — intentionally no FK so
+  /// deleting an admin doesn't cascade-null the audit trail.
+  reviewedBy     String?
+  reviewerNotes  String?      @db.Text
+  /// Set by the slug-derivation pipeline when the candidate slug looks
+  /// suspect (regex mismatch, ambiguous host, etc.). Surfaces the row in
+  /// the admin queue even if reviewStatus is otherwise APPROVED.
+  suspiciousSlug Boolean      @default(false)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
   @@unique([provider, boardToken])
+  @@index([reviewStatus])
+}
+
+/// Queue of companies the slug-derivation step could not resolve to an ATS
+/// board. Admin reviews each row, optionally pastes the correct slug + ATS
+/// provider, and the resolver promotes it to a real CompanyBoard
+/// (resolvedCompanyBoardId points at the created row).
+model BoardReviewMiss {
+  id                     String       @id @default(cuid())
+  companyName            String
+  companyUrl             String?
+  linkedinUrl            String?
+  countryCode            String?
+  totalJobsTs            Int?
+  industry               String?
+  /// Newline-joined log of slugs/hostnames the resolver attempted, kept so
+  /// reviewers can see what was already ruled out.
+  candidatesTried        String?      @db.Text
+  reviewStatus           ReviewStatus @default(PENDING)
+  manuallyProvidedSlug   String?
+  manuallyProvidedAts    AtsProvider?
+  /// Populated once an admin's manual slug produces a CompanyBoard row.
+  /// Plain string FK avoided to keep the miss audit trail even if the
+  /// board is later deleted.
+  resolvedCompanyBoardId String?
+  reviewedAt             DateTime?
+  reviewedBy             String?
+  reviewerNotes          String?      @db.Text
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@unique([companyName])
+  @@index([reviewStatus])
+}
+
+/// Per-admin resume pointer so reviewers can pick up where they left off
+/// across sessions. One row per admin user; adminUserId is a plain string
+/// (no FK) to match the rest of the review-workflow audit fields.
+model BoardReviewProgress {
+  id                  String   @id @default(cuid())
+  adminUserId         String   @unique
+  lastReviewedBoardId String?
+  lastReviewedMissId  String?
+  updatedAt           DateTime @updatedAt
 }
 
 // Runtime source-of-truth for curated logo/website overrides. Track B.4 of

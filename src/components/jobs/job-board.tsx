@@ -102,7 +102,9 @@ export function JobBoard() {
       // this canonical form and the legacy `?company=` substring for back-compat.
       if (f.companies.length > 0) params.set("companies", f.companies.join(","));
       if (f.employmentType) params.set("employmentType", f.employmentType);
-      if (f.experienceLevel) params.set("experienceLevel", f.experienceLevel);
+      // Multi-select experience-level — `levels=A,B`. /api/jobs accepts both
+      // this canonical form and the legacy `?experienceLevel=` singular for back-compat.
+      if (f.experienceLevels.length > 0) params.set("levels", f.experienceLevels.join(","));
       if (f.workMode) params.set("workMode", f.workMode);
       if (f.datePosted && f.datePosted !== "any")
         params.set("datePosted", f.datePosted);

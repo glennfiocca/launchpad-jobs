@@ -145,8 +145,13 @@ export interface JobFilters {
    */
   companies: string[];
   employmentType?: string;
-  /** Experience-level slug (entry|mid|senior|staff|management). */
-  experienceLevel?: string;
+  /**
+   * Multi-select experience-level filter. Each entry is a slug from
+   * EXPERIENCE_LEVEL_OPTIONS (entry|mid|senior|staff|management); the
+   * API matches via `experienceLevel IN (...)`. Empty array = no filter.
+   * Browse Jobs Phase 2 replaced the prior singular shape with this array.
+   */
+  experienceLevels: string[];
   /** Work-mode slug (remote|hybrid|onsite). Supersedes the legacy `remote` boolean for listing filtering. */
   workMode?: string;
   datePosted?: DatePostedOption;

@@ -5,6 +5,15 @@ import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Single-select department dropdown. Trigger matches the Browse Jobs
+ * redesign's `DropdownField` aesthetic — 36px tall, 10px radius, mono
+ * uppercase TEAM label, lavender-tinted border when a value is selected.
+ *
+ * Popover internals (Radix-backed) are unchanged: search input + scrollable
+ * facet list. The clear (×) sits inside the trigger.
+ */
+
 interface DepartmentOption {
   value: string;
   count: number;
@@ -18,9 +27,17 @@ interface DepartmentComboboxProps {
 }
 
 const TRIGGER_BASE =
-  "w-full flex items-center justify-between gap-2 pl-3 pr-2 py-2.5 text-sm " +
-  "rounded-xl border border-white/10 bg-black text-left transition-all duration-200 " +
-  "focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20";
+  "flex items-center gap-2 h-9 px-3 rounded-[10px] bg-bg text-left " +
+  "transition-colors duration-150 focus:outline-none " +
+  "focus-visible:ring-2 focus-visible:ring-accent-lavender/40";
+
+const TRIGGER_IDLE = "border border-border text-text-dim";
+const TRIGGER_ACTIVE = "border border-accent-lavender/30 text-text";
+
+const POPOVER_CLASS =
+  "z-50 w-[280px] max-h-[320px] overflow-hidden rounded-[12px] bg-bg-elev " +
+  "border border-accent-lavender/25 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7),0_0_0_4px_rgba(196,181,253,0.06)] " +
+  "flex flex-col";
 
 export function DepartmentCombobox({
   value,
@@ -30,11 +47,6 @@ export function DepartmentCombobox({
 }: DepartmentComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-
-  const selected = useMemo(
-    () => options.find((o) => o.value === value),
-    [options, value]
-  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,9 +63,9 @@ export function DepartmentCombobox({
     [onChange]
   );
 
+  // Inline clear — fires inside the trigger but must not toggle the popover.
   const handleClear = useCallback(
-    (e: React.MouseEvent) => {
-      // Prevent the trigger from opening when clicking the clear affordance.
+    (e: React.MouseEvent | React.KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
       onChange(undefined);
@@ -61,9 +73,7 @@ export function DepartmentCombobox({
     [onChange]
   );
 
-  const triggerLabel = selected
-    ? `${selected.value} (${selected.count.toLocaleString()})`
-    : "All departments";
+  const hasSelection = !!value;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -74,31 +84,38 @@ export function DepartmentCombobox({
           aria-expanded={open}
           className={cn(
             TRIGGER_BASE,
-            selected ? "text-white" : "text-zinc-500",
+            hasSelection ? TRIGGER_ACTIVE : TRIGGER_IDLE,
             className
           )}
         >
-          <span className="truncate">{triggerLabel}</span>
-          <span className="flex items-center gap-1 shrink-0">
-            {selected && (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label="Clear department"
-                onMouseDown={handleClear}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onChange(undefined);
-                  }
-                }}
-                className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-              >
-                <X className="w-3.5 h-3.5" />
-              </span>
-            )}
-            <ChevronDown className="w-4 h-4 text-zinc-500" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-dim shrink-0">
+            TEAM
           </span>
+          <span
+            className={cn(
+              "flex-1 min-w-0 truncate text-[13px]",
+              hasSelection ? "text-text" : "text-text-dim"
+            )}
+          >
+            {value ?? "Any"}
+          </span>
+          {hasSelection && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Clear team"
+              onMouseDown={handleClear}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  handleClear(e);
+                }
+              }}
+              className="text-text-dim hover:text-text transition-colors p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-accent-lavender/40"
+            >
+              <X className="w-3 h-3" />
+            </span>
+          )}
+          <ChevronDown className="w-3.5 h-3.5 text-text-dim shrink-0" />
         </button>
       </Popover.Trigger>
 
@@ -106,9 +123,9 @@ export function DepartmentCombobox({
         <Popover.Content
           sideOffset={4}
           align="start"
-          className="w-[280px] max-h-[320px] overflow-hidden bg-zinc-900 border border-white/10 rounded-xl shadow-2xl shadow-black/60 z-50 flex flex-col animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-100"
+          className={POPOVER_CLASS}
         >
-          <div className="p-2 border-b border-white/8">
+          <div className="p-2 border-b border-border">
             <input
               type="text"
               role="combobox"
@@ -117,17 +134,21 @@ export function DepartmentCombobox({
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search departments..."
-              className="w-full px-2 py-1.5 text-sm rounded-md bg-black border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
+              placeholder="Search teams…"
+              className={cn(
+                "w-full h-[30px] px-2 text-[12.5px] rounded-[7px]",
+                "bg-bg text-text placeholder:text-text-dim",
+                "border border-border focus:outline-none focus:border-accent-lavender/40"
+              )}
             />
           </div>
           <div
             id="department-listbox"
             role="listbox"
-            className="overflow-y-auto flex-1"
+            className="overflow-y-auto flex-1 p-1"
           >
             {filtered.length === 0 ? (
-              <p className="px-3 py-3 text-sm text-zinc-500">No matches</p>
+              <p className="px-2.5 py-3 text-[12px] text-text-dim">No matches</p>
             ) : (
               filtered.map((opt) => {
                 const isActive = opt.value === value;
@@ -139,15 +160,15 @@ export function DepartmentCombobox({
                     aria-selected={isActive}
                     onClick={() => handleSelect(opt.value)}
                     className={cn(
-                      "w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors",
-                      "focus:outline-none focus:bg-white/5",
+                      "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-left transition-colors duration-150",
+                      "focus:outline-none focus:bg-white/[0.04]",
                       isActive
-                        ? "bg-indigo-500/10 text-white"
-                        : "text-zinc-300 hover:bg-white/5"
+                        ? "bg-accent-lavender/10 text-accent-lavender font-medium"
+                        : "text-text hover:bg-white/[0.04]"
                     )}
                   >
                     <span className="truncate">{opt.value}</span>
-                    <span className="text-zinc-500 shrink-0">
+                    <span className="font-mono text-[10.5px] text-text-dim shrink-0">
                       {opt.count.toLocaleString()}
                     </span>
                   </button>

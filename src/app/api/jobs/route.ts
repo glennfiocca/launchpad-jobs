@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobsQuerySchema, datePostedToCutoff } from "@/lib/validations/jobs";
+import { EXPERIENCE_LEVEL_OPTIONS } from "@/lib/experience-level";
 import { buildFacets } from "@/lib/job-facets";
 import {
   usEligibleWhere,
@@ -29,6 +30,11 @@ const VELOCITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 // than any reasonable user will pick by hand; protects against accidental
 // runaway requests if the URL is constructed programmatically.
 const MAX_COMPANIES_FILTER = 20;
+
+// Cap on the IN list size for the multi-select `levels` filter. The enum
+// only has 5 values today; bound at 10 anyway to guard against malformed
+// requests echoing the user's input back at us.
+const MAX_LEVELS_FILTER = 10;
 
 /**
  * Parse the `companies` (plural, canonical) or `company` (legacy singular)
@@ -78,6 +84,54 @@ function buildCompanyWhere(
     };
   }
   return {};
+}
+
+/**
+ * Parse the `levels` (canonical, multi-select) or `experienceLevel` (legacy
+ * singular) query params into the canonical experience-level slug list.
+ * Empty result = no filter.
+ *
+ * - `levels` wins when set; `experienceLevel` is back-compat only.
+ * - Slugs are deduped, trimmed, lowercased, and validated against
+ *   EXPERIENCE_LEVEL_OPTIONS — unknown values are silently dropped so a
+ *   stale URL with a renamed slug doesn't 400.
+ */
+function parseLevelFilters(params: {
+  levels?: string;
+  experienceLevel?: string;
+}): string[] {
+  const known = new Set<string>(EXPERIENCE_LEVEL_OPTIONS);
+  if (params.levels) {
+    const list = params.levels
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.length > 0 && known.has(s));
+    return Array.from(new Set(list)).slice(0, MAX_LEVELS_FILTER);
+  }
+  if (params.experienceLevel && known.has(params.experienceLevel)) {
+    return [params.experienceLevel];
+  }
+  return [];
+}
+
+/**
+ * Build the Prisma-style where filter for the experienceLevel column.
+ * Empty list = no filter. Single entry uses `=`; multi uses `IN (...)`.
+ */
+function buildLevelsWhere(levels: string[]): Prisma.JobWhereInput {
+  if (levels.length === 0) return {};
+  if (levels.length === 1) return { experienceLevel: levels[0] };
+  return { experienceLevel: { in: levels } };
+}
+
+/**
+ * Build the raw-SQL sub-select for the experienceLevel column. Mirrors
+ * buildLevelsWhere for the raw-SQL paths. Returns null when no filter set.
+ */
+function buildLevelsSqlCondition(levels: string[]): Prisma.Sql | null {
+  if (levels.length === 0) return null;
+  if (levels.length === 1) return Prisma.sql`j."experienceLevel" = ${levels[0]}`;
+  return Prisma.sql`j."experienceLevel" IN (${Prisma.join(levels)})`;
 }
 
 /**
@@ -190,7 +244,8 @@ export async function GET(request: Request) {
     department,
     company,    // legacy single-value, kept for back-compat — see parseCompanyFilters
     companies,  // canonical multi-select, comma-separated names
-    experienceLevel,
+    experienceLevel,  // legacy single-value, kept for back-compat — see parseLevelFilters
+    levels,           // canonical multi-select, comma-separated slugs
     workMode,
     datePosted,
     salaryMin,
@@ -207,6 +262,12 @@ export async function GET(request: Request) {
   const companyFilter = parseCompanyFilters({ companies, company });
   const companyWhere = buildCompanyWhere(companyFilter);
   const companySqlCondition = buildCompanySqlCondition(companyFilter);
+
+  // Resolve `levels` (canonical multi) vs `experienceLevel` (legacy single)
+  // into the canonical slug list. Empty list = no filter.
+  const levelFilters = parseLevelFilters({ levels, experienceLevel });
+  const levelsWhere = buildLevelsWhere(levelFilters);
+  const levelsSqlCondition = buildLevelsSqlCondition(levelFilters);
 
   // Note: legacy `?remote=true` URL param is parsed by the schema but
   // intentionally NOT applied as a filter. The `remote` toggle was removed
@@ -311,8 +372,8 @@ export async function GET(request: Request) {
       department: { contains: department, mode: "insensitive" as const },
     }),
     ...companyWhere,
-    // Slug-stored, slug-compared — no variant translation needed.
-    ...(experienceLevel && { experienceLevel }),
+    // Slug-stored, slug-compared — multi-select via IN(...) when ≥2 picked.
+    ...levelsWhere,
     ...(workMode && { workMode }),
   };
 
@@ -346,7 +407,7 @@ export async function GET(request: Request) {
     }
     if (department) savedConditions.push(Prisma.sql`LOWER(j."department") LIKE LOWER(${"%" + department + "%"})`);
     if (companySqlCondition) savedConditions.push(companySqlCondition);
-    if (experienceLevel) savedConditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
+    if (levelsSqlCondition) savedConditions.push(levelsSqlCondition);
     if (workMode) savedConditions.push(Prisma.sql`j."workMode" = ${workMode}`);
     if (query) {
       savedConditions.push(Prisma.sql`j."searchVector" @@ plainto_tsquery('english', ${query})`);
@@ -433,7 +494,7 @@ export async function GET(request: Request) {
       conditions.push(Prisma.sql`LOWER(j."department") LIKE LOWER(${"%" + department + "%"})`);
     }
     if (companySqlCondition) conditions.push(companySqlCondition);
-    if (experienceLevel) conditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
+    if (levelsSqlCondition) conditions.push(levelsSqlCondition);
     if (workMode) conditions.push(Prisma.sql`j."workMode" = ${workMode}`);
 
     const whereClause = Prisma.join(conditions, " AND ");
@@ -544,7 +605,7 @@ export async function GET(request: Request) {
       conditions.push(Prisma.sql`LOWER(j."department") LIKE LOWER(${"%" + department + "%"})`);
     }
     if (companySqlCondition) conditions.push(companySqlCondition);
-    if (experienceLevel) conditions.push(Prisma.sql`j."experienceLevel" = ${experienceLevel}`);
+    if (levelsSqlCondition) conditions.push(levelsSqlCondition);
     if (workMode) conditions.push(Prisma.sql`j."workMode" = ${workMode}`);
 
     const whereClause = Prisma.join(conditions, " AND ");

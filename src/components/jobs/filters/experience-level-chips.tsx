@@ -5,25 +5,51 @@ import {
   EXPERIENCE_LEVEL_OPTIONS,
   EXPERIENCE_LEVEL_LABELS,
 } from "@/lib/validations/jobs";
-import type { JobFacets } from "@/types";
+
+/**
+ * Experience-level chip group.
+ *
+ * Phase 2: multi-select. Each chip toggles independently. Empty array = no
+ * filter (renderer treats this as "any level"). Click an active chip to
+ * remove that level from the selection.
+ *
+ * Counts intentionally omitted from the chip label — the new design's chip
+ * row is dense and tight; facet counts surfaced inside the chips made the
+ * row read as data-heavy. Counts still appear in the dropdown filters
+ * (CompanyCombobox, etc.) where there's more room.
+ */
 
 interface ExperienceLevelChipsProps {
-  value: string | undefined;
-  onChange: (value: string | undefined) => void;
-  /** When set, renders a small uppercase label before the first chip. */
-  inlineLabel?: string;
-  facets?: JobFacets["experienceLevels"];
+  value: string[];
+  onChange: (next: string[]) => void;
   /** When true, chips do not wrap (caller is expected to provide overflow-x-auto). */
   nowrap?: boolean;
 }
 
+const CHIP_BASE =
+  "shrink-0 h-7 px-2.5 rounded-full text-[12px] font-medium transition-colors duration-150 " +
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender/40";
+
+const CHIP_INACTIVE =
+  "bg-white/[0.03] border border-border text-text-muted hover:border-border-strong hover:text-text";
+
+const CHIP_ACTIVE =
+  "bg-accent-lavender/10 border border-accent-lavender/25 text-accent-lavender";
+
 export function ExperienceLevelChips({
   value,
   onChange,
-  inlineLabel,
-  facets,
   nowrap,
 }: ExperienceLevelChipsProps) {
+  const selected = new Set(value);
+
+  const toggle = (level: string) => {
+    const next = selected.has(level)
+      ? value.filter((v) => v !== level)
+      : [...value, level];
+    onChange(next);
+  };
+
   return (
     <div
       className={cn(
@@ -31,36 +57,17 @@ export function ExperienceLevelChips({
         nowrap ? "flex-nowrap w-max" : "flex-wrap"
       )}
     >
-      {inlineLabel && (
-        <span className="text-xs uppercase tracking-wide text-zinc-500 mr-2 shrink-0">
-          {inlineLabel}
-        </span>
-      )}
       {EXPERIENCE_LEVEL_OPTIONS.map((level) => {
-        const isActive = value === level;
-        const count = facets?.find((f) => f.value === level)?.count;
-        // Click selected chip again to deselect (single-string state, not array).
-        const handleClick = () => onChange(isActive ? undefined : level);
+        const isActive = selected.has(level);
         return (
           <button
             key={level}
             type="button"
-            onClick={handleClick}
+            onClick={() => toggle(level)}
             aria-pressed={isActive}
-            className={cn(
-              "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all",
-              "focus:outline-none focus:ring-2 focus:ring-indigo-500/40",
-              isActive
-                ? "bg-indigo-500/10 border border-indigo-500/40 text-white"
-                : "bg-white/5 border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
-            )}
+            className={cn(CHIP_BASE, isActive ? CHIP_ACTIVE : CHIP_INACTIVE)}
           >
             {EXPERIENCE_LEVEL_LABELS[level]}
-            {typeof count === "number" && (
-              <span className="text-zinc-600 ml-1">
-                ({count.toLocaleString()})
-              </span>
-            )}
           </button>
         );
       })}

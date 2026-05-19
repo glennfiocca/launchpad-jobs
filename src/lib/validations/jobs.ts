@@ -58,7 +58,18 @@ export const jobsQuerySchema = z.object({
   companies: z.string().max(2000).optional(),
   remote: z.enum(["true", "false"]).optional(),
   employmentType: z.string().max(50).optional(),
+  /**
+   * Legacy singular experience-level filter — exact match on a single slug.
+   * @deprecated Use `levels` (comma-separated multi-select) instead. Kept
+   * for back-compat with bookmarked URLs and external integrations.
+   */
   experienceLevel: z.enum(EXPERIENCE_LEVEL_OPTIONS).optional(),
+  /**
+   * Multi-select experience-level filter. Comma-separated slugs from
+   * EXPERIENCE_LEVEL_OPTIONS. Empty or missing param = no filter.
+   * Browse Jobs Phase 2 introduced this in place of the singular field.
+   */
+  levels: z.string().max(200).optional(),
   workMode: z.enum(WORK_MODE_OPTIONS).optional(),
   datePosted: z.enum(DATE_POSTED_OPTIONS).default("any"),
   salaryMin: z.coerce.number().int().min(0).max(10_000_000).optional(),

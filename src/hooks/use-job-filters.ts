@@ -21,6 +21,24 @@ function parseCompaniesParam(params: URLSearchParams): string[] {
   return [];
 }
 
+// Parse the `levels` (plural, canonical, multi-select) or legacy `level`
+// (singular) query param into a deduped string[]. Phase 2 swapped the
+// singular UI for multi-select chips; legacy single-value URLs are
+// rewritten transparently.
+function parseLevelsParam(params: URLSearchParams): string[] {
+  const raw = params.get("levels");
+  if (raw) {
+    const list = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return Array.from(new Set(list));
+  }
+  const legacy = params.get("level");
+  if (legacy && legacy.trim()) return [legacy.trim()];
+  return [];
+}
+
 function parseFilters(params: URLSearchParams): JobFilters {
   const salMinRaw = params.get("salMin");
   const salMaxRaw = params.get("salMax");
@@ -41,7 +59,10 @@ function parseFilters(params: URLSearchParams): JobFilters {
     // for now the existing single-input shim writes [name] or [].
     companies: parseCompaniesParam(params),
     employmentType: params.get("type") ?? undefined,
-    experienceLevel: params.get("level") ?? undefined,
+    // Multi-select experience-level filter. Supports both:
+    //   ?levels=senior,staff   (canonical multi-select)
+    //   ?level=senior          (legacy singular — back-compat)
+    experienceLevels: parseLevelsParam(params),
     workMode,
     datePosted: (params.get("date") as DatePostedOption) ?? undefined,
     salaryMin: salMinRaw ? Number(salMinRaw) : undefined,
@@ -66,7 +87,11 @@ function filtersToParams(filters: JobFilters): URLSearchParams {
   // `remote` legacy boolean is no longer serialized — workMode covers it.
   // Old `?remote=true` URLs are read on parse and rewritten as `?mode=remote`.
   if (filters.employmentType) p.set("type", filters.employmentType);
-  if (filters.experienceLevel) p.set("level", filters.experienceLevel);
+  // Serialize as `?levels=A,B`. Singular `?level=` is no longer emitted —
+  // the API still reads it for legacy back-compat.
+  if (filters.experienceLevels.length > 0) {
+    p.set("levels", filters.experienceLevels.join(","));
+  }
   if (filters.workMode) p.set("mode", filters.workMode);
   if (filters.datePosted && filters.datePosted !== "any")
     p.set("date", filters.datePosted);
@@ -137,7 +162,7 @@ export function useJobFilters() {
     filters.department ||
     filters.companies.length > 0 ||
     filters.employmentType ||
-    filters.experienceLevel ||
+    filters.experienceLevels.length > 0 ||
     filters.workMode ||
     (filters.datePosted && filters.datePosted !== "any") ||
     filters.salaryMin !== undefined ||

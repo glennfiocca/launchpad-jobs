@@ -1,19 +1,55 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+/**
+ * JobBoard — Phase 3 of the Browse Jobs editorial redesign.
+ *
+ * The layout shell. This file owns:
+ *   - Window-level scroll (no nested overflow containers; the page is a
+ *     natural-document block per the dashboard pattern).
+ *   - The sticky filter shell — top control strip + filter card pinned
+ *     under the navbar at `top: var(--navbar-h)` with backdrop-blur.
+ *   - The two-pane grid — `1fr 560px` when a job is selected, `1fr` when
+ *     not, with a 250ms cubic-bezier `grid-template-columns` transition.
+ *   - The right pane's sticky positioning (desktop only). On mobile, the
+ *     detail/apply replaces the list as a full-screen overlay.
+ *   - The mobile filter sheet (Radix Dialog bottom-drawer).
+ *
+ * What this file does NOT own:
+ *   - JobCard / JobDetail / ApplyModal internals (Phases 4 + 5).
+ *   - Filter primitive styling (Phase 2 — `job-filters.tsx`).
+ *   - Top-strip styling (`./cockpit/top-control-strip.tsx`).
+ */
+
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
+
 import { JobFilters as FiltersBar } from "./job-filters";
 import { JobCard } from "./job-card";
 import { JobDetail } from "./job-detail";
-import { JobViewTabs } from "./job-view-tabs";
 import { EmptySavedState } from "./empty-saved-state";
+import { TopControlStrip } from "./cockpit/top-control-strip";
+import { MobileFilterSheet } from "./cockpit/mobile-filter-sheet";
+import { summarizeActiveFilters } from "./filters/active-filter-strip";
 import { useJobFilters } from "@/hooks/use-job-filters";
-import type { JobWithCompany, JobFacets, ApiResponse, ApplicationWithJob } from "@/types";
-import { Loader2 } from "lucide-react";
+import type {
+  ApiResponse,
+  ApplicationWithJob,
+  JobFacets,
+  JobWithCompany,
+} from "@/types";
 
 const LIMIT = 20;
+
+// Approximate height reservation for the sticky filter bar when computing
+// the right-pane sticky offset. The bar's true height varies (active-filter
+// strip toggles, chip wrap, etc.). A fixed reservation accepts a few pixels
+// of imperfection in exchange for not measuring with ResizeObserver — the
+// detail pane stays visibly pinned in all states, which is the goal.
+const STICKY_FILTER_RESERVE_PX = 200;
+const STICKY_BOTTOM_RESERVE_PX = 220;
 
 function jobMatchesUrlParam(job: JobWithCompany, param: string): boolean {
   if (job.id === param) return true;
@@ -39,9 +75,9 @@ export function JobBoard() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [facets, setFacets] = useState<JobFacets | undefined>();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const jobsRef = useRef<JobWithCompany[]>([]);
   jobsRef.current = jobs;
   const filtersRef = useRef(filters);
@@ -82,11 +118,7 @@ export function JobBoard() {
 
       // Mark fetch in-flight so the IntersectionObserver's `loadNextPage`
       // guard does not race-fire a page-2 append while a replace fetch is
-      // still loading. Without this, the loading-state render shrinks the
-      // list to a spinner, the sentinel pops into view, observer schedules
-      // setPage(2), and the resulting append fetch aborts the replace fetch
-      // — leaving `loading` stuck at true (the append's finally only clears
-      // `loadingMore`).
+      // still loading.
       isFetchingRef.current = true;
 
       if (replace) setLoading(true);
@@ -98,12 +130,10 @@ export function JobBoard() {
       if (f.locationState) params.set("locationState", f.locationState);
       if (!f.locationCity && f.location) params.set("location", f.location);
       if (f.department) params.set("department", f.department);
-      // Multi-select company filter — `companies=A,B`. /api/jobs accepts both
-      // this canonical form and the legacy `?company=` substring for back-compat.
+      // Multi-select company filter — `companies=A,B`.
       if (f.companies.length > 0) params.set("companies", f.companies.join(","));
       if (f.employmentType) params.set("employmentType", f.employmentType);
-      // Multi-select experience-level — `levels=A,B`. /api/jobs accepts both
-      // this canonical form and the legacy `?experienceLevel=` singular for back-compat.
+      // Multi-select experience-level filter — `levels=A,B`.
       if (f.experienceLevels.length > 0) params.set("levels", f.experienceLevels.join(","));
       if (f.workMode) params.set("workMode", f.workMode);
       if (f.datePosted && f.datePosted !== "any")
@@ -118,25 +148,18 @@ export function JobBoard() {
         const data: ApiResponse<JobWithCompany[]> = await res.json();
         // Stale-write guard: abort only kills the network leg, not an
         // already-buffered response body. If a newer fetch has taken over
-        // (`abortRef` no longer points at us), discard this result rather
-        // than stomp the newer fetch's jobs/total/facets.
+        // (`abortRef` no longer points at us), discard this result.
         if (abortRef.current !== controller) return;
         if (data.success && data.data) {
           const newTotal = data.meta?.total ?? 0;
           if (replace) {
             setJobs(data.data);
             hasAnimatedRef.current = false;
-            // End-of-list when the response didn't fill `total` AND we got no rows
-            // back. Belt-and-suspenders against APIs that report a stale total.
             hasMoreRef.current = data.data.length > 0 && data.data.length < newTotal;
           } else {
             setJobs((prev) => {
               const existingIds = new Set(prev.map((j) => j.id));
               const merged = [...prev, ...data.data!.filter((j) => !existingIds.has(j.id))];
-              // Defensive: if the page returned no NEW rows (empty page, or all
-              // duplicates after dedup), treat as end-of-list even if `total`
-              // claims otherwise. Prevents the IntersectionObserver from
-              // hammering loadNextPage when the API mis-reports the total.
               const grew = merged.length > prev.length;
               hasMoreRef.current = grew && merged.length < newTotal;
               return merged;
@@ -146,15 +169,9 @@ export function JobBoard() {
           if (data.meta?.facets) setFacets(data.meta.facets);
         }
       } catch (err) {
-        // Aborted by a newer fetch — that fetch now owns the loading flags.
-        // We must NOT touch isFetchingRef/loading/loadingMore here, otherwise
-        // we would clobber the in-flight request's state.
         if (err instanceof DOMException && err.name === "AbortError") return;
         // non-fatal: leave previous list intact
       } finally {
-        // Only the controller that is still current is allowed to clear flags.
-        // An aborted older controller has already short-circuited above; this
-        // guard is defense-in-depth for the success path arriving after abort.
         if (abortRef.current === controller) {
           isFetchingRef.current = false;
           if (replace) setLoading(false);
@@ -166,17 +183,19 @@ export function JobBoard() {
     [recheckSentinel]
   );
 
-  // Observer set up once
+  // Observer set up once. Root is the VIEWPORT (`null`) now that scroll
+  // is window-level — the prior `root: listRef.current` no longer applies.
+  // Wider `rootMargin` so paging triggers a screen earlier and the user
+  // doesn't hit a visible spinner on quick scrolls.
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    const list = listRef.current;
-    if (!sentinel || !list) return;
+    if (!sentinel) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) loadNextPage();
       },
-      { root: list, rootMargin: "300px" }
+      { root: null, rootMargin: "0px 0px 600px 0px" }
     );
 
     observer.observe(sentinel);
@@ -187,18 +206,15 @@ export function JobBoard() {
     };
   }, [loadNextPage]);
 
-  // Filter change: reset to page 1 and fetch fresh.
-  // Use a stable string key derived from searchParams minus the ?job= param so
-  // that selecting/deselecting a job (which only mutates ?job=) does not trigger
-  // a spurious page-1 reset and list replacement.
+  // Filter change: reset to page 1 and fetch fresh. Use a key derived from
+  // searchParams minus the ?job= param so selecting/deselecting a job does
+  // not trigger a spurious page-1 reset.
   const filterKey = new URLSearchParams(
     [...searchParams.entries()].filter(([k]) => k !== "job")
   ).toString();
 
   useEffect(() => {
     isFetchingRef.current = false;
-    // Clear any lingering bottom-spinner state from a prior in-flight
-    // append — the new full-list fetch's centered spinner takes over.
     setLoadingMore(false);
     setPage(1);
     fetchJobs(filtersRef.current, 1, true);
@@ -206,7 +222,6 @@ export function JobBoard() {
   }, [filterKey]);
 
   // Page increment from infinite scroll: append next page
-  // Use filtersRef to avoid stale closure — filters may change between renders
   useEffect(() => {
     if (page === 1) return;
     fetchJobs(filtersRef.current, page, false);
@@ -268,30 +283,18 @@ export function JobBoard() {
     (jobId: string, saved: boolean) => {
       setSavedJobIds((prev) => {
         const next = new Set(prev);
-        if (saved) {
-          next.add(jobId);
-        } else {
-          next.delete(jobId);
-        }
+        if (saved) next.add(jobId);
+        else next.delete(jobId);
         return next;
       });
 
       // On the Saved view, an un-save makes the row no longer belong here.
-      // Drop it from the rendered list immediately and adjust the count so
-      // the user sees the same numbers the next page-load would.
       if (!saved && filtersRef.current.saved) {
         setJobs((prev) => prev.filter((j) => j.id !== jobId));
         setTotal((t) => Math.max(0, t - 1));
       }
     },
     []
-  );
-
-  const handleViewChange = useCallback(
-    (next: "all" | "saved") => {
-      updateFilters({ saved: next === "saved" ? true : undefined });
-    },
-    [updateFilters]
   );
 
   // Select job from loaded list when URL param matches
@@ -334,7 +337,6 @@ export function JobBoard() {
     (job: JobWithCompany) => {
       setSelected(job);
       const slug = job.publicJobId ?? job.id;
-      // Preserve all active filter params — only set the job param
       const params = new URLSearchParams(searchParams.toString());
       params.set("job", encodeURIComponent(slug));
       router.replace(`/jobs?${params}`, { scroll: false });
@@ -344,127 +346,201 @@ export function JobBoard() {
 
   const closeDetail = useCallback(() => {
     setSelected(null);
-    // Preserve all active filter params — only remove the job param
     const params = new URLSearchParams(searchParams.toString());
     params.delete("job");
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
   }, [router, searchParams]);
 
-  return (
-    <div className="h-full flex gap-6">
-      {/* Left: filters + list */}
-      <div
-        className={`flex-1 min-w-0 min-h-0 flex flex-col ${
-          selected ? "hidden lg:flex" : "flex"
-        }`}
-      >
-        <div className="mb-4 flex justify-center md:justify-start">
-          <JobViewTabs
-            active={onSavedView ? "saved" : "all"}
-            savedCount={isAuthenticated ? savedJobIds.size : null}
-            isAuthenticated={isAuthenticated}
-            onChange={handleViewChange}
-          />
-        </div>
+  const handleApplied = useCallback((jobId: string) => {
+    setAppliedJobIds((prev) => new Set([...prev, jobId]));
+  }, []);
 
-        <FiltersBar
+  // Active-filter count — drives the mobile Filters trigger badge AND the
+  // sheet's "Clear all" disabled state. Reuses the canonical source from
+  // the active-filter-strip module.
+  const activeFilterCount = useMemo(
+    () => summarizeActiveFilters(filters, updateFilters).length,
+    [filters, updateFilters]
+  );
+
+  const showSavedEmptyState =
+    !loading && jobs.length === 0 && onSavedView && isAuthenticated;
+  const showNoResults =
+    !loading && jobs.length === 0 && !showSavedEmptyState;
+  const showList = !loading && jobs.length > 0;
+
+  return (
+    <>
+      {/* ── Sticky filter shell ────────────────────────────────────────
+          Pinned under the navbar. Backdrop-blurred so list rows scrolling
+          beneath are obscured cleanly. The negative `-mx-7` + `px-7` lets
+          the backdrop bleed to the page edges while content stays in the
+          1480-wide column. */}
+      <div
+        className="sticky z-30 -mx-7 px-7 pt-3 pb-3 bg-bg/92 backdrop-blur-xl border-b border-border"
+        style={{ top: "var(--navbar-h)" }}
+      >
+        <TopControlStrip
+          isAuthenticated={isAuthenticated}
+          savedCount={isAuthenticated ? savedJobIds.size : null}
+          currentCount={jobs.length}
+          total={total}
           filters={filters}
-          facets={facets}
           onChange={updateFilters}
-          onClearAll={clearFilters}
-          className="mb-4"
+          onOpenMobileFilters={() => setMobileFiltersOpen(true)}
+          activeFilterCount={activeFilterCount}
         />
 
-        <div
-          ref={listRef}
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-        >
-          {loading ? (
+        {/* Desktop: inline filter card. Mobile: hidden — lives in the sheet. */}
+        <div className="mt-3 hidden lg:block">
+          <FiltersBar
+            filters={filters}
+            facets={facets}
+            onChange={updateFilters}
+            onClearAll={clearFilters}
+          />
+        </div>
+      </div>
+
+      {/* ── Two-pane grid ─────────────────────────────────────────────
+          `grid-template-columns` transitions between `1fr` and `1fr 560px`
+          when the detail pane opens / closes. Right pane is hidden on
+          mobile; a full-screen overlay handles that case below. */}
+      <div
+        className="mt-4 grid gap-[18px] items-start transition-[grid-template-columns] duration-[250ms]"
+        style={{
+          gridTemplateColumns: selected ? "1fr 560px" : "1fr",
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      >
+        {/* LEFT — list */}
+        <div className="min-w-0">
+          {loading && (
             <div className="flex items-center justify-center py-24">
-              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+              <Loader2 className="w-6 h-6 text-accent animate-spin" />
             </div>
-          ) : jobs.length === 0 ? (
-            onSavedView && isAuthenticated ? (
-              <EmptySavedState onBrowseAll={() => handleViewChange("all")} />
-            ) : (
-              <div className="text-center py-24">
-                <p className="text-slate-400 text-lg">No jobs found</p>
-                <p className="text-slate-400 text-sm mt-1">
-                  Try adjusting your filters
-                </p>
-              </div>
-            )
-          ) : (
-            <>
-              <p className="text-sm text-slate-500 mb-3">
-                {total.toLocaleString()} jobs found
-              </p>
-              <div className="space-y-2">
-                {jobs.map((job, index) => {
-                  const shouldAnimate =
-                    !hasAnimatedRef.current && index < 10;
-                  if (
-                    index === jobs.length - 1 &&
-                    !hasAnimatedRef.current
-                  ) {
-                    hasAnimatedRef.current = true;
-                  }
-                  return (
-                    <motion.div
-                      key={job.id}
-                      initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.3,
-                        ease: "easeOut",
-                        delay: shouldAnimate
-                          ? Math.min(index * 0.04, 0.4)
-                          : 0,
-                      }}
-                    >
-                      <JobCard
-                        job={job}
-                        selected={selected?.id === job.id}
-                        onClick={() => selectJob(job)}
-                        isSaved={savedJobIds.has(job.id)}
-                        onSaveToggle={handleSaveToggle}
-                      />
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </>
           )}
 
-          <div ref={sentinelRef} className="py-4 flex justify-center">
+          {showSavedEmptyState && (
+            <EmptySavedState
+              onBrowseAll={() => updateFilters({ saved: undefined })}
+            />
+          )}
+
+          {showNoResults && (
+            <div className="text-center py-24">
+              <p className="text-text-muted text-lg">No jobs found</p>
+              <p className="text-text-dim text-sm mt-1">
+                Try adjusting your filters
+              </p>
+            </div>
+          )}
+
+          {showList && (
+            <div className="space-y-2">
+              {jobs.map((job, index) => {
+                const shouldAnimate =
+                  !hasAnimatedRef.current && index < 10;
+                if (
+                  index === jobs.length - 1 &&
+                  !hasAnimatedRef.current
+                ) {
+                  hasAnimatedRef.current = true;
+                }
+                return (
+                  <motion.div
+                    key={job.id}
+                    initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.3,
+                      ease: "easeOut",
+                      delay: shouldAnimate
+                        ? Math.min(index * 0.04, 0.4)
+                        : 0,
+                    }}
+                  >
+                    <JobCard
+                      job={job}
+                      selected={selected?.id === job.id}
+                      onClick={() => selectJob(job)}
+                      isSaved={savedJobIds.has(job.id)}
+                      onSaveToggle={handleSaveToggle}
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Sentinel + bottom states */}
+          <div ref={sentinelRef} className="py-6 flex justify-center">
             {!loading && loadingMore && (
-              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+              <Loader2 className="w-5 h-5 text-accent animate-spin" />
             )}
             {!loading && !loadingMore && !hasMore && jobs.length > 0 && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-text-dim">
                 All {total.toLocaleString()} jobs loaded
               </p>
             )}
           </div>
         </div>
+
+        {/* RIGHT — detail pane (desktop only). Sticky-pinned beneath the
+            filter shell using a generous fixed offset; see comment on
+            STICKY_FILTER_RESERVE_PX above for rationale. */}
+        {selected && (
+          <aside
+            className="hidden lg:block w-[560px] sticky"
+            style={{
+              top: `calc(var(--navbar-h) + ${STICKY_FILTER_RESERVE_PX}px)`,
+              maxHeight: `calc(100vh - var(--navbar-h) - ${STICKY_BOTTOM_RESERVE_PX}px)`,
+              minHeight: 480,
+            }}
+          >
+            <JobDetail
+              job={selected}
+              hasPriorApplication={appliedJobIds.has(selected.id)}
+              onClose={closeDetail}
+              isSaved={savedJobIds.has(selected.id)}
+              onSaveToggle={handleSaveToggle}
+              onApplied={handleApplied}
+            />
+          </aside>
+        )}
       </div>
 
-      {/* Right: job detail */}
+      {/* ── Mobile detail/apply — full-screen replace ─────────────────
+          On `< lg`, the right pane doesn't render in-grid. Instead the
+          selected job's detail covers the viewport. Phase 5 will swap
+          the inner JobDetail's apply modal for the inline apply pane;
+          this overlay is the dock the pane will live in. */}
       {selected && (
-        <div className="w-full lg:w-[560px] shrink-0 min-h-0 h-full">
+        <div className="lg:hidden fixed inset-0 z-40 bg-bg overflow-y-auto">
           <JobDetail
             job={selected}
             hasPriorApplication={appliedJobIds.has(selected.id)}
             onClose={closeDetail}
             isSaved={savedJobIds.has(selected.id)}
             onSaveToggle={handleSaveToggle}
-            onApplied={(jobId) => {
-              setAppliedJobIds((prev) => new Set([...prev, jobId]));
-            }}
+            onApplied={handleApplied}
           />
         </div>
       )}
-    </div>
+
+      {/* ── Mobile filter sheet ───────────────────────────────────────
+          Bottom drawer wrapping the same FiltersBar. Trigger lives in
+          TopControlStrip (passes onOpenMobileFilters). */}
+      <MobileFilterSheet
+        open={mobileFiltersOpen}
+        onOpenChange={setMobileFiltersOpen}
+        filters={filters}
+        facets={facets}
+        onChange={updateFilters}
+        onClearAll={clearFilters}
+        activeFilterCount={activeFilterCount}
+      />
+    </>
   );
 }

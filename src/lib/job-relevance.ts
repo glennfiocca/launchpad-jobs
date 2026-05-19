@@ -21,6 +21,22 @@ const TARGET_ROLE_BOOST_PER_MATCH = 15;
 const TARGET_ROLE_BOOST_CAP = 30;
 const EMPLOYMENT_TYPE_BOOST = 10;
 
+// Per-signal max contributions — kept in sync with buildProfileScoreParts.
+// Used by computeMaxRawScore to derive the per-request normalization ceiling
+// (so /api/jobs can map raw scores → 0–100). Centralized here so the score
+// expression and the ceiling never drift.
+const SIGNAL_MAX = {
+  city: 25,
+  state: 10,
+  openToRemote: 20,
+  openToOnsite: 10,
+  salaryMin: 10,
+  salaryMax: 10,
+  targetRoles: TARGET_ROLE_BOOST_CAP,
+  employmentType: EMPLOYMENT_TYPE_BOOST,
+  recency: 15,
+} as const;
+
 /** Fallback ORDER BY when no profile signals are available. */
 const RECENCY_FALLBACK = Prisma.sql`j."createdAt" DESC NULLS LAST`;
 
@@ -143,6 +159,59 @@ export function buildRelevanceOrder(profile: RelevanceProfile): Prisma.Sql {
   const scoreExpr = Prisma.join(parts, " + ");
 
   return Prisma.sql`(${scoreExpr}) DESC, j."createdAt" DESC NULLS LAST`;
+}
+
+/**
+ * Build the raw SQL score expression usable in SELECT (not just ORDER BY).
+ *
+ * Returns a Prisma.Sql fragment that evaluates to the per-job raw score
+ * (same expression powering buildRelevanceOrder). The route uses this to
+ * select `score` alongside the row IDs so it can attach a normalized
+ * matchScore (0–100) to each result.
+ *
+ * Falls back to literal `0` when the profile has no scoring signals —
+ * matches buildRelevanceOrder's recency-fallback behavior (the caller is
+ * expected to skip the SELECT entirely in that case, but emitting a
+ * constant keeps the function total).
+ */
+export function buildRelevanceScoreSql(profile: RelevanceProfile): Prisma.Sql {
+  if (!hasProfileSignals(profile)) {
+    return Prisma.sql`0`;
+  }
+  const parts = buildProfileScoreParts(profile);
+  return Prisma.sql`(${Prisma.join(parts, " + ")})`;
+}
+
+/**
+ * Compute the maximum possible raw score for a given profile. Used by the
+ * API to normalize per-row scores into a 0–100 integer.
+ *
+ * Only signals the profile actually has are summed — a profile with no
+ * salary range doesn't reserve the salary slots, so a job that matches
+ * everything else still tops out at 100. Returns 0 when no signals are
+ * present (caller treats this as "no score available" and returns
+ * matchScore = undefined).
+ *
+ * Mutually-exclusive note: openToRemote (+20) and openToOnsite (+10) both
+ * fire only when a job matches their respective `remote` value, so any
+ * given job can score at most one of the two. We add the larger (20) when
+ * either flag is on — that's the realistic per-row ceiling.
+ */
+export function computeMaxRawScore(profile: RelevanceProfile): number {
+  let max = 0;
+  if (profile.locationCity) max += SIGNAL_MAX.city;
+  if (profile.locationState) max += SIGNAL_MAX.state;
+  if (profile.openToRemote || profile.openToOnsite) {
+    // Take the larger of the two — any single job only fires one branch.
+    max += profile.openToRemote ? SIGNAL_MAX.openToRemote : SIGNAL_MAX.openToOnsite;
+  }
+  if (profile.desiredSalaryMin !== null) max += SIGNAL_MAX.salaryMin;
+  if (profile.desiredSalaryMax !== null) max += SIGNAL_MAX.salaryMax;
+  if (profile.targetRoles.length > 0) max += SIGNAL_MAX.targetRoles;
+  if (profile.desiredEmploymentTypes.length > 0) max += SIGNAL_MAX.employmentType;
+  // Recency boost is always in the expression — see buildProfileScoreParts.
+  max += SIGNAL_MAX.recency;
+  return max;
 }
 
 /**

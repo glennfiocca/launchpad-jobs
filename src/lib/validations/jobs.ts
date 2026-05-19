@@ -42,7 +42,20 @@ export const jobsQuerySchema = z.object({
   locationCity: z.string().max(200).optional(),  // structured city
   locationState: z.string().max(50).optional(),  // structured state abbrev
   department: z.string().max(200).optional(),
+  /**
+   * Legacy singular company filter — substring LIKE on Company.name.
+   * @deprecated Use `companies` (comma-separated, exact-match IN) instead.
+   * Kept for back-compat with bookmarked URLs and external integrations.
+   * Browse Jobs Phase 1 introduces the multi-select `companies` field;
+   * Phase 2 stops emitting `?company=` from internal callers.
+   */
   company: z.string().max(200).optional(),
+  /**
+   * Multi-select company filter. Comma-separated company NAMES (matched
+   * verbatim against Company.name via WHERE name IN (...)). Max 20 names
+   * to bound the IN list. Empty or missing param = no filter.
+   */
+  companies: z.string().max(2000).optional(),
   remote: z.enum(["true", "false"]).optional(),
   employmentType: z.string().max(50).optional(),
   experienceLevel: z.enum(EXPERIENCE_LEVEL_OPTIONS).optional(),

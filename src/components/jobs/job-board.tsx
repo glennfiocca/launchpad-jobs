@@ -15,9 +15,21 @@
  *   - The mobile filter sheet (Radix Dialog bottom-drawer).
  *
  * What this file does NOT own:
- *   - JobCard / JobDetail / ApplyModal internals (Phases 4 + 5).
+ *   - JobCard / JobDetail / ApplyPane / AppliedCelebration internals
+ *     (Phases 4 + 5 — `./job-card.tsx`, `./job-detail.tsx`, and the
+ *     `./cockpit/*` modules).
  *   - Filter primitive styling (Phase 2 — `job-filters.tsx`).
  *   - Top-strip styling (`./cockpit/top-control-strip.tsx`).
+ *
+ * Phase 5 added:
+ *   - `applyingJobId` + `celebratingApplicationId` state. The right
+ *     pane is a ternary across {detail, apply, celebration}.
+ *   - Session-cached `profile` (one fetch per session). The apply
+ *     question hook reads it without a refetch on each open.
+ *   - `creditsRemaining` refreshed after each successful application.
+ *   - Silent close on `selected?.id` change — switching jobs while
+ *     the apply pane is open just drops the pane and shows the new
+ *     detail.
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
@@ -32,14 +44,19 @@ import { JobDetail } from "./job-detail";
 import { EmptySavedState } from "./empty-saved-state";
 import { TopControlStrip } from "./cockpit/top-control-strip";
 import { MobileFilterSheet } from "./cockpit/mobile-filter-sheet";
+import { ApplyPane } from "./cockpit/apply-pane";
+import { AppliedCelebration } from "./cockpit/applied-celebration";
+import { useApplyQuestions } from "./cockpit/use-apply-questions";
 import { summarizeActiveFilters } from "./filters/active-filter-strip";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import type {
   ApiResponse,
   ApplicationWithJob,
+  CreditStatus,
   JobFacets,
   JobWithCompany,
 } from "@/types";
+import type { UserProfile } from "@prisma/client";
 
 const LIMIT = 20;
 
@@ -76,6 +93,24 @@ export function JobBoard() {
   const [page, setPage] = useState(1);
   const [facets, setFacets] = useState<JobFacets | undefined>();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Phase 5 — apply flow state lifted from JobDetail. Three exclusive
+  // right-pane states drive the ternary below:
+  //   1. celebratingApplicationId set  → <AppliedCelebration>
+  //   2. applyingJobId === selected.id → <ApplyPane>
+  //   3. otherwise                     → <JobDetail>
+  const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
+  const [celebratingApplicationId, setCelebratingApplicationId] = useState<
+    string | null
+  >(null);
+
+  // Profile fetched once per session and reused across every apply
+  // open (replaces the legacy modal's per-mount fetch). Lives at the
+  // board level so even the question-fetch hook can read it cheaply.
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [creditsRemaining, setCreditsRemaining] = useState<number | undefined>(
+    undefined,
+  );
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const jobsRef = useRef<JobWithCompany[]>([]);
@@ -279,6 +314,68 @@ export function JobBoard() {
     return () => { cancelled = true; };
   }, [session?.user?.id, sessionStatus]);
 
+  // Profile load — single fetch per session. We don't re-fetch on
+  // every apply open; if the user updates their profile in another
+  // tab, this stale copy is acceptable (the server still validates).
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !session?.user?.id) {
+      setProfile(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile");
+        const data = (await res.json()) as ApiResponse<UserProfile | null>;
+        if (!cancelled && data.success && data.data) setProfile(data.data);
+      } catch {
+        // non-fatal: ApplyPane handles the null-profile case by showing
+        // a guarded error inside the pane.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, sessionStatus]);
+
+  // Credits-remaining for the apply pane footer. Cheap GET, refreshed
+  // on each successful application so the count stays current.
+  const refreshCredits = useCallback(() => {
+    if (sessionStatus !== "authenticated") return;
+    (async () => {
+      try {
+        const res = await fetch("/api/billing/status");
+        const data = (await res.json()) as ApiResponse<CreditStatus>;
+        if (data.success && data.data) {
+          setCreditsRemaining(data.data.creditsRemaining);
+        }
+      } catch {
+        // non-fatal: footer hides the count if undefined.
+      }
+    })();
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    refreshCredits();
+  }, [refreshCredits]);
+
+  // Silent close: switching jobs mid-apply clears the apply/celebration
+  // overlays so the new selection's detail pane renders cleanly. No
+  // "unsaved answers?" prompt per the locked spec.
+  useEffect(() => {
+    setApplyingJobId(null);
+    setCelebratingApplicationId(null);
+  }, [selected?.id]);
+
+  // Drive the question-fetch hook from the apply state. Returns idle
+  // (and skips the network call) whenever the apply pane is closed.
+  const applyingJob = useMemo(
+    () =>
+      applyingJobId && selected?.id === applyingJobId ? selected : null,
+    [applyingJobId, selected],
+  );
+  const questionsState = useApplyQuestions(applyingJob?.id ?? null, profile);
+
   const handleSaveToggle = useCallback(
     (jobId: string, saved: boolean) => {
       setSavedJobIds((prev) => {
@@ -352,9 +449,99 @@ export function JobBoard() {
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
   }, [router, searchParams]);
 
-  const handleApplied = useCallback((jobId: string) => {
-    setAppliedJobIds((prev) => new Set([...prev, jobId]));
+  const handleApplied = useCallback(
+    (jobId: string, applicationId: string) => {
+      setAppliedJobIds((prev) => new Set([...prev, jobId]));
+      setApplyingJobId(null);
+      setCelebratingApplicationId(applicationId);
+      refreshCredits();
+    },
+    [refreshCredits],
+  );
+
+  const handleContinueBrowsing = useCallback(() => {
+    setCelebratingApplicationId(null);
+    setApplyingJobId(null);
+    // `selected` stays set — the user returns to the applied detail.
   }, []);
+
+  /**
+   * Renders the right-pane content. Extracted so the desktop sticky
+   * `<aside>` and the mobile full-screen overlay can share the same
+   * three-way ternary without code duplication.
+   */
+  const renderRightPane = useCallback(
+    (job: JobWithCompany) => {
+      if (celebratingApplicationId) {
+        return (
+          <AppliedCelebration
+            job={job}
+            applicationId={celebratingApplicationId}
+            onContinue={handleContinueBrowsing}
+          />
+        );
+      }
+      if (applyingJobId === job.id) {
+        // Show a holding spinner while questions are being fetched —
+        // we need the matcher result before we can render the form.
+        if (!profile || questionsState.phase !== "ready") {
+          return (
+            <div className="bg-bg-elev border border-white/[0.06] rounded-[14px] h-full flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-accent-lavender animate-spin" />
+            </div>
+          );
+        }
+        if (questionsState.error) {
+          return (
+            <div className="bg-bg-elev border border-white/[0.06] rounded-[14px] h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-sm text-red-400">{questionsState.error}</p>
+              <button
+                type="button"
+                onClick={() => setApplyingJobId(null)}
+                className="text-xs text-text-muted hover:text-text underline-offset-2 hover:underline"
+              >
+                Close
+              </button>
+            </div>
+          );
+        }
+        return (
+          <ApplyPane
+            job={job}
+            profile={profile}
+            totalQuestions={questionsState.questions.length}
+            unanswered={questionsState.unanswered}
+            creditsRemaining={creditsRemaining}
+            onClose={() => setApplyingJobId(null)}
+            onApplied={(appId) => handleApplied(job.id, appId)}
+          />
+        );
+      }
+      return (
+        <JobDetail
+          job={job}
+          hasPriorApplication={appliedJobIds.has(job.id)}
+          onClose={closeDetail}
+          isSaved={savedJobIds.has(job.id)}
+          onSaveToggle={handleSaveToggle}
+          onRequestApply={() => setApplyingJobId(job.id)}
+        />
+      );
+    },
+    [
+      celebratingApplicationId,
+      applyingJobId,
+      profile,
+      questionsState,
+      creditsRemaining,
+      appliedJobIds,
+      savedJobIds,
+      handleApplied,
+      handleContinueBrowsing,
+      closeDetail,
+      handleSaveToggle,
+    ],
+  );
 
   // Active-filter count — drives the mobile Filters trigger badge AND the
   // sheet's "Clear all" disabled state. Reuses the canonical source from
@@ -487,9 +674,10 @@ export function JobBoard() {
           </div>
         </div>
 
-        {/* RIGHT — detail pane (desktop only). Sticky-pinned beneath the
-            filter shell using a generous fixed offset; see comment on
-            STICKY_FILTER_RESERVE_PX above for rationale. */}
+        {/* RIGHT — detail / apply / celebration. Sticky-pinned beneath
+            the filter shell using a generous fixed offset; see comment
+            on STICKY_FILTER_RESERVE_PX above for rationale. The actual
+            pane choice is delegated to `renderRightPane`. */}
         {selected && (
           <aside
             className="hidden lg:block w-[560px] sticky"
@@ -499,33 +687,17 @@ export function JobBoard() {
               minHeight: 480,
             }}
           >
-            <JobDetail
-              job={selected}
-              hasPriorApplication={appliedJobIds.has(selected.id)}
-              onClose={closeDetail}
-              isSaved={savedJobIds.has(selected.id)}
-              onSaveToggle={handleSaveToggle}
-              onApplied={handleApplied}
-            />
+            {renderRightPane(selected)}
           </aside>
         )}
       </div>
 
-      {/* ── Mobile detail/apply — full-screen replace ─────────────────
+      {/* ── Mobile detail / apply / celebration — full-screen replace ─
           On `< lg`, the right pane doesn't render in-grid. Instead the
-          selected job's detail covers the viewport. Phase 5 will swap
-          the inner JobDetail's apply modal for the inline apply pane;
-          this overlay is the dock the pane will live in. */}
+          same three-way ternary lives inside a viewport-cover overlay. */}
       {selected && (
         <div className="lg:hidden fixed inset-0 z-40 bg-bg overflow-y-auto">
-          <JobDetail
-            job={selected}
-            hasPriorApplication={appliedJobIds.has(selected.id)}
-            onClose={closeDetail}
-            isSaved={savedJobIds.has(selected.id)}
-            onSaveToggle={handleSaveToggle}
-            onApplied={handleApplied}
-          />
+          <div className="min-h-full">{renderRightPane(selected)}</div>
         </div>
       )}
 

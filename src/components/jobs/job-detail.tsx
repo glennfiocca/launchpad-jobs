@@ -18,8 +18,10 @@
  *  - Velocity cell in the 2×2 stats grid renders `+{N}/wk` when defined and
  *    `—` (em-dash) when undefined.
  *  - "View original listing" link is preserved (uses `job.absoluteUrl`).
- *  - Apply button still triggers the existing `ApplyModal` — Phase 5 will
- *    replace it with an inline `ApplyPane`. Intermediate-state by design.
+ *  - Apply button no longer owns its own modal. Phase 5 lifted the apply
+ *    flow to `<JobBoard>`, which renders one of {detail, apply pane,
+ *    celebration} in the right column. Clicking Apply here calls
+ *    `onRequestApply()` to ask the parent to swap us out.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -37,7 +39,6 @@ import {
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 import { sanitizeEmployerJobHtml } from "@/lib/sanitize-job-html";
-import { ApplyModal } from "@/components/jobs/apply-modal";
 import { CompanyLogo } from "@/components/company-logo";
 import { SaveButton } from "@/components/jobs/save-button";
 import { ReportButton } from "@/components/jobs/report-button";
@@ -56,7 +57,10 @@ interface JobDetailProps {
   onClose: () => void;
   isSaved?: boolean;
   onSaveToggle?: (jobId: string, saved: boolean) => void;
-  onApplied?: (jobId: string) => void;
+  /** Asks the parent to swap this pane for the inline `<ApplyPane>`.
+   *  When undefined, the Apply CTA is disabled — kept defensively so
+   *  the component still renders if a caller hasn't wired the flow. */
+  onRequestApply?: () => void;
 }
 
 const ICON_BTN_BASE =
@@ -77,7 +81,7 @@ export function JobDetail({
   onClose,
   isSaved = false,
   onSaveToggle,
-  onApplied,
+  onRequestApply,
 }: JobDetailProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { data: session } = useSession();
@@ -130,22 +134,6 @@ export function JobDetail({
     };
   }, [job.id, job.publicJobId, session?.user?.id]);
 
-  // Per-job apply state. We avoid the old setState-in-effect pattern (which
-  // caused the pre-existing lint error) by tracking the previous `job.id` in
-  // state and resetting inline during render when it changes — React's
-  // recommended pattern for "adjusting state when props change". See
-  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  const [applied, setApplied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [lastJobId, setLastJobId] = useState(job.id);
-  if (lastJobId !== job.id) {
-    setLastJobId(job.id);
-    setApplied(false);
-    setError(null);
-    setShowModal(false);
-  }
-
   const decodedContent = useMemo(
     () =>
       job.content
@@ -155,7 +143,7 @@ export function JobDetail({
   );
 
   const hasMatch = typeof job.matchScore === "number";
-  const isApplyDisabled = applied || hasPriorApplication;
+  const isApplyDisabled = hasPriorApplication || !onRequestApply;
   const showTldr = Boolean(job.summary);
 
   return (
@@ -257,42 +245,31 @@ export function JobDetail({
 
         {/* Apply zone */}
         <div className="mt-4">
-          {applied ? (
-            <div className="flex items-center gap-2.5 px-4 py-3.5 rounded-[12px] bg-[rgba(99,102,241,0.08)] border border-[rgba(99,102,241,0.25)] text-accent-light font-display font-medium text-[13.5px]">
-              <Zap className="w-4 h-4" />
-              Applied · tracking in your pipeline
-            </div>
-          ) : session && hasPriorApplication ? (
+          {session && hasPriorApplication ? (
             <div className="space-y-2">
-              <button
-                type="button"
-                disabled
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-[12px] bg-white/[0.04] text-text-dim font-display font-semibold text-[14.5px] cursor-not-allowed border border-white/[0.08]"
-              >
+              <div className="flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-[12px] bg-[rgba(99,102,241,0.08)] border border-[rgba(99,102,241,0.25)] text-accent-light font-display font-medium text-[13.5px]">
                 <Zap className="w-4 h-4" />
-                One-click apply
-              </button>
+                Applied · tracking in your pipeline
+              </div>
               <p className="text-xs text-text-dim text-center">
                 You cannot re-apply to this job once an application exists.
               </p>
             </div>
           ) : session ? (
-            <div className="space-y-2">
-              {error && <p className="text-sm text-red-400">{error}</p>}
-              <button
-                type="button"
-                onClick={() => setShowModal(true)}
-                disabled={isApplyDisabled}
-                className={cn(
-                  "w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-[12px] font-display font-semibold text-[14.5px] transition-transform active:scale-[0.985]",
-                  "text-bg bg-gradient-to-b from-[#f5f4f1] to-[#e7e5e0]",
-                  "shadow-[0_8px_24px_-8px_rgba(99,102,241,0.4),inset_0_1px_0_rgba(255,255,255,0.6)]",
-                )}
-              >
-                <Zap className="w-4 h-4" />
-                One-click apply
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => onRequestApply?.()}
+              disabled={isApplyDisabled}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-[12px] font-display font-semibold text-[14.5px] transition-transform active:scale-[0.985]",
+                "text-bg bg-gradient-to-b from-[#f5f4f1] to-[#e7e5e0]",
+                "shadow-[0_8px_24px_-8px_rgba(99,102,241,0.4),inset_0_1px_0_rgba(255,255,255,0.6)]",
+                "disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100",
+              )}
+            >
+              <Zap className="w-4 h-4" />
+              One-click apply
+            </button>
           ) : (
             <Link
               href="/auth/signin"
@@ -300,19 +277,6 @@ export function JobDetail({
             >
               Sign in to apply
             </Link>
-          )}
-
-          {showModal && (
-            <ApplyModal
-              job={job}
-              onClose={() => setShowModal(false)}
-              onApplied={(_applicationId, warning) => {
-                setShowModal(false);
-                setApplied(true);
-                onApplied?.(job.id);
-                if (warning) setError(warning);
-              }}
-            />
           )}
         </div>
       </div>

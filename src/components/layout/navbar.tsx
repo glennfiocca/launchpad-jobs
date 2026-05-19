@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { PipelineLogo } from "@/components/brand/PipelineLogo";
 import { CreditsBadge } from "@/components/billing/credits-badge";
 import { ReferBadge } from "@/components/billing/refer-badge";
 import { UpgradePill } from "@/components/layout/upgrade-pill";
@@ -80,13 +80,21 @@ export function Navbar() {
       className="sticky top-0 z-50 bg-bg/[0.82] backdrop-blur-[20px] border-b border-white/[0.06]"
       aria-label="Primary"
     >
-      <div className="relative w-full px-7 py-[18px] flex items-center justify-between gap-6">
-        {/* Logo — flush left. */}
+      <div className="relative w-full px-7 py-[14px] flex items-center justify-between gap-6">
+        {/* Logo — flush left. Intrinsic 1280x340 (~3.76:1); rendered height
+            driven by Tailwind, width auto-scales to preserve aspect. */}
         <Link
           href="/"
           className="flex items-center shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
-          <PipelineLogo aria-label="Pipeline" className="h-11 md:h-16 w-auto shrink-0" />
+          <Image
+            src="/pipeline-lockup.png"
+            alt="Pipeline"
+            width={1280}
+            height={340}
+            priority
+            className="h-10 md:h-14 w-auto shrink-0"
+          />
         </Link>
 
         {/* Tabs pill — absolutely centered, hidden under 1080px. */}

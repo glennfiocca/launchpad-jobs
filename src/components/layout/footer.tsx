@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { PipelineLogo } from "@/components/brand/PipelineLogo";
+
+// Routes that own a full-viewport container-scroll surface and therefore
+// must NOT render the page-level CompactSiteFooter (it would steal the
+// remaining viewport height from the scroll container).
+// NOTE: exact match only — `/jobs/[publicJobId]` keeps its footer.
+const NO_FOOTER_ROUTES = new Set<string>(["/jobs"]);
 
 // Editorial footer treatment — see design_handoff_homepage_redesign/README.md §Footer.
 // Visual rules:
@@ -156,6 +163,10 @@ const compactLink =
 
 export function CompactSiteFooter() {
   const { data: session } = useSession();
+  const pathname = usePathname();
+
+  // /jobs owns the full viewport — see NO_FOOTER_ROUTES above.
+  if (pathname && NO_FOOTER_ROUTES.has(pathname)) return null;
 
   return (
     <footer

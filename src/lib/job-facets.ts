@@ -43,12 +43,14 @@ export async function buildFacets(
       orderBy: { _count: { workMode: "desc" } },
     }),
 
+    // No `take` — the filter combobox needs every company with at least one
+    // matching job so the user can find any employer. Client-side typeahead
+    // handles long lists. Payload size stays modest (~50 bytes/row).
     db.job.groupBy({
       by: ["companyId"],
       where,
       _count: { companyId: true },
       orderBy: { _count: { companyId: "desc" } },
-      take: 20,
     }),
 
     db.job.count({ where: { ...where, remote: true } }),
@@ -68,11 +70,11 @@ export async function buildFacets(
   const companyRecords = companyIds.length
     ? await db.company.findMany({
         where: { id: { in: companyIds } },
-        select: { id: true, name: true },
+        select: { id: true, name: true, logoUrl: true, website: true },
       })
     : [];
 
-  const companyMap = new Map(companyRecords.map((c) => [c.id, c.name]));
+  const companyMap = new Map(companyRecords.map((c) => [c.id, c]));
 
   return {
     departments: departments
@@ -101,11 +103,16 @@ export async function buildFacets(
       })),
     companies: companies
       .filter((c) => c.companyId && companyMap.has(c.companyId))
-      .map((c) => ({
-        id: c.companyId!,
-        name: companyMap.get(c.companyId!)!,
-        count: c._count.companyId,
-      })),
+      .map((c) => {
+        const rec = companyMap.get(c.companyId!)!;
+        return {
+          id: c.companyId!,
+          name: rec.name,
+          logoUrl: rec.logoUrl,
+          website: rec.website,
+          count: c._count.companyId,
+        };
+      }),
     totalRemote: remoteCount,
     salaryRange: {
       min: salaryAgg._min.salaryMin ?? null,

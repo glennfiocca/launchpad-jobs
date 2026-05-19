@@ -172,7 +172,13 @@ export interface JobFacets {
   experienceLevels: Array<{ value: string; count: number }>;
   /** Work-mode slug counts (remote|hybrid|onsite). */
   workModes: Array<{ value: string; count: number }>;
-  companies: Array<{ id: string; name: string; count: number }>;
+  companies: Array<{
+    id: string;
+    name: string;
+    logoUrl: string | null;
+    website: string | null;
+    count: number;
+  }>;
   totalRemote: number;
   salaryRange: { min: number | null; max: number | null };
 }

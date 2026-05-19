@@ -203,7 +203,12 @@ export function JobFilters({
           <div className="md:w-[200px] shrink-0">
             <CompanyCombobox
               value={filters.companies}
-              options={companyFacets.map((c) => ({ value: c.name, count: c.count }))}
+              options={companyFacets.map((c) => ({
+                value: c.name,
+                count: c.count,
+                logoUrl: c.logoUrl,
+                website: c.website,
+              }))}
               onChange={handleCompanies}
               className="w-full"
             />

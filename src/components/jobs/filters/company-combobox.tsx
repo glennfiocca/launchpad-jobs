@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CompanyLogo } from "@/components/company-logo";
 
 /**
  * Multi-select company combobox — typeahead picker for the Browse Jobs
@@ -18,11 +19,22 @@ import { cn } from "@/lib/utils";
  * space bookmarkable.
  */
 
+interface CompanyComboboxOption {
+  /** Company name — also the value used in the filter URL. */
+  value: string;
+  /** Number of currently-matching jobs at this company. */
+  count: number;
+  /** Logo URL for the small 16x16 swatch next to the name. */
+  logoUrl?: string | null;
+  /** Company website — fed to `<CompanyLogo>` for favicon fallback. */
+  website?: string | null;
+}
+
 interface CompanyComboboxProps {
   /** Currently selected company names. */
   value: string[];
-  /** Facet rows from the listing API — `{ value: name, count }`. */
-  options: Array<{ value: string; count: number }>;
+  /** Facet rows from the listing API. */
+  options: CompanyComboboxOption[];
   /** Called with the next selected names array on every toggle. */
   onChange: (next: string[]) => void;
   className?: string;
@@ -179,6 +191,12 @@ export function CompanyCombobox({
                         : "hover:bg-white/[0.04]"
                     )}
                   >
+                    <CompanyLogo
+                      name={opt.value}
+                      logoUrl={opt.logoUrl ?? null}
+                      website={opt.website ?? null}
+                      className="shrink-0 w-5 h-5 rounded-[4px] overflow-hidden text-[9px] font-semibold"
+                    />
                     <span
                       className={cn(
                         "flex-1 text-[12.5px] truncate",

@@ -4,6 +4,23 @@ import { useCallback, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type { DatePostedOption, JobFilters, SortOption } from "@/types";
 
+// Parse the `companies` (plural, canonical) or legacy `company` (singular)
+// query param into a deduped string[]. Empty / whitespace-only entries
+// are dropped. Returns [] when neither param is present.
+function parseCompaniesParam(params: URLSearchParams): string[] {
+  const raw = params.get("companies");
+  if (raw) {
+    const list = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return Array.from(new Set(list));
+  }
+  const legacy = params.get("company");
+  if (legacy && legacy.trim()) return [legacy.trim()];
+  return [];
+}
+
 function parseFilters(params: URLSearchParams): JobFilters {
   const salMinRaw = params.get("salMin");
   const salMaxRaw = params.get("salMax");
@@ -17,7 +34,12 @@ function parseFilters(params: URLSearchParams): JobFilters {
     locationCity: params.get("city") ?? undefined,
     locationState: params.get("state") ?? undefined,
     department: params.get("dept") ?? undefined,
-    company: params.get("company") ?? undefined,
+    // Multi-select company filter. Supports both:
+    //   ?companies=Stripe,OpenAI   (preferred — canonical form)
+    //   ?company=Stripe            (legacy single-value — back-compat)
+    // Phase 2 will replace the UI input with a multi-select chip group;
+    // for now the existing single-input shim writes [name] or [].
+    companies: parseCompaniesParam(params),
     employmentType: params.get("type") ?? undefined,
     experienceLevel: params.get("level") ?? undefined,
     workMode,
@@ -36,7 +58,11 @@ function filtersToParams(filters: JobFilters): URLSearchParams {
   if (filters.locationCity) p.set("city", filters.locationCity);
   if (filters.locationState) p.set("state", filters.locationState);
   if (filters.department) p.set("dept", filters.department);
-  if (filters.company) p.set("company", filters.company);
+  // Serialize as `?companies=A,B`. Phase 2 owns the proper multi-select UI;
+  // until then the input shim writes 0 or 1 entries.
+  if (filters.companies.length > 0) {
+    p.set("companies", filters.companies.join(","));
+  }
   // `remote` legacy boolean is no longer serialized — workMode covers it.
   // Old `?remote=true` URLs are read on parse and rewritten as `?mode=remote`.
   if (filters.employmentType) p.set("type", filters.employmentType);
@@ -109,7 +135,7 @@ export function useJobFilters() {
     filters.locationCity ||
     filters.locationState ||
     filters.department ||
-    filters.company ||
+    filters.companies.length > 0 ||
     filters.employmentType ||
     filters.experienceLevel ||
     filters.workMode ||

@@ -22,9 +22,20 @@ export type { ApplicationStatus };
 export * from "./_shared/profile-enums";
 
 // Job with company
+//
+// Optional derived fields populated by /api/jobs:
+// - matchScore: 0–100 integer normalized from the SQL relevance score in
+//   src/lib/job-relevance.ts. Undefined for signed-out users and users with
+//   no scoring signals — the renderer hides the slot when undefined (vs.
+//   showing a zero). See src/app/api/jobs/route.ts.
+// - applicationVelocity: rolling 7-day applications-per-job count. Detail
+//   pane only, signed-in only. Undefined for signed-out users (privacy +
+//   noise floor). Also undefined for list rows since list views don't surface it.
 export type JobWithCompany = Job & {
   company: Company;
   _count?: { applications: number };
+  matchScore?: number;
+  applicationVelocity?: number;
 };
 
 // Application with full context
@@ -125,7 +136,14 @@ export interface JobFilters {
   locationCity?: string;   // structured city from Google Places
   locationState?: string;  // structured state abbrev from Google Places
   department?: string;
-  company?: string;
+  /**
+   * Multi-select company filter. Replaces the legacy singular `company`
+   * substring search. Each entry is a company **name** (matched verbatim
+   * by the API via WHERE company.name IN (...)). Empty array = no filter.
+   * Phase 2 owns the UI rebuild that exposes this as a multi-select chip
+   * group; until then callers pass [name] or [] to mimic the prior behavior.
+   */
+  companies: string[];
   employmentType?: string;
   /** Experience-level slug (entry|mid|senior|staff|management). */
   experienceLevel?: string;

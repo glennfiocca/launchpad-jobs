@@ -98,7 +98,9 @@ export function JobBoard() {
       if (f.locationState) params.set("locationState", f.locationState);
       if (!f.locationCity && f.location) params.set("location", f.location);
       if (f.department) params.set("department", f.department);
-      if (f.company) params.set("company", f.company);
+      // Multi-select company filter — `companies=A,B`. /api/jobs accepts both
+      // this canonical form and the legacy `?company=` substring for back-compat.
+      if (f.companies.length > 0) params.set("companies", f.companies.join(","));
       if (f.employmentType) params.set("employmentType", f.employmentType);
       if (f.experienceLevel) params.set("experienceLevel", f.experienceLevel);
       if (f.workMode) params.set("workMode", f.workMode);

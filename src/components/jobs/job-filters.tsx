@@ -73,13 +73,17 @@ function ClearAllButton({ onClick }: ClearAllButtonProps) {
 export function JobFilters({ facets }: JobFiltersProps) {
   const { filters, updateFilters, clearFilters, hasFilters } = useJobFilters();
 
-  // Local text state — provides instant UI feedback while debouncing API calls
+  // Local text state — provides instant UI feedback while debouncing API calls.
+  // `companies` is canonically a string[] (Phase 2 will swap this input for a
+  // multi-select chip group); for now this text input mirrors the first entry.
   const [localQuery, setLocalQuery] = useState(filters.query ?? "");
-  const [localCompany, setLocalCompany] = useState(filters.company ?? "");
+  const [localCompany, setLocalCompany] = useState(filters.companies[0] ?? "");
 
   // Sync local text state when URL changes externally (back/forward nav, clear)
   useEffect(() => { setLocalQuery(filters.query ?? ""); }, [filters.query]);
-  useEffect(() => { setLocalCompany(filters.company ?? ""); }, [filters.company]);
+  useEffect(() => {
+    setLocalCompany(filters.companies[0] ?? "");
+  }, [filters.companies]);
 
   const debouncedUpdate = useDebouncedCallback(
     (patch: Parameters<typeof updateFilters>[0]) => updateFilters(patch),
@@ -167,7 +171,11 @@ export function JobFilters({ facets }: JobFiltersProps) {
               value={localCompany}
               onChange={(e) => {
                 setLocalCompany(e.target.value);
-                debouncedUpdate({ company: e.target.value || undefined });
+                // Phase-1 shim: write 0 or 1 entry into the new companies[]
+                // filter. Phase 2 swaps this for a multi-select chip group.
+                debouncedUpdate({
+                  companies: e.target.value ? [e.target.value] : [],
+                });
               }}
               className={INPUT_CLASS}
               aria-label="Filter by company"

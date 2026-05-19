@@ -43,6 +43,7 @@ function makeJob(overrides: {
     absoluteUrl: "https://boards.greenhouse.io/acme/jobs/999001",
     applyUrl: null,
     content: "<p>Build great things at Acme.</p>",
+    summary: null,
     salaryMin: 150000,
     salaryMax: 220000,
     salaryCurrency: "USD",

@@ -41,6 +41,7 @@ function makeJob(overrides: {
     absoluteUrl: null,
     applyUrl: null,
     content: "<p>Build great things at Acme. We are hiring engineers.</p>",
+    summary: null,
     salaryMin: null,
     salaryMax: null,
     salaryCurrency: null,

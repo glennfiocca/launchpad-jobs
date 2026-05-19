@@ -10,6 +10,7 @@ import { notifyIndexNow } from "../seo/indexnow";
 import { resolveCompanyName } from "../company-name";
 import { resolveCompanyLogoSync } from "../company-logo";
 import { VALIDITY_WINDOW_DAYS } from "@/config/seo";
+import { summarizeJobDescription } from "@/lib/jobs/summarize";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://trypipeline.ai").replace(/\/$/, "");
 
@@ -343,9 +344,22 @@ export async function syncBoard(
         result.jobsUpdated++;
       } else {
         const publicJobId = await generateUniquePublicJobId();
+        // Editorial TL;DR — only generated on first ingest. Sequential await
+        // (not Promise.all batched across the whole sync) because each board
+        // typically contributes 0–50 new jobs per cycle, the summarizer
+        // already has its own per-call retry/timeout (~15s cap), and a
+        // sequential walk keeps the upsert loop's failure mode simple: one
+        // bad job can never poison the rest. Summarizer returns null on
+        // any failure — that's an acceptable retry-next-time state, because
+        // the next sync will create this row again only if it was never
+        // persisted (idempotent on success, retryable on failure).
+        const summary = normalizedJob.content
+          ? await summarizeJobDescription(normalizedJob.content)
+          : null;
         await db.job.create({
           data: {
             ...jobData,
+            summary,
             externalId: normalizedJob.externalId,
             companyId: company.id,
             publicJobId,

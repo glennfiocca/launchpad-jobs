@@ -53,6 +53,14 @@ export function getStaleThresholdMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_STALE_THRESHOLD_MS
 }
 
+// Per-board fan-out. With ~3.1s avg/board and 3,950 boards a sequential
+// loop runs ~280 min; a chunk size of 10 brings wall time to ~30 min while
+// staying well under upstream rate-limit headroom. Override via env if the
+// upstream surfaces start to push back. Chunk-based scheduling has a slow-
+// tail issue (a chunk waits on its slowest board), which is acceptable at
+// this scale and avoids a more complex queue.
+const SYNC_CONCURRENCY = Number(process.env.SYNC_CONCURRENCY ?? 10)
+
 // ---------------------------------------------------------------------------
 // Reconcile stale RUNNING rows
 // ---------------------------------------------------------------------------
@@ -217,9 +225,18 @@ export async function executeSyncWork(
       boards = [...boards, ...seedEntries]
     }
 
-    log.info("Boards fetched", { count: boards.length })
+    log.info("Boards fetched", {
+      count: boards.length,
+      concurrency: SYNC_CONCURRENCY,
+    })
 
-    for (const board of boards) {
+    // Hoisted so it can be invoked from the bounded worker pool below.
+    // Shared accumulator writes (`totalAdded += ...`, counters, etc.) are
+    // safe under Node's single-threaded event loop: every mutation happens
+    // synchronously *after* its `await` resolves, so there is no torn-write
+    // hazard between parallel boards. The order in which SyncBoardResult
+    // rows land is no longer input-order, which is fine.
+    const processBoard = async (board: BoardEntry): Promise<void> => {
       const boardLog = log.child({
         boardToken: board.token,
         boardName: board.name,
@@ -306,6 +323,16 @@ export async function executeSyncWork(
         errorSummaries.push(`${board.name}: ${errMsg}`)
         boardLog.error("Board exception", { error: errMsg })
       }
+    }
+
+    // Bounded fan-out: process boards in fixed-size chunks. Each chunk is a
+    // single `Promise.all`, so we cap in-flight upstream requests at
+    // SYNC_CONCURRENCY and never queue a 4k-deep promise tree. Per-board
+    // failures are already swallowed inside processBoard, so Promise.all
+    // here never rejects.
+    for (let i = 0; i < boards.length; i += SYNC_CONCURRENCY) {
+      const chunk = boards.slice(i, i + SYNC_CONCURRENCY)
+      await Promise.all(chunk.map(processBoard))
     }
 
     const completedAt = new Date()

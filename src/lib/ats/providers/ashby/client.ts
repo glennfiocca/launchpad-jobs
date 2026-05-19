@@ -18,6 +18,13 @@ import { discoverAshbyCustomJobMap } from "@/lib/ashby-custom-jobs";
 const ASHBY_BASE_URL = "https://api.ashbyhq.com/posting-api/job-board";
 const ASHBY_GRAPHQL_URL = "https://jobs.ashbyhq.com/api/non-user-graphql";
 
+// Bound every upstream call so a hung Ashby endpoint can't pin a sync
+// worker. The TimeoutError bubbles through fetchJson exactly like a
+// network/HTTP error, producing a clean per-board FAILURE. The GraphQL
+// path already has its own try/catch returning [] on error, so a timeout
+// there degrades gracefully (questions skipped, job still ingested).
+const ASHBY_FETCH_TIMEOUT_MS = 30_000;
+
 /**
  * Feature flag for the self-hoster URL rewrite. Defaults to ON. Flip to
  * `false` to revert to the legacy behavior (applyUrl/absoluteUrl stay at
@@ -84,6 +91,7 @@ export class AshbyAtsClient implements AtsClient {
   private async fetchJson<T>(url: string): Promise<T> {
     const res = await fetch(url, {
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(ASHBY_FETCH_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -190,6 +198,7 @@ export class AshbyAtsClient implements AtsClient {
           },
           query: JOB_POSTING_QUERY,
         }),
+        signal: AbortSignal.timeout(ASHBY_FETCH_TIMEOUT_MS),
       });
 
       if (!res.ok) {

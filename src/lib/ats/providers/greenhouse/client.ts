@@ -8,6 +8,12 @@ import {
 
 const GREENHOUSE_BASE_URL = "https://boards-api.greenhouse.io/v1/boards";
 
+// Bound every upstream call so a hung Greenhouse board can't pin a sync
+// worker for the full 4h reconciler window. The thrown TimeoutError bubbles
+// through fetchJson exactly like a network/HTTP error, producing a clean
+// per-board FAILURE rather than freezing the whole sync.
+const GREENHOUSE_FETCH_TIMEOUT_MS = 30_000;
+
 /**
  * Greenhouse implementation of AtsClient.
  * Delegates to the Greenhouse Board API and maps responses to normalized types.
@@ -24,6 +30,7 @@ export class GreenhouseAtsClient implements AtsClient {
     const url = `${GREENHOUSE_BASE_URL}/${this.boardToken}${path}`;
     const res = await fetch(url, {
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(GREENHOUSE_FETCH_TIMEOUT_MS),
     });
 
     if (!res.ok) {

@@ -19,32 +19,66 @@ import {
   TAB_LABELS,
   type TabKey,
 } from "./forms/_shared/tab-config";
+import type { PerSectionScore } from "@/lib/profile/completeness";
 
 interface ProfileTabsProps {
   profile: UserProfile | null;
+  /** Per-section completion 0..100. Drives the status dot on each tab. */
+  perSection: PerSectionScore;
 }
 
-// Sidebar trigger (desktop): vertical pill row matching the settings sidenav
-// pattern. Active state uses indigo accent to match the focus ring on inputs.
+// Status-dot color rules (locked spec):
+//   pct === 100 → cyan (with soft glow)
+//   0 < pct < 100 → lavender
+//   pct === 0 → faint dim
+// Returned as inline style objects so the colors reference @theme tokens
+// without a CSS-in-JS layer (legitimate use of inline style per project
+// coding-style for dynamic theme-token values).
+function dotStyle(pct: number): {
+  background: string;
+  boxShadow: string;
+} {
+  if (pct === 100) {
+    return {
+      background: "var(--color-accent-cyan)",
+      boxShadow: "0 0 6px var(--color-accent-cyan)",
+    };
+  }
+  if (pct > 0) {
+    return {
+      background: "var(--color-accent-lavender)",
+      boxShadow: "none",
+    };
+  }
+  return {
+    background: "rgba(245,244,241,0.18)",
+    boxShadow: "none",
+  };
+}
+
+// Sidebar trigger (desktop): vertical pill matching Direction A sidenav
+// treatment. Active state uses indigo-lavender tint (Direction A spec).
 const sidebarTriggerClass = [
-  "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium",
+  "flex items-center gap-3 w-full px-3 py-2 rounded-[10px] text-sm font-medium",
   "transition-colors text-left",
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40",
-  "text-zinc-400 hover:text-white hover:bg-white/5",
-  "data-[state=active]:bg-indigo-500/10 data-[state=active]:text-indigo-300",
-  "data-[state=active]:border data-[state=active]:border-indigo-500/30",
+  "text-text-muted hover:text-text hover:bg-white/5 border border-transparent",
+  "data-[state=active]:bg-[rgba(99,102,241,0.10)]",
+  "data-[state=active]:text-[#c7d2fe]",
+  "data-[state=active]:border-[rgba(99,102,241,0.28)]",
 ].join(" ");
 
-// Mobile chip rail: same pattern as the settings sidenav mobile chip row.
+// Mobile chip rail: same as before structurally, now with a status dot
+// inside each chip per spec Q9.
 const mobileTriggerClass = [
   "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium",
   "border whitespace-nowrap transition-colors shrink-0",
-  "text-zinc-400 border-white/10 hover:text-white hover:bg-white/5",
-  "data-[state=active]:bg-indigo-500/10 data-[state=active]:text-indigo-300",
-  "data-[state=active]:border-indigo-500/30",
+  "text-text-muted border-white/10 hover:text-text hover:bg-white/5",
+  "data-[state=active]:bg-[rgba(99,102,241,0.10)] data-[state=active]:text-[#c7d2fe]",
+  "data-[state=active]:border-[rgba(99,102,241,0.28)]",
 ].join(" ");
 
-export function ProfileTabs({ profile }: ProfileTabsProps) {
+export function ProfileTabs({ profile, perSection }: ProfileTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -58,6 +92,12 @@ export function ProfileTabs({ profile }: ProfileTabsProps) {
     // replace, not push: every tab click would otherwise pollute browser history.
     router.replace(`?${params.toString()}`, { scroll: false });
   };
+
+  // Sidebar header — name in Bricolage above the tab list. Falls back to
+  // "Your profile" before identity is filled.
+  const sidebarHeading = profile?.firstName
+    ? `${profile.firstName}${profile.lastName ? ` ${profile.lastName}` : ""}`
+    : "Your profile";
 
   return (
     <Tabs.Root
@@ -73,30 +113,58 @@ export function ProfileTabs({ profile }: ProfileTabsProps) {
         >
           {TAB_KEYS.map((key) => {
             const Icon = TAB_ICONS[key];
+            const ds = dotStyle(perSection[key]);
             return (
               <Tabs.Trigger key={key} value={key} className={mobileTriggerClass}>
                 <Icon className="w-3.5 h-3.5 shrink-0" />
                 <span>{TAB_LABELS[key]}</span>
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 rounded-full shrink-0"
+                  style={ds}
+                />
               </Tabs.Trigger>
             );
           })}
         </Tabs.List>
 
-        {/* Desktop: vertical sidebar */}
-        <Tabs.List
-          className="hidden md:flex md:flex-col w-56 shrink-0 gap-1 sticky top-4 self-start"
-          aria-label="Profile sections"
-        >
-          {TAB_KEYS.map((key) => {
-            const Icon = TAB_ICONS[key];
-            return (
-              <Tabs.Trigger key={key} value={key} className={sidebarTriggerClass}>
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="flex-1 truncate text-left">{TAB_LABELS[key]}</span>
-              </Tabs.Trigger>
-            );
-          })}
-        </Tabs.List>
+        {/* Desktop: vertical sidebar — sticky beneath navbar */}
+        <aside className="hidden md:flex md:flex-col w-56 shrink-0 sticky self-start top-[calc(var(--navbar-h)+16px)]">
+          <div className="mb-3 px-1">
+            <div className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-dim">
+              Sections
+            </div>
+            <div className="mt-1 font-display font-medium text-[15px] tracking-[-0.015em] text-text truncate">
+              {sidebarHeading}
+            </div>
+          </div>
+          <Tabs.List
+            className="flex flex-col gap-1"
+            aria-label="Profile sections"
+          >
+            {TAB_KEYS.map((key) => {
+              const Icon = TAB_ICONS[key];
+              const ds = dotStyle(perSection[key]);
+              return (
+                <Tabs.Trigger
+                  key={key}
+                  value={key}
+                  className={sidebarTriggerClass}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="flex-1 truncate text-left">
+                    {TAB_LABELS[key]}
+                  </span>
+                  <span
+                    aria-hidden
+                    className="ml-auto h-1.5 w-1.5 rounded-full shrink-0"
+                    style={ds}
+                  />
+                </Tabs.Trigger>
+              );
+            })}
+          </Tabs.List>
+        </aside>
 
         {/* Content area */}
         <div className="flex-1 min-w-0 space-y-6">

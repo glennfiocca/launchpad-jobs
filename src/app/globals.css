@@ -170,6 +170,46 @@ body {
   }
 }
 
+/* ============================================
+   PROFILE REDESIGN v2 — "MANIFOLD" MOTION
+   Used by the page header sigil, the saved pill,
+   list-editor row entry/reorder flash, and the
+   resume parse-tease strip.
+   All consumers must gate on framer-motion's
+   useReducedMotion() — these keyframes also no-op
+   under prefers-reduced-motion (see below).
+   ============================================ */
+@keyframes pp-ping {
+  0%   { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(3); opacity: 0; }
+}
+@keyframes pp-fade-up {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes pp-saved-in {
+  0%   { opacity: 0; transform: translateY(-2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes pp-reorder-flash {
+  0%   { background-color: rgba(196, 181, 253, 0.14); border-color: rgba(196, 181, 253, 0.40); }
+  100% { background-color: transparent; border-color: rgba(245, 244, 241, 0.08); }
+}
+@keyframes pp-pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-anim-ping,
+  .pp-anim-fade-up,
+  .pp-anim-saved-in,
+  .pp-anim-reorder-flash,
+  .pp-anim-pulse-glow {
+    animation: none !important;
+  }
+}
+
 /* Job content HTML from Greenhouse */
 
 .job-content {

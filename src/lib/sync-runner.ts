@@ -325,15 +325,21 @@ export async function executeSyncWork(
       }
     }
 
-    // Bounded fan-out: process boards in fixed-size chunks. Each chunk is a
-    // single `Promise.all`, so we cap in-flight upstream requests at
-    // SYNC_CONCURRENCY and never queue a 4k-deep promise tree. Per-board
-    // failures are already swallowed inside processBoard, so Promise.all
-    // here never rejects.
-    for (let i = 0; i < boards.length; i += SYNC_CONCURRENCY) {
-      const chunk = boards.slice(i, i + SYNC_CONCURRENCY)
-      await Promise.all(chunk.map(processBoard))
+    // Worker-pool fan-out: SYNC_CONCURRENCY workers each pull from a shared
+    // queue. A fast worker doesn't block on a slow board in a different
+    // worker (avoids the chunk-tail problem where a 70s board freezes a
+    // chunk of 10 for the full 70s). Per-board failures are swallowed
+    // inside processBoard, so workers never reject.
+    const queue = [...boards]
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const board = queue.shift()
+        if (!board) return
+        await processBoard(board)
+      }
     }
+    const workers = Array.from({ length: SYNC_CONCURRENCY }, () => worker())
+    await Promise.all(workers)
 
     const completedAt = new Date()
     const durationMs = completedAt.getTime() - startedAt.getTime()

@@ -1,5 +1,29 @@
 "use client";
 
+/**
+ * PreferencesForm — Direction A redesign.
+ *
+ * Mirrors the personal-form.tsx reference implementation: three editorial
+ * section cards (Search Preferences, Relocation, Compliance), each rendered
+ * with `directionASectionClass` + `SectionHeader` + `SavedPill`. Pill toggles
+ * (search status, work modes, employment types, company sizes, equity) all
+ * route through `pillBtnClass()` so the active state is lavender, not white.
+ *
+ * Data shape is preserved exactly — same `PreferencesFormState`, same
+ * `buildPayload` slice, same identity-gate, same single-shot submit. The
+ * redesign is purely visual + structural (3 sections instead of 6).
+ *
+ * Local atoms inside this file (DirectionATriState, sectionEyebrowFor):
+ *  - DirectionATriState reuses the shared TriStateRadio's data contract but
+ *    re-skins the buttons through `pillBtnClass` because the shared helper
+ *    still ships the legacy white-active styling and lives outside this PR's
+ *    one-file scope. Keeping it inline here avoids cross-file edits while
+ *    matching the Direction A treatment exactly.
+ *
+ * Motion is gated on the cockpit-wide reduced-motion preference via the
+ * SavedPill atom; this form introduces no new framer-motion animations.
+ */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
@@ -16,8 +40,16 @@ import {
   type SearchStatus,
   type SecurityClearance,
 } from "@/types/_shared/profile-enums";
-import { gridTwoCol, inputClass, labelClass, sectionClass, sectionTitleClass } from "./_shared/styles";
-import { SaveButton } from "./_shared/save-button";
+import {
+  directionAInputClass,
+  directionASectionClass,
+  gridTwoCol,
+  labelClass,
+  pillBtnClass,
+  primaryWhiteBtnClass,
+  sectionDividerClass,
+} from "./_shared/styles";
+import { FormEyebrow, SavedPill, SectionHeader } from "./_shared/atoms";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
 import { ChipInput } from "./_shared/chip-input";
@@ -33,14 +65,13 @@ import {
   EMPLOYMENT_TYPE_LABELS,
   EQUITY_LABELS,
   SEARCH_STATUS_LABELS,
-  TriStateRadio,
   normalizeCountryCode,
   validateCountryCode,
 } from "./_shared/preferences-helpers";
 
-// Preferences form local state. We model nullable tri-state booleans
-// (compliance answers) explicitly as `boolean | null` because the API
-// distinguishes "no answer" (null) from "no" (false).
+// ────────── Local form state ──────────
+// Mirrors the API contract — boolean | null for tri-state compliance answers
+// so we can distinguish "no answer" (null) from "no" (false).
 interface PreferencesFormState {
   // Salary
   desiredSalaryMin: string;
@@ -101,6 +132,92 @@ function initState(data: UserProfile | null): PreferencesFormState {
   };
 }
 
+// ────────── Local Direction A tri-state ──────────
+// The shared TriStateRadio in `_shared/preferences-helpers.tsx` still ships
+// the legacy white-on-black active state. This redesign is one-file-scoped,
+// so we keep the shared helper's data contract (`boolean | null`) but
+// re-skin the buttons through `pillBtnClass` for the lavender treatment.
+interface DirectionATriStateProps {
+  label: string;
+  value: boolean | null;
+  onChange: (next: boolean | null) => void;
+}
+
+const TRI_STATE_OPTIONS: ReadonlyArray<{
+  key: "yes" | "no" | "skip";
+  label: string;
+  v: boolean | null;
+}> = [
+  { key: "yes", label: "Yes", v: true },
+  { key: "no", label: "No", v: false },
+  { key: "skip", label: "Prefer not to say", v: null },
+];
+
+function DirectionATriState({ label, value, onChange }: DirectionATriStateProps) {
+  return (
+    <div>
+      <label className={labelClass}>{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {TRI_STATE_OPTIONS.map((opt) => {
+          const active = value === opt.v;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => onChange(opt.v)}
+              aria-pressed={active}
+              className={pillBtnClass(active)}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ────────── Direction A checkbox row ──────────
+// Re-skins the legacy `<input type=checkbox>` rows (relocationOpen,
+// requiresSponsorship) into a lavender-tinted toggle that matches the rest
+// of the Direction A surface. Falls back to a real <input> for a11y so the
+// native focus ring + keyboard handling stays correct.
+interface DirectionACheckboxProps {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+}
+
+function DirectionACheckbox({ checked, onChange, label }: DirectionACheckboxProps) {
+  return (
+    <label className="flex items-center gap-3 cursor-pointer text-sm text-text-muted">
+      <span className="relative inline-flex items-center justify-center">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer w-4 h-4 appearance-none rounded-[5px] border border-white/15 bg-white/[0.03] transition-colors checked:bg-[rgba(196,181,253,0.85)] checked:border-[var(--color-accent-lavender)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(196,181,253,0.30)]"
+        />
+        <svg
+          aria-hidden
+          viewBox="0 0 12 12"
+          className="pointer-events-none absolute h-3 w-3 text-bg opacity-0 peer-checked:opacity-100 transition-opacity"
+        >
+          <path
+            d="M2.5 6.2l2.4 2.4L9.5 3.6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span>{label}</span>
+    </label>
+  );
+}
+
 interface PreferencesFormProps {
   initialData: UserProfile | null;
 }
@@ -109,6 +226,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<PreferencesFormState>(initState(initialData));
   const [saving, setSaving] = useState(false);
+  const [recentlySaved, setRecentlySaved] = useState(false);
 
   const set = <K extends keyof PreferencesFormState>(
     field: K,
@@ -171,87 +289,44 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
     if (!result.ok) {
       toast.error(result.error ?? "Failed to save profile");
     } else {
-      toast.success("Profile saved successfully!");
+      toast.success("Preferences saved");
+      setRecentlySaved(true);
+      // Match the 2-second SAVED pill window used by personal-form / list-editor.
+      setTimeout(() => setRecentlySaved(false), 2000);
       router.refresh();
     }
     setSaving(false);
   };
 
-  const workModes = [
-    { key: "openToRemote" as const, label: "Remote" },
-    { key: "openToHybrid" as const, label: "Hybrid" },
-    { key: "openToOnsite" as const, label: "Onsite" },
+  const workModes: ReadonlyArray<{
+    key: "openToRemote" | "openToHybrid" | "openToOnsite";
+    label: string;
+  }> = [
+    { key: "openToRemote", label: "Remote" },
+    { key: "openToHybrid", label: "Hybrid" },
+    { key: "openToOnsite", label: "Onsite" },
   ];
+
+  const identityOk = isIdentityComplete(initialData);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <IdentityRequiredNotice initialData={initialData} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Salary Expectations</h2>
-        <div className={gridTwoCol}>
-          <div>
-            <label className={labelClass}>Minimum (USD/year)</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">
-                $
-              </span>
-              <input
-                className={`${inputClass} pl-7`}
-                type="number"
-                min="0"
-                value={form.desiredSalaryMin}
-                onChange={(e) => set("desiredSalaryMin", e.target.value)}
-                placeholder="120000"
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Maximum (USD/year)</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">
-                $
-              </span>
-              <input
-                className={`${inputClass} pl-7`}
-                type="number"
-                min="0"
-                value={form.desiredSalaryMax}
-                onChange={(e) => set("desiredSalaryMax", e.target.value)}
-                placeholder="160000"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* ───────── Section 1: Search Preferences ───────── */}
+      <section className={directionASectionClass}>
+        <SectionHeader
+          eyebrow={
+            <FormEyebrow accent>preferences · what you&apos;re looking for</FormEyebrow>
+          }
+          title="Search Preferences"
+          subtitle="Set the bar — search status, target roles, comp, and the shape of the role you want next."
+          right={<SavedPill visible={recentlySaved} />}
+        />
 
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Work Preferences</h2>
-        <div className="flex gap-3 flex-wrap">
-          {workModes.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => set(key, !form[key])}
-              className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
-                form[key]
-                  ? "bg-white text-black border-white font-medium"
-                  : "bg-white/5 border-white/10 text-zinc-400"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      </div>
-
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Search Preferences</h2>
-
+        {/* Search status — full-width pill row */}
         <div>
-          <label className={labelClass}>Search Status</label>
+          <label className={labelClass}>Search status</label>
           <div className="flex gap-2 flex-wrap">
             {SEARCH_STATUSES.map((status) => {
               const active = form.searchStatus === status;
@@ -261,11 +336,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
                   type="button"
                   onClick={() => set("searchStatus", status)}
                   aria-pressed={active}
-                  className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
-                    active
-                      ? "bg-white text-black border-white font-medium"
-                      : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20"
-                  }`}
+                  className={pillBtnClass(active)}
                 >
                   {SEARCH_STATUS_LABELS[status]}
                 </button>
@@ -278,7 +349,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           <div>
             <label className={labelClass}>Notice period (weeks)</label>
             <input
-              className={inputClass}
+              className={`${directionAInputClass} font-mono tabular-nums`}
               type="number"
               min="0"
               max="52"
@@ -290,7 +361,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           <div>
             <label className={labelClass}>Earliest start date</label>
             <input
-              className={inputClass}
+              className={`${directionAInputClass} font-mono tabular-nums`}
               type="date"
               value={form.earliestStartDate}
               onChange={(e) => set("earliestStartDate", e.target.value)}
@@ -329,11 +400,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
                   type="button"
                   onClick={() => toggleEmploymentType(t)}
                   aria-pressed={active}
-                  className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
-                    active
-                      ? "bg-white text-black border-white font-medium"
-                      : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20"
-                  }`}
+                  className={pillBtnClass(active)}
                 >
                   {EMPLOYMENT_TYPE_LABELS[t]}
                 </button>
@@ -353,11 +420,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
                   type="button"
                   onClick={() => toggleCompanySize(s)}
                   aria-pressed={active}
-                  className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
-                    active
-                      ? "bg-white text-black border-white font-medium"
-                      : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20"
-                  }`}
+                  className={pillBtnClass(active)}
                 >
                   {COMPANY_SIZE_LABELS[s]}
                 </button>
@@ -366,65 +429,120 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
           </div>
         </div>
 
-        <div className={gridTwoCol}>
-          <div>
-            <label className={labelClass}>Currency preference</label>
-            <input
-              className={inputClass}
-              value={form.currencyPreference}
-              maxLength={3}
-              onChange={(e) =>
-                set("currencyPreference", e.target.value.toUpperCase())
-              }
-              placeholder="USD"
-            />
+        {/* Comp + work mode group — hairline rule above */}
+        <div className={sectionDividerClass}>
+          <FormEyebrow>compensation · work mode</FormEyebrow>
+
+          <div className={`${gridTwoCol} mt-3`}>
+            <div>
+              <label className={labelClass}>Minimum salary (per year)</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim text-sm pointer-events-none font-mono">
+                  $
+                </span>
+                <input
+                  className={`${directionAInputClass} pl-7 font-mono tabular-nums`}
+                  type="number"
+                  min="0"
+                  value={form.desiredSalaryMin}
+                  onChange={(e) => set("desiredSalaryMin", e.target.value)}
+                  placeholder="120000"
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Maximum salary (per year)</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim text-sm pointer-events-none font-mono">
+                  $
+                </span>
+                <input
+                  className={`${directionAInputClass} pl-7 font-mono tabular-nums`}
+                  type="number"
+                  min="0"
+                  value={form.desiredSalaryMax}
+                  onChange={(e) => set("desiredSalaryMax", e.target.value)}
+                  placeholder="160000"
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className={labelClass}>Equity importance</label>
+
+          <div className={`${gridTwoCol} mt-4`}>
+            <div>
+              <label className={labelClass}>Currency</label>
+              <input
+                className={`${directionAInputClass} font-mono tabular-nums`}
+                value={form.currencyPreference}
+                maxLength={3}
+                onChange={(e) =>
+                  set("currencyPreference", e.target.value.toUpperCase())
+                }
+                placeholder="USD"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Equity importance</label>
+              <div className="flex gap-2 flex-wrap">
+                {EQUITY_IMPORTANCE_VALUES.map((v) => {
+                  const active = form.equityImportance === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() =>
+                        set("equityImportance", active ? null : v)
+                      }
+                      aria-pressed={active}
+                      className={pillBtnClass(active)}
+                    >
+                      {EQUITY_LABELS[v]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>Open to (work mode)</label>
             <div className="flex gap-2 flex-wrap">
-              {EQUITY_IMPORTANCE_VALUES.map((v) => {
-                const active = form.equityImportance === v;
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() =>
-                      set("equityImportance", active ? null : v)
-                    }
-                    aria-pressed={active}
-                    className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
-                      active
-                        ? "bg-white text-black border-white font-medium"
-                        : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20"
-                    }`}
-                  >
-                    {EQUITY_LABELS[v]}
-                  </button>
-                );
-              })}
+              {workModes.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => set(key, !form[key])}
+                  aria-pressed={form[key]}
+                  className={pillBtnClass(form[key])}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Relocation</h2>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.relocationOpen}
-            onChange={(e) => set("relocationOpen", e.target.checked)}
-            className="w-4 h-4 rounded accent-white"
-          />
-          <span className="text-sm text-zinc-300">
-            I&apos;m open to relocating
-          </span>
-        </label>
+      {/* ───────── Section 2: Relocation ───────── */}
+      <section className={directionASectionClass}>
+        <SectionHeader
+          eyebrow={<FormEyebrow>relocation · where you&apos;ll go</FormEyebrow>}
+          title="Relocation"
+          subtitle="Whether you&apos;ll pack a box for the right role — and which cities are on the table."
+        />
+
+        <DirectionACheckbox
+          checked={form.relocationOpen}
+          onChange={(next) => set("relocationOpen", next)}
+          label="I'm open to relocating for the right role"
+        />
+
         <div>
           <label className={labelClass}>
             Cities of interest{" "}
-            <span className="text-zinc-600 font-normal">(optional)</span>
+            <span className="text-text-dim font-normal">
+              (optional — leave blank to keep your options open)
+            </span>
           </label>
           <ChipInput
             value={form.relocationCities}
@@ -434,14 +552,20 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
             maxChips={50}
           />
         </div>
-      </div>
+      </section>
 
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Work Authorization</h2>
+      {/* ───────── Section 3: Compliance ───────── */}
+      <section className={directionASectionClass}>
+        <SectionHeader
+          eyebrow={<FormEyebrow>compliance · standard ats questions</FormEyebrow>}
+          title="Compliance"
+          subtitle="The boilerplate every ATS asks. None of it is PII — pick &ldquo;Prefer not to say&rdquo; to leave a question blank."
+        />
+
         <div>
-          <label className={labelClass}>Authorization Status</label>
+          <label className={labelClass}>Work authorization</label>
           <select
-            className={inputClass}
+            className={directionAInputClass}
             value={form.workAuthorization}
             onChange={(e) => set("workAuthorization", e.target.value)}
           >
@@ -452,75 +576,85 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
             <option value="other">Other</option>
           </select>
         </div>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.requiresSponsorship}
-            onChange={(e) => set("requiresSponsorship", e.target.checked)}
-            className="w-4 h-4 rounded accent-white"
-          />
-          <span className="text-sm text-zinc-400">I require visa sponsorship</span>
-        </label>
-      </div>
-      </div>
 
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Compliance</h2>
-        <p className="text-xs text-zinc-500 -mt-2">
-          Standard ATS questions — none of this is PII. Pick &ldquo;Prefer not to
-          say&rdquo; to leave a question blank.
-        </p>
-        <TriStateRadio
-          label="Do you have a valid driver's license?"
-          value={form.hasDriversLicense}
-          onChange={(v) => set("hasDriversLicense", v)}
+        <DirectionACheckbox
+          checked={form.requiresSponsorship}
+          onChange={(next) => set("requiresSponsorship", next)}
+          label="I require visa sponsorship"
         />
-        <TriStateRadio
-          label="Are you willing to undergo a background check?"
-          value={form.willingBackgroundCheck}
-          onChange={(v) => set("willingBackgroundCheck", v)}
-        />
-        <TriStateRadio
-          label="Are you willing to undergo a drug test?"
-          value={form.willingDrugTest}
-          onChange={(v) => set("willingDrugTest", v)}
-        />
-        <div>
-          <label className={labelClass}>Security clearance</label>
-          <select
-            className={inputClass}
-            value={form.securityClearance}
-            onChange={(e) =>
-              set("securityClearance", e.target.value as SecurityClearance)
-            }
-          >
-            {SECURITY_CLEARANCES.map((c) => (
-              <option key={c} value={c}>
-                {CLEARANCE_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelClass}>
-            Eligible to work in (ISO country codes)
-          </label>
-          <ChipInput
-            value={form.eligibleCountries}
-            onChange={(next) => set("eligibleCountries", next)}
-            placeholder="e.g. US, CA, GB"
-            validate={validateCountryCode}
-            normalize={normalizeCountryCode}
-            maxChips={50}
-          />
-        </div>
-      </div>
 
-      <SaveButton
-        saving={saving}
-        disabled={!isIdentityComplete(initialData)}
-        disabledReason="Complete the Personal tab first"
-      />
+        <div className={sectionDividerClass}>
+          <FormEyebrow>screening</FormEyebrow>
+          <div className="mt-3 space-y-4">
+            <DirectionATriState
+              label="Do you have a valid driver's license?"
+              value={form.hasDriversLicense}
+              onChange={(v) => set("hasDriversLicense", v)}
+            />
+            <DirectionATriState
+              label="Are you willing to undergo a background check?"
+              value={form.willingBackgroundCheck}
+              onChange={(v) => set("willingBackgroundCheck", v)}
+            />
+            <DirectionATriState
+              label="Are you willing to undergo a drug test?"
+              value={form.willingDrugTest}
+              onChange={(v) => set("willingDrugTest", v)}
+            />
+          </div>
+        </div>
+
+        <div className={sectionDividerClass}>
+          <FormEyebrow>clearance · eligibility</FormEyebrow>
+
+          <div className={`${gridTwoCol} mt-3`}>
+            <div>
+              <label className={labelClass}>Security clearance</label>
+              <select
+                className={directionAInputClass}
+                value={form.securityClearance}
+                onChange={(e) =>
+                  set("securityClearance", e.target.value as SecurityClearance)
+                }
+              >
+                {SECURITY_CLEARANCES.map((c) => (
+                  <option key={c} value={c}>
+                    {CLEARANCE_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>
+                Eligible to work in{" "}
+                <span className="text-text-dim font-normal font-mono tabular-nums">
+                  (ISO codes)
+                </span>
+              </label>
+              <ChipInput
+                value={form.eligibleCountries}
+                onChange={(next) => set("eligibleCountries", next)}
+                placeholder="US, CA, GB"
+                validate={validateCountryCode}
+                normalize={normalizeCountryCode}
+                maxChips={50}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="submit"
+          disabled={saving || !identityOk}
+          title={!identityOk ? "Complete the Personal tab first" : undefined}
+          aria-disabled={saving || !identityOk}
+          className={primaryWhiteBtnClass}
+        >
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
     </form>
   );
 }

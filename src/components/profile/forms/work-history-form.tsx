@@ -16,7 +16,7 @@
  *   - Reorder still swaps `order` columns between adjacent rows.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { UserProfile } from "@prisma/client";
 import { toast } from "sonner";
 import { useReducedMotion } from "framer-motion";
@@ -43,6 +43,7 @@ import {
   isIdentityComplete,
 } from "./_shared/identity-gate";
 import { useChildResource } from "./_shared/use-child-resource";
+import { useReorderFlash } from "./_shared/use-reorder-flash";
 import { EmptyState } from "./_shared/empty-state";
 import { EMPTY_STATES } from "./_shared/empty-states";
 
@@ -69,10 +70,6 @@ const PAST_DOT_COLORS = [
 
 const LAVENDER = "var(--color-accent-lavender)";
 const CYAN = "var(--color-accent-cyan)";
-
-// How long a row is highlighted after a reorder. Matches the
-// pp-reorder-flash keyframe duration in globals.css.
-const REORDER_FLASH_MS = 1200;
 
 // ── Date helpers ────────────────────────────────────────────────────────────
 
@@ -142,44 +139,10 @@ export function WorkHistoryForm({ initialData }: WorkHistoryFormProps) {
     remove,
   } = useChildResource<WorkExperienceRow>("work-experience");
 
-  // Local set of ids that just reordered — drives the lavender flash inside
-  // ListEditor. Cleared per id after REORDER_FLASH_MS.
-  const [recentlyReorderedIds, setRecentlyReorderedIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const reorderTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map(),
-  );
-  // Clean up any pending flash timers on unmount.
-  useEffect(() => {
-    const timers = reorderTimersRef.current;
-    return () => {
-      timers.forEach((t) => clearTimeout(t));
-      timers.clear();
-    };
-  }, []);
-
-  const flashReorder = useCallback((ids: readonly string[]) => {
-    setRecentlyReorderedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => next.add(id));
-      return next;
-    });
-    ids.forEach((id) => {
-      const existing = reorderTimersRef.current.get(id);
-      if (existing) clearTimeout(existing);
-      const timer = setTimeout(() => {
-        setRecentlyReorderedIds((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-        reorderTimersRef.current.delete(id);
-      }, REORDER_FLASH_MS);
-      reorderTimersRef.current.set(id, timer);
-    });
-  }, []);
+  // Lavender flash on rows that just reordered — see useReorderFlash for
+  // timer / cleanup semantics.
+  const { reorderFlashIds: recentlyReorderedIds, flashPair } =
+    useReorderFlash();
 
   // ── Derived header stats ──────────────────────────────────────────────────
   const now = useMemo(() => new Date(), []);
@@ -244,7 +207,7 @@ export function WorkHistoryForm({ initialData }: WorkHistoryFormProps) {
     if (!a || !b) return;
     // Swap `order` values between the two rows. Optimistic updates inside
     // useChildResource handle UI flicker; on failure both calls roll back.
-    flashReorder([a.id, b.id]);
+    flashPair(a.id, b.id);
     try {
       await Promise.all([
         update(a.id, { order: b.order }),

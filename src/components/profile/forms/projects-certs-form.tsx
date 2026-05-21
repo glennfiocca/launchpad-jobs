@@ -38,6 +38,7 @@ import { EMPTY_STATES } from "./_shared/empty-states";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { ListEditor } from "./_shared/list-editor";
 import { useChildResource } from "./_shared/use-child-resource";
+import { useReorderFlash } from "./_shared/use-reorder-flash";
 
 type ProjectRow = ProjectInput & { id: string };
 type CertificationRow = CertificationInput & { id: string };
@@ -101,6 +102,12 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
   // signal that mirrors the per-row pill rendered by ListEditor.
   const sectionRecentlySaved = recentlySavedIds.size > 0;
 
+  // Lavender flash on rows that just reordered — see useReorderFlash for
+  // timer / cleanup semantics. ListEditor consumes this set via the
+  // `recentlyReorderedIds` prop and applies pp-reorder-flash to those rows.
+  const { reorderFlashIds: recentlyReorderedIds, flashPair } =
+    useReorderFlash();
+
   const handleAdd = async () => {
     if (!identityOk) {
       toast.error("Complete the Personal tab first");
@@ -151,6 +158,7 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
     const a = items[oldIdx];
     const b = items[newIdx];
     if (!a || !b) return;
+    flashPair(a.id, b.id);
     try {
       await Promise.all([
         update(a.id, { order: b.order }),
@@ -184,6 +192,7 @@ function ProjectsSection({ identityOk }: { identityOk: boolean }) {
             onReorder={handleReorder}
             onItemUpdate={handleUpdate}
             recentlySavedIds={recentlySavedIds}
+            recentlyReorderedIds={recentlyReorderedIds}
             autoFocusItemId={lastCreatedId}
             onAutoFocusConsumed={consumeLastCreatedId}
             lastCreatedId={lastCreatedId}
@@ -361,6 +370,10 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
   // Header-level pill mirrors row-level activity for a single "saved" signal.
   const sectionRecentlySaved = recentlySavedIds.size > 0;
 
+  // Lavender flash on rows that just reordered — fed to ListEditor.
+  const { reorderFlashIds: recentlyReorderedIds, flashPair } =
+    useReorderFlash();
+
   // Per-row count summary — surfaces in the eyebrow as "credentials · N of N".
   const summary = useMemo(() => {
     if (items.length === 0) return "credentials · empty";
@@ -412,6 +425,7 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
     const a = items[oldIdx];
     const b = items[newIdx];
     if (!a || !b) return;
+    flashPair(a.id, b.id);
     try {
       await Promise.all([
         update(a.id, { order: b.order }),
@@ -442,6 +456,7 @@ function CertificationsSection({ identityOk }: { identityOk: boolean }) {
             onReorder={handleReorder}
             onItemUpdate={handleUpdate}
             recentlySavedIds={recentlySavedIds}
+            recentlyReorderedIds={recentlyReorderedIds}
             autoFocusItemId={lastCreatedId}
             onAutoFocusConsumed={consumeLastCreatedId}
             lastCreatedId={lastCreatedId}

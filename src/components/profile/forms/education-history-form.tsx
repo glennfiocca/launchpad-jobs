@@ -48,6 +48,7 @@ import {
 } from "./_shared/atoms";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
 import { useChildResource } from "./_shared/use-child-resource";
+import { useReorderFlash } from "./_shared/use-reorder-flash";
 import { EmptyState } from "./_shared/empty-state";
 import { EMPTY_STATES } from "./_shared/empty-states";
 
@@ -99,6 +100,12 @@ export function EducationHistoryForm({ initialData }: Props) {
     update,
     remove,
   } = useChildResource<EducationEntryRow>("education-entries");
+
+  // Lavender flash on rows that just reordered — see useReorderFlash for
+  // timer / cleanup semantics. EducationSpine consumes this set via the
+  // `recentlyReorderedIds` prop and applies the pp-reorder-flash animation.
+  const { reorderFlashIds: recentlyReorderedIds, flashPair } =
+    useReorderFlash();
 
   // Section-header SavedPill flash is a pure derivation of the per-row save
   // set — useChildResource already TTLs ids out of `recentlySavedIds` after
@@ -167,6 +174,10 @@ export function EducationHistoryForm({ initialData }: Props) {
     const a = items[idx];
     const b = items[target];
     if (!a || !b) return;
+    // Flash both swapped rows before kicking off the optimistic updates —
+    // mirrors the work-history pattern so the lavender highlight rides the
+    // same frame as the row-position swap.
+    flashPair(a.id, b.id);
     try {
       // Optimistic swap inside useChildResource handles UI flicker.
       await Promise.all([
@@ -213,6 +224,7 @@ export function EducationHistoryForm({ initialData }: Props) {
             items={items}
             currentRowId={currentRowId}
             recentlySavedIds={recentlySavedIds}
+            recentlyReorderedIds={recentlyReorderedIds}
             lastCreatedId={lastCreatedId}
             onAutoFocusConsumed={consumeLastCreatedId}
             onUpdate={handleUpdate}
@@ -243,6 +255,8 @@ interface SpineProps {
   items: EducationEntryRow[];
   currentRowId: string | null;
   recentlySavedIds: Set<string>;
+  /** Ids of rows that just reordered — plays the lavender flash animation. */
+  recentlyReorderedIds: Set<string>;
   lastCreatedId: string | null;
   onAutoFocusConsumed: () => void;
   onUpdate: (id: string, patch: Partial<EducationEntryRow>) => void;
@@ -256,6 +270,7 @@ function EducationSpine({
   items,
   currentRowId,
   recentlySavedIds,
+  recentlyReorderedIds,
   lastCreatedId,
   onAutoFocusConsumed,
   onUpdate,
@@ -310,10 +325,15 @@ function EducationSpine({
         {items.map((row, idx) => {
           const isCurrent = row.id === currentRowId;
           const isJustAdded = row.id === lastCreatedId;
+          const isJustReordered = recentlyReorderedIds.has(row.id);
           const isJustSaved = recentlySavedIds.has(row.id);
           const dotColor = isCurrent ? SPINE_DOT_CURRENT : SPINE_DOT_OLDER;
+          // Add wins over reorder when both fire on the same frame (a brand-
+          // new row can't have been reordered). Both are gated on motion.
           const animStyle = !reduced && isJustAdded
             ? { animation: "pp-fade-up 360ms cubic-bezier(0.22,1,0.36,1)" }
+            : !reduced && isJustReordered
+            ? { animation: "pp-reorder-flash 1200ms ease-out" }
             : undefined;
           return (
             <article

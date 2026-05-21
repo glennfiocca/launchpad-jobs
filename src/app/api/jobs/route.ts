@@ -21,6 +21,7 @@ import {
 } from "@/lib/job-relevance";
 import type { RelevanceProfile } from "@/lib/job-relevance";
 import type { ApiResponse, JobWithCompany } from "@/types";
+import type { ExtractedResumeData } from "@/lib/profile/resume-types";
 
 // 7-day window for the rolling applicationVelocity count. Detail-pane only,
 // signed-in only — see the per-row enrichment block below for the gating.
@@ -309,17 +310,49 @@ export async function GET(request: Request) {
         locationCity: true,
         locationState: true,
         openToRemote: true,
+        openToHybrid: true,
         openToOnsite: true,
         currentTitle: true,
         fieldOfStudy: true,
+        yearsExperience: true,
         desiredSalaryMin: true,
         desiredSalaryMax: true,
         targetRoles: true,
         desiredEmploymentTypes: true,
+        // Resume snapshot — JSONB, used as fallback for currentTitle/years
+        // when the scalar columns are still empty. Cast to ExtractedResumeData
+        // at the boundary (validated upstream by extractedResumeSchema).
+        resumeExtracted: true,
+        // Skills + spoken languages drive the new ts_rank and language-gate
+        // signals (P0 #1, #2). Selected with name only to keep the payload
+        // tight — both relations are typically <50 rows per user.
+        skills: { select: { name: true } },
+        spokenLanguages: { select: { name: true } },
       },
     });
     if (profile) {
-      relevanceProfile = profile;
+      // resumeExtracted is JSONB — cast at the boundary, validated upstream.
+      const extracted = profile.resumeExtracted as ExtractedResumeData | null;
+      const effectiveTitle = profile.currentTitle ?? extracted?.currentTitle ?? null;
+      const effectiveYears = profile.yearsExperience ?? extracted?.yearsExperience ?? null;
+      relevanceProfile = {
+        locationCity: profile.locationCity,
+        locationState: profile.locationState,
+        openToRemote: profile.openToRemote,
+        openToHybrid: profile.openToHybrid,
+        openToOnsite: profile.openToOnsite,
+        currentTitle: effectiveTitle,
+        fieldOfStudy: profile.fieldOfStudy,
+        yearsExperience: effectiveYears,
+        desiredSalaryMin: profile.desiredSalaryMin,
+        desiredSalaryMax: profile.desiredSalaryMax,
+        targetRoles: profile.targetRoles,
+        desiredEmploymentTypes: profile.desiredEmploymentTypes,
+        skillNames: profile.skills.map((s) => s.name),
+        // Lowercase spoken-language names so they overlap with the
+        // canonical lowercase slugs in Job.requiredLanguages.
+        spokenLanguages: profile.spokenLanguages.map((l) => l.name.toLowerCase()),
+      };
     }
   }
 

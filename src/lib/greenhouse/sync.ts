@@ -8,6 +8,22 @@ import { decode } from "html-entities";
 import { inferEmploymentTypeFromTitle } from "@/lib/employment-type";
 import { inferExperienceLevelFromTitle } from "@/lib/experience-level";
 import { inferWorkModeFromJob } from "@/lib/work-mode";
+import { extractRequiredLanguages } from "@/lib/jobs/language-extractor";
+
+/**
+ * Sync-time wrapper around the language extractor. Centralizes the
+ * null/empty-content guard so both the create and update paths produce
+ * the same `requiredLanguages` value for the same decoded content. The
+ * extractor itself is pure / synchronous / microsecond-fast — see
+ * src/lib/jobs/language-extractor.ts for the regex algorithm.
+ *
+ * Exported for the sync-language-extraction smoke test, which exercises
+ * the wiring without standing up the full Greenhouse pipeline.
+ */
+export function deriveRequiredLanguages(content: string | null): string[] {
+  if (!content) return [];
+  return extractRequiredLanguages(content);
+}
 
 interface SyncResult {
   companyName: string;
@@ -93,6 +109,12 @@ export async function syncGreenhouseBoard(
     const department = extractDepartment(ghJob.departments);
     const remote = location ? isRemoteJob(location) : false;
 
+    // Decode once and re-use for both content storage and the
+    // language-requirement extractor. Re-extracting on every update is
+    // intentional — companies edit job descriptions and the requiredLanguages
+    // field must reflect the current copy, not the value at first ingest.
+    const decodedContent = ghJob.content ? decode(ghJob.content) : null;
+
     const jobData = {
       title: ghJob.title,
       location,
@@ -113,10 +135,14 @@ export async function syncGreenhouseBoard(
       workMode: inferWorkModeFromJob({
         title: ghJob.title,
         location,
-        content: ghJob.content ?? null,
+        content: decodedContent,
         remote,
       }),
-      content: ghJob.content ? decode(ghJob.content) : null,
+      content: decodedContent,
+      // Regex-extracted spoken-language requirements (PR2 — profile match
+      // filter). Recomputed on every sync so re-edited postings stay in
+      // sync with the current copy. Pure / synchronous / microsecond-fast.
+      requiredLanguages: deriveRequiredLanguages(decodedContent),
       isActive: true,
       postedAt: ghJob.updated_at ? new Date(ghJob.updated_at) : null,
     };

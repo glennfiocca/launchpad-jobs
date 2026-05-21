@@ -8,19 +8,23 @@
  * can read which sections are still open at a glance. Empty axes still leave
  * a small notch (MIN_PCT) so the polygon never collapses to a single point.
  *
- * Per-vertex tooltips use Radix Popover (no shadcn) — they open on hover
- * (desktop) and on tap (mobile). The sigil itself is decorative; the
- * accessible summary lives in role="img" + aria-label + per-axis
- * <title> + <desc> for screen readers.
+ * Per-vertex tooltips use Radix Tooltip — built-in hover-in/hover-out
+ * semantics with a snappy delay, auto-close on cursor exit, no lingering.
+ * Each axis has TWO transparent hit areas inside one Tooltip trigger: a
+ * 12-radius circle on the vertex dot AND a 22-radius circle at the
+ * perimeter (where the label lives). Empty axes — whose vertex collapses
+ * inward to the MIN_PCT notch — stay reachable via the perimeter hit area.
+ * The sigil itself is decorative; the accessible summary lives in
+ * role="img" + aria-label + per-axis <title> + <desc> for screen readers.
  *
  * Motion: each non-empty vertex pulses with a staggered glow loop. Gated
  * on framer-motion's useReducedMotion() — under reduced motion the pulse
  * resolves to the initial (un-pulsed) state.
  */
 
-import { useState, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
 import { useReducedMotion } from "framer-motion";
-import * as Popover from "@radix-ui/react-popover";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   TAB_KEYS,
   TAB_LABELS,
@@ -161,6 +165,7 @@ export function Sigil({
   ).join(" ");
 
   return (
+    <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
     <svg
       viewBox={`0 0 ${size} ${size}`}
       width="100%"
@@ -296,6 +301,8 @@ export function Sigil({
                 color={color}
                 x={v.x}
                 y={v.y}
+                perimeterX={cx + Math.cos(angleFor(i)) * maxR}
+                perimeterY={cy + Math.sin(angleFor(i)) * maxR}
                 empty={empty}
                 partialContext={partialContext?.[key]}
               />
@@ -395,12 +402,20 @@ export function Sigil({
         </>
       )}
     </svg>
+    </Tooltip.Provider>
   );
 }
 
 // ---------------------------------------------------------------------------
-// SigilVertex — one vertex circle + its Radix Popover tooltip target.
-// Split out so each vertex tracks its own open state for the popover.
+// SigilVertex — one vertex dot + its Radix Tooltip trigger.
+// Two transparent hit-area circles share one trigger: the inner one covers
+// the dot (which collapses to the polygon's MIN_PCT notch for empty axes,
+// otherwise sits on the polygon vertex), and the outer one sits at the
+// perimeter where the axis label is — so empty axes whose vertex has
+// snapped inward are still reachable by hovering the label area.
+//
+// Tooltip handles open/close on its own. No manual setOpen, no lingering
+// after pointer leave. delayDuration is set on the parent Provider.
 // ---------------------------------------------------------------------------
 
 interface SigilVertexProps {
@@ -409,6 +424,8 @@ interface SigilVertexProps {
   color: string;
   x: number;
   y: number;
+  perimeterX: number;
+  perimeterY: number;
   empty: boolean;
   partialContext?: TooltipPartialContext;
 }
@@ -419,29 +436,29 @@ function SigilVertex({
   color,
   x,
   y,
+  perimeterX,
+  perimeterY,
   empty,
   partialContext,
 }: SigilVertexProps) {
-  const [open, setOpen] = useState(false);
   const copy = getTooltipCopy(tab, pct, partialContext);
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        {/* The visible vertex dot doubles as the popover trigger. We render
-            a transparent "hit area" circle at r=12 underneath so taps + hovers
-            register reliably even on small (r=3.5) dots. */}
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>
         <g
           tabIndex={0}
           role="button"
-          aria-label={`${TAB_LABELS[tab]} — ${pct}% complete. Click to read more.`}
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
+          aria-label={`${TAB_LABELS[tab]} — ${pct}% complete.`}
           style={{ cursor: "pointer", outline: "none" }}
         >
+          {/* Outer hit area at the perimeter — wraps the label position so
+              empty axes (whose vertex collapses inward) remain hoverable. */}
+          <circle cx={perimeterX} cy={perimeterY} r={22} fill="transparent" />
+          {/* Inner hit area at the vertex — generous click target on the
+              dot itself for non-empty axes. */}
           <circle cx={x} cy={y} r={12} fill="transparent" />
+          {/* Visible vertex dot. */}
           <circle
             cx={x}
             cy={y}
@@ -451,13 +468,13 @@ function SigilVertex({
             strokeWidth={empty ? 1 : 1.4}
           />
         </g>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content
           side="top"
           sideOffset={8}
+          collisionPadding={12}
           className="z-50 max-w-[260px] rounded-[10px] border border-white/10 bg-bg-elev px-3.5 py-2.5 shadow-lg"
-          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-accent-lavender)]">
             {copy.title} · <span className="tabular-nums">{pct}%</span>
@@ -465,8 +482,8 @@ function SigilVertex({
           <div className="mt-1 text-[12.5px] leading-snug text-text">
             {copy.body}
           </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }

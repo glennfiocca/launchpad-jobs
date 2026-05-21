@@ -283,6 +283,19 @@ model UserProfile {
   resumeFileName String?
   resumeMimeType String?
 
+  // Structured snapshot of the last parsed resume. Populated by the
+  // /api/profile/resume upload handler after Haiku extraction (see
+  // src/lib/profile/resume-parser.ts). Shape matches ExtractedResumeData
+  // from src/lib/profile/resume-types.ts and is validated by Zod before
+  // write. Null until the user uploads a resume; replaced wholesale on
+  // each re-upload (no merge).
+  resumeExtracted   Json?
+  // Timestamp of the most recent successful Haiku extraction that
+  // produced `resumeExtracted`. Null whenever resumeExtracted is null.
+  // Used by the profile UI to show "Last parsed: …" and to gate
+  // re-extraction prompts when the file is new but the snapshot is stale.
+  resumeExtractedAt DateTime?
+
   // Headline & bio
   headline String?
   summary  String? @db.Text
@@ -477,6 +490,15 @@ model Job {
   /// Full-text search vector. Maintained by DB trigger — do not write from application code.
   searchVector Unsupported("tsvector")?
 
+  /// Languages flagged as REQUIRED for the role, extracted from the job
+  /// description at sync time by src/lib/jobs/language-extractor.ts.
+  /// Stored as lowercase language slugs (e.g. ["spanish","mandarin"]).
+  /// Empty array means "no explicit language requirement" — the listing
+  /// API treats that as "no language gate" when matching candidate
+  /// profiles. Match queries use `&&` (array overlap) against the
+  /// candidate's spoken-language slugs.
+  requiredLanguages String[] @default([])
+
   isActive     Boolean   @default(true)
   postedAt     DateTime?
   /// JobPosting validity window for Google structured data. Refreshed on every
@@ -500,6 +522,7 @@ model Job {
   @@index([postedAt])
   @@index([validThrough])
   @@index([isUSEligible])
+  @@index([requiredLanguages], type: Gin)
 }
 
 enum ApplicationStatus {

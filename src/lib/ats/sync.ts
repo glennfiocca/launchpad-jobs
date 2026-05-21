@@ -10,6 +10,7 @@ import { enrichCompanyLogo } from "../logo-enrichment";
 import { notifyIndexNow } from "../seo/indexnow";
 import { resolveCompanyName } from "../company-name";
 import { resolveCompanyLogoSync } from "../company-logo";
+import { extractRequiredLanguages } from "../jobs/language-extractor";
 import { VALIDITY_WINDOW_DAYS } from "@/config/seo";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://trypipeline.ai").replace(/\/$/, "");
@@ -305,6 +306,10 @@ export async function syncBoard(
       countryCode: normalizedJob.countryCode,
       locationCategory: normalizedJob.locationCategory,
       isUSEligible: normalizedJob.isUSEligible,
+      // Required-language extraction runs at sync time so the matcher can
+      // gate jobs against the user's SpokenLanguage profile. Regex with
+      // proximity rules — see src/lib/jobs/language-extractor.ts.
+      requiredLanguages: extractRequiredLanguages(normalizedJob.content ?? ""),
       ...(normalizedJob.compensation?.min != null && { salaryMin: normalizedJob.compensation.min }),
       ...(normalizedJob.compensation?.max != null && { salaryMax: normalizedJob.compensation.max }),
       ...(normalizedJob.compensation?.currency && { salaryCurrency: normalizedJob.compensation.currency }),

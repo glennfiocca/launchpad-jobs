@@ -10,6 +10,7 @@ import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getSpacesClient, SPACES_BUCKET } from "@/lib/spaces";
 import {
   extractPdfText,
@@ -34,6 +35,15 @@ const MAX_SIZE = 8 * 1024 * 1024;
 // degrades. Kept here (not in resume-parser) because it's a route-level
 // match-count concern, not a parsing concern.
 const MAX_TSQUERY_SKILLS = 8;
+
+// Per-user rate limits on the upload endpoint. Each upload costs a paid
+// Anthropic call + pdf-parse CPU + an SSE-held connection; without a cap
+// an authenticated user could burn budget by looping. Two windows so a
+// burst is allowed but sustained abuse is not.
+const UPLOAD_RATE_PER_MIN = 5;
+const UPLOAD_RATE_PER_MIN_MS = 60 * 1000;
+const UPLOAD_RATE_PER_HOUR = 30;
+const UPLOAD_RATE_PER_HOUR_MS = 60 * 60 * 1000;
 
 function getSpacesKey(userId: string, fileName: string): string {
   return `resumes/${userId}/${Date.now()}-${fileName}`;
@@ -292,6 +302,40 @@ export async function POST(request: Request) {
   }
   const userId = session.user.id;
   const userEmail = session.user.email ?? "";
+
+  // Two-window per-user rate limit. Cheap to short-circuit here before
+  // touching multipart / Spaces / Anthropic. Burst window protects against
+  // accidental client retries; sustained window protects against abuse.
+  const minuteRate = await checkRateLimit(
+    `resume-upload:user:${userId}:1m`,
+    UPLOAD_RATE_PER_MIN,
+    UPLOAD_RATE_PER_MIN_MS,
+  );
+  if (!minuteRate.allowed) {
+    const retryAfterSec = Math.max(
+      1,
+      Math.ceil((minuteRate.resetAt - Date.now()) / 1000),
+    );
+    return NextResponse.json(
+      { error: "Too many uploads — try again in a minute" },
+      { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+    );
+  }
+  const hourRate = await checkRateLimit(
+    `resume-upload:user:${userId}:1h`,
+    UPLOAD_RATE_PER_HOUR,
+    UPLOAD_RATE_PER_HOUR_MS,
+  );
+  if (!hourRate.allowed) {
+    const retryAfterSec = Math.max(
+      1,
+      Math.ceil((hourRate.resetAt - Date.now()) / 1000),
+    );
+    return NextResponse.json(
+      { error: "Hourly upload limit reached" },
+      { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+    );
+  }
 
   const url = new URL(request.url);
   const reextract = url.searchParams.get("reextract") === "true";

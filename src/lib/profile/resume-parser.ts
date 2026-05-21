@@ -34,6 +34,11 @@ const PARSE_TIMEOUT_MS = 20_000;
 const PARSE_DEFAULT_RETRY_BACKOFF_MS = 2_000;
 const PARSE_MAX_RETRY_BACKOFF_MS = 10_000;
 
+// Hard cap on pdf-parse runtime. The library is unmaintained (1.1.4, 2022)
+// and known to hang on malformed PDFs — without this timeout an attacker
+// could DoS a route worker with a single crafted upload.
+const PDF_PARSE_TIMEOUT_MS = 15_000;
+
 // Cap on plain-text resume content sent to Haiku. ~12k chars is roughly
 // 3k tokens — more than enough to cover even verbose multi-page CVs while
 // keeping the prompt well under the model's 200k context.
@@ -147,7 +152,18 @@ async function loadPdfParse(): Promise<PdfParseFn> {
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     const pdfParse = await loadPdfParse();
-    const result = await pdfParse(buffer);
+    // Promise.race timeout — pdf-parse has no built-in abort, so the worker
+    // thread can still run after we reject, but the route returns promptly
+    // and the user-facing path is bounded. Node will GC the orphan promise.
+    const result = await Promise.race([
+      pdfParse(buffer),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`pdf-parse exceeded ${PDF_PARSE_TIMEOUT_MS}ms`)),
+          PDF_PARSE_TIMEOUT_MS,
+        ),
+      ),
+    ]);
     return result.text ?? "";
   } catch (err) {
     throw new ResumeParseError(

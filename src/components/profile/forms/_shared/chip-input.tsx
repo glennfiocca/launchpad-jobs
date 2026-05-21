@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { inputClass } from "./styles";
+import { directionAInputClass } from "./styles";
 
 // Backspace double-tap window: first press arms a pending-delete state,
 // second press within this window removes the last chip. Any other key
@@ -134,7 +134,7 @@ export function ChipInput({
   return (
     <div className="space-y-2">
       <div
-        className={`${inputClass} flex flex-wrap items-center gap-1.5 ${
+        className={`${directionAInputClass} flex flex-wrap items-center gap-1.5 ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
       >
@@ -144,8 +144,10 @@ export function ChipInput({
           return (
             <span
               key={`${chip}-${idx}`}
-              className={`inline-flex items-center gap-1.5 rounded-full bg-white/10 border px-2.5 py-0.5 text-xs text-white transition-colors ${
-                armed ? "ring-1 ring-red-400/40 border-red-400/40" : "border-white/15"
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs transition-colors ${
+                armed
+                  ? "bg-red-500/10 text-red-300 ring-1 ring-red-400/40 border border-red-400/40"
+                  : "bg-[rgba(196,181,253,0.08)] text-[var(--color-accent-lavender)] border border-[rgba(196,181,253,0.22)]"
               }`}
             >
               {chip}
@@ -154,7 +156,7 @@ export function ChipInput({
                 disabled={disabled}
                 onClick={() => removeAt(idx)}
                 aria-label={`Remove ${chip}`}
-                className="text-zinc-400 hover:text-white transition-colors disabled:hover:text-zinc-400"
+                className="text-[var(--color-accent-lavender)] opacity-60 hover:opacity-100 transition-opacity disabled:hover:opacity-60"
               >
                 ×
               </button>
@@ -162,7 +164,7 @@ export function ChipInput({
           );
         })}
         <input
-          className="flex-1 min-w-[120px] bg-transparent border-0 outline-none text-sm text-white placeholder:text-zinc-700 disabled:cursor-not-allowed"
+          className="flex-1 min-w-[120px] bg-transparent border-0 outline-none text-sm text-[var(--text)] placeholder:text-[var(--text-dim)] disabled:cursor-not-allowed"
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);

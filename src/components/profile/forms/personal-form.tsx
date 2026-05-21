@@ -1,5 +1,29 @@
 "use client";
 
+/**
+ * PersonalForm — Direction A reference implementation.
+ *
+ * The other 6 parallel tab agents will copy this pattern. Things worth
+ * preserving when other tabs are migrated:
+ *
+ *  - SectionHeader pair (eyebrow + display title + optional right slot)
+ *  - directionAInputClass on every field (lavender focus ring, 12px radius)
+ *  - directionASectionClass on every section card (14px radius hairline)
+ *  - SavedPill in the section header that lights up on successful save
+ *  - Single submit button using primaryWhiteBtnClass; no inline save state
+ *    on individual fields for tabs that don't use list-editor (Personal,
+ *    Professional, Preferences — these still patch on form submit so they
+ *    can validate the whole form server-side as one shot).
+ *  - 13 social URLs split: top tier (LinkedIn / GitHub / X / Portfolio)
+ *    separated by a subtle hairline from "the rest." Portfolio sits in the
+ *    top tier visually but is labeled explicitly as "personal website or
+ *    portfolio" so users understand the field.
+ *
+ * Identity fields (firstName / lastName / email) are required by the API.
+ * Phone is included to match the per-section completion rubric (counted as
+ * 1 of 6 personal contributors).
+ */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserProfile } from "@prisma/client";
@@ -7,19 +31,22 @@ import { toast } from "sonner";
 import { AddressCombobox } from "@/components/ui/address-combobox";
 import type { PlaceDetails } from "@/lib/validations/places";
 import {
+  directionAInputClass,
+  directionASectionClass,
   gridThreeCol,
   gridTwoCol,
-  inputClass,
   labelClass,
-  sectionClass,
-  sectionTitleClass,
+  primaryWhiteBtnClass,
 } from "./_shared/styles";
-import { SaveButton } from "./_shared/save-button";
+import {
+  FormEyebrow,
+  SavedPill,
+  SectionHeader,
+} from "./_shared/atoms";
 import { submitProfilePatch } from "./_shared/submit";
 
-// Same runtime-vs-generated-type bridge used in the original profile-form.tsx —
-// these structured location columns exist at runtime even before the Prisma
-// client regen reflects them.
+// Runtime-vs-generated-type bridge — these structured location columns exist
+// in the DB even before the Prisma client regen reflects them.
 type ProfileWithStructured =
   | (UserProfile & {
       locationPlaceId?: string | null;
@@ -48,8 +75,6 @@ interface PersonalFormState {
   locationPostalCode: string;
   locationLat: string;
   locationLng: string;
-  // Social / professional URLs (10 new + 3 existing). Stored on the personal
-  // tab because they're identity-attached profile metadata, not job-search prefs.
   linkedinUrl: string;
   githubUrl: string;
   portfolioUrl: string;
@@ -65,54 +90,101 @@ interface PersonalFormState {
   youtubeUrl: string;
 }
 
-// URL field groups for the Social Links collapsible section. Order within each
-// group is the rendered order; group-name is the subheader label.
-type UrlField = Exclude<keyof PersonalFormState,
-  | "firstName" | "lastName" | "preferredFirstName" | "email" | "phone"
-  | "location" | "locationPlaceId" | "locationFormatted" | "locationStreet"
-  | "locationCity" | "locationState" | "locationPostalCode" | "locationLat" | "locationLng">;
+type UrlField = Exclude<
+  keyof PersonalFormState,
+  | "firstName"
+  | "lastName"
+  | "preferredFirstName"
+  | "email"
+  | "phone"
+  | "location"
+  | "locationPlaceId"
+  | "locationFormatted"
+  | "locationStreet"
+  | "locationCity"
+  | "locationState"
+  | "locationPostalCode"
+  | "locationLat"
+  | "locationLng"
+>;
 
-const SOCIAL_GROUPS: ReadonlyArray<{
-  title: string;
-  fields: ReadonlyArray<{ key: UrlField; label: string; placeholder: string }>;
-}> = [
+interface UrlFieldConfig {
+  readonly key: UrlField;
+  readonly label: string;
+  readonly placeholder: string;
+}
+
+// Top-tier socials sit above a hairline divider. Portfolio is here for
+// visual prominence but its label is explicit so users know it's the
+// "personal website" field rather than a specific service.
+const TOP_TIER_SOCIALS: ReadonlyArray<UrlFieldConfig> = [
   {
-    title: "Code",
-    fields: [
-      { key: "githubUrl", label: "GitHub", placeholder: "https://github.com/yourname" },
-      { key: "stackOverflowUrl", label: "Stack Overflow", placeholder: "https://stackoverflow.com/users/123/yourname" },
-      { key: "kaggleUrl", label: "Kaggle", placeholder: "https://kaggle.com/yourname" },
-      { key: "huggingFaceUrl", label: "Hugging Face", placeholder: "https://huggingface.co/yourname" },
-    ],
+    key: "linkedinUrl",
+    label: "LinkedIn",
+    placeholder: "https://linkedin.com/in/yourname",
   },
   {
-    title: "Writing",
-    fields: [
-      { key: "mediumUrl", label: "Medium", placeholder: "https://medium.com/@yourname" },
-      { key: "devToUrl", label: "Dev.to", placeholder: "https://dev.to/yourname" },
-    ],
+    key: "githubUrl",
+    label: "GitHub",
+    placeholder: "https://github.com/yourname",
   },
   {
-    title: "Design",
-    fields: [
-      { key: "dribbbleUrl", label: "Dribbble", placeholder: "https://dribbble.com/yourname" },
-      { key: "behanceUrl", label: "Behance", placeholder: "https://behance.net/yourname" },
-    ],
+    key: "twitterUrl",
+    label: "X / Twitter",
+    placeholder: "https://x.com/yourname",
   },
   {
-    title: "Research",
-    fields: [
-      { key: "googleScholarUrl", label: "Google Scholar", placeholder: "https://scholar.google.com/citations?user=..." },
-    ],
+    key: "portfolioUrl",
+    label: "Your personal website or portfolio",
+    placeholder: "https://yoursite.com",
+  },
+];
+
+const OTHER_SOCIALS: ReadonlyArray<UrlFieldConfig> = [
+  {
+    key: "stackOverflowUrl",
+    label: "Stack Overflow",
+    placeholder: "https://stackoverflow.com/users/123/yourname",
   },
   {
-    title: "Social",
-    fields: [
-      { key: "linkedinUrl", label: "LinkedIn", placeholder: "https://linkedin.com/in/yourname" },
-      { key: "twitterUrl", label: "Twitter / X", placeholder: "https://twitter.com/yourname" },
-      { key: "youtubeUrl", label: "YouTube", placeholder: "https://youtube.com/@yourname" },
-      { key: "portfolioUrl", label: "Portfolio / Website", placeholder: "https://yoursite.com" },
-    ],
+    key: "kaggleUrl",
+    label: "Kaggle",
+    placeholder: "https://kaggle.com/yourname",
+  },
+  {
+    key: "huggingFaceUrl",
+    label: "Hugging Face",
+    placeholder: "https://huggingface.co/yourname",
+  },
+  {
+    key: "mediumUrl",
+    label: "Medium",
+    placeholder: "https://medium.com/@yourname",
+  },
+  {
+    key: "devToUrl",
+    label: "Dev.to",
+    placeholder: "https://dev.to/yourname",
+  },
+  {
+    key: "dribbbleUrl",
+    label: "Dribbble",
+    placeholder: "https://dribbble.com/yourname",
+  },
+  {
+    key: "behanceUrl",
+    label: "Behance",
+    placeholder: "https://behance.net/yourname",
+  },
+  {
+    key: "googleScholarUrl",
+    label: "Google Scholar",
+    placeholder: "https://scholar.google.com/citations?user=...",
+  },
+  {
+    key: "youtubeUrl",
+    label: "YouTube",
+    placeholder: "https://youtube.com/@yourname",
   },
 ];
 
@@ -156,7 +228,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<PersonalFormState>(initState(initialData));
   const [saving, setSaving] = useState(false);
-  const [socialLinksOpen, setSocialLinksOpen] = useState(false);
+  const [recentlySaved, setRecentlySaved] = useState(false);
 
   const set = (field: keyof PersonalFormState, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -165,9 +237,6 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
     e.preventDefault();
     setSaving(true);
 
-    // Personal tab IS the source of truth for identity fields. Social URLs are
-    // sent as "" rather than undefined so the API's "" → null normalizer can
-    // clear them on the server when the user empties an input.
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
@@ -202,7 +271,10 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
     if (!result.ok) {
       toast.error(result.error ?? "Failed to save profile");
     } else {
-      toast.success("Profile saved successfully!");
+      toast.success("Profile saved");
+      setRecentlySaved(true);
+      // Match the 2-second SAVED pill window used by list-editor saves.
+      setTimeout(() => setRecentlySaved(false), 2000);
       router.refresh();
     }
     setSaving(false);
@@ -210,13 +282,20 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className={sectionClass}>
-        <h2 className={sectionTitleClass}>Personal Information</h2>
+      {/* Identity section */}
+      <section className={directionASectionClass}>
+        <SectionHeader
+          eyebrow={<FormEyebrow accent>identity · required</FormEyebrow>}
+          title="Personal Information"
+          subtitle="The basics that go on every application — name, contact, where you're based."
+          right={<SavedPill visible={recentlySaved} />}
+        />
+
         <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>First Name *</label>
             <input
-              className={inputClass}
+              className={directionAInputClass}
               value={form.firstName}
               onChange={(e) => set("firstName", e.target.value)}
               required
@@ -226,7 +305,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
           <div>
             <label className={labelClass}>Last Name *</label>
             <input
-              className={inputClass}
+              className={directionAInputClass}
               value={form.lastName}
               onChange={(e) => set("lastName", e.target.value)}
               required
@@ -234,25 +313,27 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
             />
           </div>
         </div>
+
         <div>
           <label className={labelClass}>
             Preferred First Name{" "}
-            <span className="text-zinc-600 font-normal">
+            <span className="text-text-dim font-normal">
               (optional — used on applications that ask for a preferred name)
             </span>
           </label>
           <input
-            className={inputClass}
+            className={directionAInputClass}
             value={form.preferredFirstName}
             onChange={(e) => set("preferredFirstName", e.target.value)}
             placeholder="e.g. Alex (if different from your legal first name)"
           />
         </div>
+
         <div className={gridTwoCol}>
           <div>
             <label className={labelClass}>Email *</label>
             <input
-              className={inputClass}
+              className={`${directionAInputClass} font-mono`}
               type="email"
               value={form.email}
               onChange={(e) => set("email", e.target.value)}
@@ -263,7 +344,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
           <div>
             <label className={labelClass}>Phone</label>
             <input
-              className={inputClass}
+              className={`${directionAInputClass} font-mono`}
               type="tel"
               value={form.phone}
               onChange={(e) => set("phone", e.target.value)}
@@ -271,6 +352,7 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
             />
           </div>
         </div>
+
         <div>
           <label className={labelClass}>Address</label>
           <AddressCombobox
@@ -293,46 +375,62 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
             placeholder="San Francisco, CA"
           />
         </div>
-      </div>
+      </section>
 
-      <details className={sectionClass} open={socialLinksOpen}>
-        <summary
-          className="cursor-pointer list-none flex items-center justify-between"
-          onClick={(e) => {
-            e.preventDefault();
-            setSocialLinksOpen((v) => !v);
-          }}
-        >
-          <h2 className={`${sectionTitleClass} mb-0`}>Social Links</h2>
-          <span className="text-xs text-zinc-500">{socialLinksOpen ? "Hide" : "Show"}</span>
-        </summary>
-        <p className="text-xs text-zinc-500 -mt-1">
-          Optional — used to autofill applications and link from your public profile.
-        </p>
-        {SOCIAL_GROUPS.map((group) => (
-          <div key={group.title} className="space-y-3 pt-2">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">
-              {group.title}
-            </p>
-            <div className={gridThreeCol}>
-              {group.fields.map(({ key, label, placeholder }) => (
-                <div key={key}>
-                  <label className={labelClass}>{label}</label>
-                  <input
-                    className={inputClass}
-                    type="url"
-                    value={form[key]}
-                    onChange={(e) => set(key, e.target.value)}
-                    placeholder={placeholder}
-                  />
-                </div>
-              ))}
+      {/* Social links — top tier (LinkedIn / GitHub / X / Portfolio) above
+          the rest. Always visible; no more accordion (the redesign treats
+          this as part of the personal artifact, not a collapsed extra). */}
+      <section className={directionASectionClass}>
+        <SectionHeader
+          eyebrow={<FormEyebrow>optional · used for autofill</FormEyebrow>}
+          title="Social Links"
+          subtitle="Top four feed straight into your job application autofills. The rest tile underneath for discoverability."
+        />
+
+        <div className={gridTwoCol}>
+          {TOP_TIER_SOCIALS.map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <label className={labelClass}>{label}</label>
+              <input
+                className={`${directionAInputClass} font-mono`}
+                type="url"
+                value={form[key]}
+                onChange={(e) => set(key, e.target.value)}
+                placeholder={placeholder}
+              />
             </div>
-          </div>
-        ))}
-      </details>
+          ))}
+        </div>
 
-      <SaveButton saving={saving} />
+        {/* Hairline separator between the top tier and the rest. */}
+        <div className="border-t border-white/[0.06] pt-4 mt-2">
+          <FormEyebrow>more · social, writing, design, research</FormEyebrow>
+          <div className={`${gridThreeCol} mt-3`}>
+            {OTHER_SOCIALS.map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label className={labelClass}>{label}</label>
+                <input
+                  className={`${directionAInputClass} font-mono`}
+                  type="url"
+                  value={form[key]}
+                  onChange={(e) => set(key, e.target.value)}
+                  placeholder={placeholder}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="submit"
+          disabled={saving}
+          className={primaryWhiteBtnClass}
+        >
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
     </form>
   );
 }

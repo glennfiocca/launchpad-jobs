@@ -12,7 +12,7 @@ import {
   type SearchStatus,
   type SecurityClearance,
 } from "@/types/_shared/profile-enums";
-import { labelClass } from "./styles";
+import { labelClass, pillBtnClass } from "./styles";
 
 // ────────── Soft-enum coercion helpers ──────────
 // Prisma stores the soft-enum columns as `string`. The Phase 1 schema
@@ -131,11 +131,7 @@ export function TriStateRadio({ label, value, onChange }: TriStateProps) {
               type="button"
               onClick={() => onChange(opt.v)}
               aria-pressed={active}
-              className={`rounded-lg px-3 py-2 text-sm border transition-colors ${
-                active
-                  ? "bg-white text-black border-white font-medium"
-                  : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20"
-              }`}
+              className={pillBtnClass(active)}
             >
               {opt.label}
             </button>

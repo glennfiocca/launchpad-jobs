@@ -135,7 +135,16 @@ async function loadPdfParse(): Promise<PdfParseFn> {
   return fn;
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
+/**
+ * Step 1 of the parse pipeline: extract plain text from a PDF buffer via
+ * pdf-parse. Exported as a granular step so the SSE route can emit a PARSED
+ * progress event after this resolves without owning the model-call below.
+ *
+ * Throws `ResumeParseError("PDF_EXTRACTION_FAILED", …)` on any pdf-parse
+ * error so the route can pass the code straight through to the SSE error
+ * payload without re-classification.
+ */
+export async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     const pdfParse = await loadPdfParse();
     const result = await pdfParse(buffer);
@@ -239,8 +248,19 @@ function isolateJsonObject(text: string): string {
   return text.slice(start, end + 1);
 }
 
-export async function parseResume(
-  buffer: Buffer,
+/**
+ * Step 2 of the parse pipeline: take the pdf-parsed text and ask Haiku for
+ * a validated `ExtractedResumeData`. Exported so the SSE route can emit a
+ * PARSED event between pdf-parse and this call, then an INDEXED event after
+ * it resolves — without the parser knowing anything about SSE.
+ *
+ * Throws `ResumeParseError` with one of:
+ *   - "PDF_EXTRACTION_FAILED"  if the supplied text is empty after trim
+ *   - "HAIKU_CALL_FAILED"      if the model call fails after retries
+ *   - "HAIKU_INVALID_OUTPUT"   if the model returns non-JSON or invalid shape
+ */
+export async function extractStructuredFromText(
+  text: string,
 ): Promise<ExtractedResumeData> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new ResumeParseError(
@@ -249,8 +269,7 @@ export async function parseResume(
     );
   }
 
-  const rawText = await extractPdfText(buffer);
-  const trimmed = rawText.trim();
+  const trimmed = text.trim();
   if (trimmed.length === 0) {
     throw new ResumeParseError(
       "PDF_EXTRACTION_FAILED",
@@ -295,4 +314,17 @@ export async function parseResume(
   }
 
   return validation.data;
+}
+
+/**
+ * Thin wrapper that runs the full pipeline (pdf-parse + Haiku) for callers
+ * that don't need stage-by-stage progress. The SSE route uses the granular
+ * `extractPdfText` + `extractStructuredFromText` exports instead so it can
+ * emit intermediate progress events.
+ */
+export async function parseResume(
+  buffer: Buffer,
+): Promise<ExtractedResumeData> {
+  const rawText = await extractPdfText(buffer);
+  return extractStructuredFromText(rawText);
 }

@@ -243,12 +243,18 @@ function buildProfileScoreParts(profile: RelevanceProfile): Prisma.Sql[] {
   // -- 6. Skills ts_rank (P0 #2). Biggest precision win — uses the existing
   //       Job.searchVector tsvector + a tsquery built from the user's skill
   //       names. Scaled by SKILLS_RANK_MULT and capped via LEAST() so a
-  //       trove of niche keyword hits can't out-rank stronger signals. --
+  //       trove of niche keyword hits can't out-rank stronger signals.
+  //
+  //       The `WHEN @@ ELSE 0` guard short-circuits the per-row ts_rank
+  //       call for jobs whose searchVector doesn't match the tsquery at
+  //       all. @@ evaluation against the GIN-indexed tsvector is cheap;
+  //       ts_rank is not. On a 60-80k post-filter row set this saves
+  //       roughly an order of magnitude of computation per page-1 sort. --
   if (profile.skillNames && profile.skillNames.length > 0) {
     const tsquery = buildSkillsTsquery(profile.skillNames);
     if (tsquery) {
       parts.push(
-        Prisma.sql`LEAST(${SKILLS_BOOST_CAP}, ts_rank(j."searchVector", to_tsquery('english', ${tsquery})) * ${SKILLS_RANK_MULT})`
+        Prisma.sql`CASE WHEN j."searchVector" @@ to_tsquery('english', ${tsquery}) THEN LEAST(${SKILLS_BOOST_CAP}, ts_rank(j."searchVector", to_tsquery('english', ${tsquery})) * ${SKILLS_RANK_MULT}) ELSE 0 END`
       );
     }
   }

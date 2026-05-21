@@ -6,11 +6,14 @@
  * Direction A two-column hero (sigil on the right) at >= md, MobileHeader
  * fallback (no sigil, 2x2 metric grid, thin progress bar) at < md.
  *
- * The integration agent in a later PR wraps this in scroll-sticky behavior;
- * this component itself stays a flat block so the wrapper has a clean unit
- * to compress.
+ * At >= md, a <StickyMiniHeader> is also mounted. It manages its own
+ * visibility via an IntersectionObserver pinned to a 1px sentinel at the
+ * bottom of the hero — when the hero scrolls past the top of the viewport
+ * the strip slides in, when it returns the strip slides out. Mobile keeps
+ * the v1 fallback only (no sticky chrome).
  */
 
+import { useRef } from "react";
 import { useReducedMotion } from "framer-motion";
 import type { PerSectionScore } from "@/lib/profile/completeness";
 import { Sigil } from "../sigil/sigil";
@@ -18,6 +21,7 @@ import { PulseDot } from "@/components/dashboard/cockpit/atoms";
 import { MetricStrip } from "./metric-strip";
 import { NextBestActionChip } from "./next-best-action-chip";
 import { MobileHeader } from "./mobile-header";
+import { StickyMiniHeader } from "./sticky-mini-header";
 import type { TooltipPartialContext } from "../sigil/sigil-tooltip-copy";
 import type { TabKey } from "../forms/_shared/tab-config";
 
@@ -64,6 +68,9 @@ export function ProfilePageHeader({
   const reduced = useReducedMotion();
   const { filled, partial, empty } = countByState(perSection);
   const greeting = firstName ?? "Your";
+  // Sentinel sits at the bottom of the desktop hero; the sticky-mini header
+  // observes it to know when to show / hide.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   return (
     <>
@@ -75,6 +82,17 @@ export function ProfilePageHeader({
         filledCount={filled}
         partialCount={partial}
         emptyCount={empty}
+        updatedAgo={updatedAgo}
+        isStale={isStale}
+      />
+
+      {/* Desktop (>= md) — sticky compressed strip. Hidden on <md inside the
+          component itself; mobile keeps the v1 fallback header only. */}
+      <StickyMiniHeader
+        sentinelRef={sentinelRef}
+        firstName={firstName}
+        perSection={perSection}
+        totalPct={totalPct}
         updatedAgo={updatedAgo}
         isStale={isStale}
       />
@@ -146,6 +164,11 @@ export function ProfilePageHeader({
           updatedAgo={updatedAgo}
           isStale={isStale}
         />
+
+        {/* Sentinel — 1px sliver at the bottom of the hero. The sticky-mini
+            header observes this via IntersectionObserver to decide when to
+            show / hide. aria-hidden because it carries no semantic content. */}
+        <div ref={sentinelRef} aria-hidden className="h-px w-full" />
       </header>
     </>
   );

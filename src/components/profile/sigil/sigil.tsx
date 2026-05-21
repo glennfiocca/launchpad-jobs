@@ -107,6 +107,13 @@ interface SigilProps {
   size?: number;
   /** When true, drop the perimeter axis labels (used at < 640px). */
   hideLabels?: boolean;
+  /** When false, the sigil renders as a glyph only — no per-vertex tooltips,
+   *  no center % label, no "YOUR SIGIL" caption. Used by the sticky compressed
+   *  header at ~36px where the dots are too small to hit reliably. */
+  showInteractions?: boolean;
+  /** When false, drop the center total % + "YOUR SIGIL" caption. Defaults to
+   *  true so the hero sigil is unchanged. */
+  showCenter?: boolean;
 }
 
 export function Sigil({
@@ -115,6 +122,8 @@ export function Sigil({
   partialContext,
   size = 380,
   hideLabels = false,
+  showInteractions = true,
+  showCenter = true,
 }: SigilProps) {
   const reduced = useReducedMotion();
   const cx = size / 2;
@@ -280,15 +289,27 @@ export function Sigil({
                 filter="url(#sigilDot)"
               />
             )}
-            <SigilVertex
-              tab={key}
-              pct={pct}
-              color={color}
-              x={v.x}
-              y={v.y}
-              empty={empty}
-              partialContext={partialContext?.[key]}
-            />
+            {showInteractions ? (
+              <SigilVertex
+                tab={key}
+                pct={pct}
+                color={color}
+                x={v.x}
+                y={v.y}
+                empty={empty}
+                partialContext={partialContext?.[key]}
+              />
+            ) : (
+              // Mini-mode: just the dot, no popover trigger / hit area.
+              <circle
+                cx={v.x}
+                cy={v.y}
+                r={empty ? 2.5 : 3.5}
+                fill={empty ? "rgba(245,244,241,0.30)" : "#fefefe"}
+                stroke={empty ? "rgba(245,244,241,0.18)" : color}
+                strokeWidth={empty ? 1 : 1.4}
+              />
+            )}
           </g>
         );
       })}
@@ -342,33 +363,37 @@ export function Sigil({
         })}
 
       {/* Center label — total % and YOUR SIGIL caption */}
-      <text
-        x={cx}
-        y={cy - 6}
-        textAnchor="middle"
-        className="tabular-nums"
-        fontFamily="var(--font-display)"
-        fontSize={48}
-        fontWeight={500}
-        letterSpacing="-0.04em"
-        fill="var(--color-accent-lavender)"
-      >
-        {totalPct}
-        <tspan fontSize={22} fill="var(--color-text-dim)">
-          %
-        </tspan>
-      </text>
-      <text
-        x={cx}
-        y={cy + 16}
-        textAnchor="middle"
-        fontFamily="var(--font-mono)"
-        fontSize={9.5}
-        letterSpacing="0.10em"
-        fill="var(--color-text-dim)"
-      >
-        YOUR SIGIL
-      </text>
+      {showCenter && (
+        <>
+          <text
+            x={cx}
+            y={cy - 6}
+            textAnchor="middle"
+            className="tabular-nums"
+            fontFamily="var(--font-display)"
+            fontSize={48}
+            fontWeight={500}
+            letterSpacing="-0.04em"
+            fill="var(--color-accent-lavender)"
+          >
+            {totalPct}
+            <tspan fontSize={22} fill="var(--color-text-dim)">
+              %
+            </tspan>
+          </text>
+          <text
+            x={cx}
+            y={cy + 16}
+            textAnchor="middle"
+            fontFamily="var(--font-mono)"
+            fontSize={9.5}
+            letterSpacing="0.10em"
+            fill="var(--color-text-dim)"
+          >
+            YOUR SIGIL
+          </text>
+        </>
+      )}
     </svg>
   );
 }

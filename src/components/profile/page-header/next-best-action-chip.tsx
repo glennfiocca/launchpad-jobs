@@ -37,6 +37,10 @@ interface NextBestActionChipProps {
   /** Whether the profile hasn't been touched in
    *  STALENESS_THRESHOLD_DAYS days. */
   isStale: boolean;
+  /** Compact variant used by the sticky-mini header. Strips the body copy +
+   *  icon disk, leaving a single-line "→ {Tab}" pill that fits inside a
+   *  64-72px tall strip. Defaults to false so the hero chip is unchanged. */
+  compact?: boolean;
 }
 
 // "Pushes the {section} spoke outward" reads better when the noun is the
@@ -92,6 +96,7 @@ export function NextBestActionChip({
   totalPct,
   updatedAgo,
   isStale,
+  compact = false,
 }: NextBestActionChipProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -101,6 +106,37 @@ export function NextBestActionChip({
     params.set("tab", tab);
     router.replace(`?${params.toString()}`, { scroll: false });
   };
+
+  // Compact variant — single-line pill for the sticky-mini header. Mirrors
+  // the priority/copy logic of the full chip but trims to fit a thin strip.
+  if (compact) {
+    if (totalPct >= 100) {
+      return (
+        <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(196,181,253,0.22)] bg-[rgba(196,181,253,0.08)] px-3 py-1 font-mono text-[10.5px] tracking-[0.04em] text-[var(--color-accent-lavender)]">
+          {isStale ? (
+            <RefreshCw className="w-3 h-3" />
+          ) : (
+            <Check className="w-3 h-3" />
+          )}
+          {isStale ? "Refresh nudge" : "All sections filled"}
+        </span>
+      );
+    }
+    const target = pickTargetAxis(perSection);
+    if (!target) return null;
+    const targetLabel = TAB_LABELS[target];
+    return (
+      <button
+        type="button"
+        onClick={() => goToTab(target)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(196,181,253,0.30)] bg-[rgba(196,181,253,0.12)] px-3 py-1 font-display font-medium text-[12px] text-[var(--color-accent-lavender)] hover:bg-[rgba(196,181,253,0.20)] transition-colors"
+        aria-label={`Next best action — open ${targetLabel}`}
+      >
+        <ArrowRight className="w-3 h-3" />
+        Open {targetLabel}
+      </button>
+    );
+  }
 
   // Fully complete states (100%) — no axis selection, no "open X" CTA.
   if (totalPct >= 100) {

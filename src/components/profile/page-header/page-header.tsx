@@ -100,7 +100,7 @@ export function ProfilePageHeader({
       {/* Desktop (>= md) — full Direction A two-column hero */}
       <header className="hidden md:flex md:flex-col md:gap-5">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/12 font-mono text-[11px] tracking-[0.04em] text-text-muted">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/[0.12] font-mono text-[11px] tracking-[0.04em] text-text-muted">
             <PulseDot />
             Profile · <span className="tabular-nums">{totalPct}%</span>{" "}
             complete · auto-saving

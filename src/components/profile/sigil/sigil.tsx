@@ -173,9 +173,9 @@ export function Sigil({
 
       <defs>
         <radialGradient id="sigilFill" cx="50%" cy="50%" r="60%">
-          <stop offset="0%" stopColor="#c4b5fd" stopOpacity="0.45" />
-          <stop offset="55%" stopColor="#818cf8" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.10" />
+          <stop offset="0%" stopColor="var(--color-accent-lavender)" stopOpacity="0.45" />
+          <stop offset="55%" stopColor="var(--color-accent-light)" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.10" />
         </radialGradient>
         <linearGradient
           id="sigilStroke"
@@ -185,9 +185,9 @@ export function Sigil({
           y2={size}
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#c4b5fd" stopOpacity="0.95" />
-          <stop offset="0.5" stopColor="#818cf8" stopOpacity="0.95" />
-          <stop offset="1" stopColor="#22d3ee" stopOpacity="0.95" />
+          <stop offset="0" stopColor="var(--color-accent-lavender)" stopOpacity="0.95" />
+          <stop offset="0.5" stopColor="var(--color-accent-light)" stopOpacity="0.95" />
+          <stop offset="1" stopColor="var(--color-accent-cyan)" stopOpacity="0.95" />
         </linearGradient>
         <filter id="sigilGlow">
           <feGaussianBlur stdDeviation="4" />
@@ -305,7 +305,7 @@ export function Sigil({
                 cx={v.x}
                 cy={v.y}
                 r={empty ? 2.5 : 3.5}
-                fill={empty ? "rgba(245,244,241,0.30)" : "#fefefe"}
+                fill={empty ? "rgba(245,244,241,0.30)" : "var(--color-text)"}
                 stroke={empty ? "rgba(245,244,241,0.18)" : color}
                 strokeWidth={empty ? 1 : 1.4}
               />
@@ -446,7 +446,7 @@ function SigilVertex({
             cx={x}
             cy={y}
             r={empty ? 2.5 : 3.5}
-            fill={empty ? "rgba(245,244,241,0.30)" : "#fefefe"}
+            fill={empty ? "rgba(245,244,241,0.30)" : "var(--color-text)"}
             stroke={empty ? "rgba(245,244,241,0.18)" : color}
             strokeWidth={empty ? 1 : 1.4}
           />

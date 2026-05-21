@@ -115,7 +115,7 @@ export function MobileHeader({
         <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-text-dim tabular-nums">
           {totalPct}% complete
         </span>
-        <div className="flex-1 h-[3px] rounded-full bg-white/8 overflow-hidden">
+        <div className="flex-1 h-[3px] rounded-full bg-white/[0.08] overflow-hidden">
           <div
             className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent-lavender)] via-[var(--color-stage-interview)] to-[var(--color-accent-cyan)] transition-all"
             style={{

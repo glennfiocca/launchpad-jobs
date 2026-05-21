@@ -92,7 +92,7 @@ export function SavedPill({ visible = true }: SavedPillProps) {
       className={[
         "pp-anim-saved-in",
         "inline-flex items-center gap-1.5",
-        "font-mono text-[10.5px] tracking-[0.04em] text-[#67e8f9]",
+        "font-mono text-[10.5px] tracking-[0.04em] text-[var(--color-stage-offer-accent)]",
       ].join(" ")}
       style={
         reduced

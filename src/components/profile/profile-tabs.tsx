@@ -64,7 +64,7 @@ const sidebarTriggerClass = [
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40",
   "text-text-muted hover:text-text hover:bg-white/5 border border-transparent",
   "data-[state=active]:bg-[rgba(99,102,241,0.10)]",
-  "data-[state=active]:text-[#c7d2fe]",
+  "data-[state=active]:text-[var(--color-accent-lavender)]",
   "data-[state=active]:border-[rgba(99,102,241,0.28)]",
 ].join(" ");
 
@@ -74,7 +74,7 @@ const mobileTriggerClass = [
   "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium",
   "border whitespace-nowrap transition-colors shrink-0",
   "text-text-muted border-white/10 hover:text-text hover:bg-white/5",
-  "data-[state=active]:bg-[rgba(99,102,241,0.10)] data-[state=active]:text-[#c7d2fe]",
+  "data-[state=active]:bg-[rgba(99,102,241,0.10)] data-[state=active]:text-[var(--color-accent-lavender)]",
   "data-[state=active]:border-[rgba(99,102,241,0.28)]",
 ].join(" ");
 

@@ -24,10 +24,8 @@
  * SavedPill atom; this form introduces no new framer-motion animations.
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
 import type { UserProfile } from "@prisma/client";
-import { toast } from "sonner";
 import {
   COMPANY_SIZES,
   EMPLOYMENT_TYPES,
@@ -46,12 +44,12 @@ import {
   gridTwoCol,
   labelClass,
   pillBtnClass,
-  primaryWhiteBtnClass,
   sectionDividerClass,
 } from "./_shared/styles";
 import { FormEyebrow, SavedPill, SectionHeader } from "./_shared/atoms";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
-import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
+import { buildPayload, getIdentityBase } from "./_shared/submit";
+import { useDebouncedProfileSave } from "./_shared/use-debounced-profile-save";
 import { ChipInput } from "./_shared/chip-input";
 import {
   asCompanySizes,
@@ -223,41 +221,16 @@ interface PreferencesFormProps {
 }
 
 export function PreferencesForm({ initialData }: PreferencesFormProps) {
-  const router = useRouter();
   const [form, setForm] = useState<PreferencesFormState>(initState(initialData));
-  const [saving, setSaving] = useState(false);
-  const [recentlySaved, setRecentlySaved] = useState(false);
 
-  const set = <K extends keyof PreferencesFormState>(
-    field: K,
-    value: PreferencesFormState[K]
-  ) => setForm((prev) => ({ ...prev, [field]: value }));
-
-  const toggleEmploymentType = (t: EmploymentType) => {
-    setForm((prev) => ({
-      ...prev,
-      desiredEmploymentTypes: prev.desiredEmploymentTypes.includes(t)
-        ? prev.desiredEmploymentTypes.filter((x) => x !== t)
-        : [...prev.desiredEmploymentTypes, t],
-    }));
-  };
-
-  const toggleCompanySize = (s: CompanySize) => {
-    setForm((prev) => ({
-      ...prev,
-      companySizePreferences: prev.companySizePreferences.includes(s)
-        ? prev.companySizePreferences.filter((x) => x !== s)
-        : [...prev.companySizePreferences, s],
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
+  const buildPreferencesPayload = useCallback(() => {
     const slice = {
-      desiredSalaryMin: form.desiredSalaryMin ? Number(form.desiredSalaryMin) : undefined,
-      desiredSalaryMax: form.desiredSalaryMax ? Number(form.desiredSalaryMax) : undefined,
+      desiredSalaryMin: form.desiredSalaryMin
+        ? Number(form.desiredSalaryMin)
+        : undefined,
+      desiredSalaryMax: form.desiredSalaryMax
+        ? Number(form.desiredSalaryMax)
+        : undefined,
       openToRemote: form.openToRemote,
       openToHybrid: form.openToHybrid,
       openToOnsite: form.openToOnsite,
@@ -283,19 +256,40 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
       // Server already enforces 2-char length; uppercase here for cleanliness.
       eligibleCountries: form.eligibleCountries.map((c) => c.toUpperCase()),
     };
+    return buildPayload(getIdentityBase(initialData), slice);
+  }, [form, initialData]);
 
-    const payload = buildPayload(getIdentityBase(initialData), slice);
-    const result = await submitProfilePatch(payload);
-    if (!result.ok) {
-      toast.error(result.error ?? "Failed to save profile");
-    } else {
-      toast.success("Preferences saved");
-      setRecentlySaved(true);
-      // Match the 2-second SAVED pill window used by personal-form / list-editor.
-      setTimeout(() => setRecentlySaved(false), 2000);
-      router.refresh();
-    }
-    setSaving(false);
+  const { schedule, saving, recentlySaved } =
+    useDebouncedProfileSave(buildPreferencesPayload);
+
+  // Every state update — single-field set, toggle, multi-field setForm —
+  // schedules a debounced save. Wrap setForm so multi-field updates work too.
+  const set = <K extends keyof PreferencesFormState>(
+    field: K,
+    value: PreferencesFormState[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    schedule();
+  };
+
+  const toggleEmploymentType = (t: EmploymentType) => {
+    setForm((prev) => ({
+      ...prev,
+      desiredEmploymentTypes: prev.desiredEmploymentTypes.includes(t)
+        ? prev.desiredEmploymentTypes.filter((x) => x !== t)
+        : [...prev.desiredEmploymentTypes, t],
+    }));
+    schedule();
+  };
+
+  const toggleCompanySize = (s: CompanySize) => {
+    setForm((prev) => ({
+      ...prev,
+      companySizePreferences: prev.companySizePreferences.includes(s)
+        ? prev.companySizePreferences.filter((x) => x !== s)
+        : [...prev.companySizePreferences, s],
+    }));
+    schedule();
   };
 
   const workModes: ReadonlyArray<{
@@ -310,7 +304,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
   const identityOk = isIdentityComplete(initialData);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="space-y-6">
       <IdentityRequiredNotice initialData={initialData} />
 
       {/* ───────── Section 1: Search Preferences ───────── */}
@@ -644,17 +638,14 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
         </div>
       </section>
 
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="submit"
-          disabled={saving || !identityOk}
-          title={!identityOk ? "Complete the Personal tab first" : undefined}
-          aria-disabled={saving || !identityOk}
-          className={primaryWhiteBtnClass}
-        >
-          {saving ? "Saving…" : "Save changes"}
-        </button>
-      </div>
-    </form>
+      {/* Live save indicator — replaces the explicit Save button. */}
+      {saving && (
+        <div className="flex items-center justify-end">
+          <FormEyebrow>
+            {identityOk ? "saving…" : "complete the Personal tab to save"}
+          </FormEyebrow>
+        </div>
+      )}
+    </div>
   );
 }

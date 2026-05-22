@@ -31,17 +31,14 @@
  *   - buildPayload + getIdentityBase + submitProfilePatch flow unchanged
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
 import type { UserProfile } from "@prisma/client";
-import { toast } from "sonner";
 import {
   directionAInputClass,
   directionASectionClass,
   gridThreeCol,
   gridTwoCol,
   labelClass,
-  primaryWhiteBtnClass,
 } from "./_shared/styles";
 import {
   FormEyebrow,
@@ -49,7 +46,8 @@ import {
   SectionHeader,
 } from "./_shared/atoms";
 import { IdentityRequiredNotice, isIdentityComplete } from "./_shared/identity-gate";
-import { buildPayload, getIdentityBase, submitProfilePatch } from "./_shared/submit";
+import { buildPayload, getIdentityBase } from "./_shared/submit";
+import { useDebouncedProfileSave } from "./_shared/use-debounced-profile-save";
 
 interface ProfessionalFormState {
   headline: string;
@@ -114,18 +112,9 @@ interface ProfessionalFormProps {
 }
 
 export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
-  const router = useRouter();
   const [form, setForm] = useState<ProfessionalFormState>(initState(initialData));
-  const [saving, setSaving] = useState(false);
-  const [recentlySaved, setRecentlySaved] = useState(false);
 
-  const set = (field: keyof ProfessionalFormState, value: string) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
+  const buildProfessionalPayload = useCallback(() => {
     const slice = {
       headline: form.headline || undefined,
       summary: form.summary || undefined,
@@ -134,30 +123,31 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
       portfolioUrl: form.portfolioUrl || undefined,
       currentTitle: form.currentTitle || undefined,
       currentCompany: form.currentCompany || undefined,
-      yearsExperience: form.yearsExperience ? Number(form.yearsExperience) : undefined,
+      yearsExperience: form.yearsExperience
+        ? Number(form.yearsExperience)
+        : undefined,
       // Empty string → null on the server so we don't store blank templates.
       coverLetterIntro: form.coverLetterIntro || null,
       whyImLookingTemplate: form.whyImLookingTemplate || null,
     };
+    return buildPayload(getIdentityBase(initialData), slice);
+  }, [form, initialData]);
 
-    const payload = buildPayload(getIdentityBase(initialData), slice);
-    const result = await submitProfilePatch(payload);
-    if (!result.ok) {
-      toast.error(result.error ?? "Failed to save profile");
-    } else {
-      toast.success("Profile saved");
-      setRecentlySaved(true);
-      // Match the 2-second SAVED pill window used by list-editor saves.
-      setTimeout(() => setRecentlySaved(false), 2000);
-      router.refresh();
-    }
-    setSaving(false);
+  const { schedule, saving, recentlySaved } =
+    useDebouncedProfileSave(buildProfessionalPayload);
+
+  // Every local-state update also schedules a debounced save — UX is
+  // identical to the list tabs: type, blur to next field, watch the
+  // SAVED pill light up about half a second later.
+  const set = (field: keyof ProfessionalFormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    schedule();
   };
 
   const identityOk = isIdentityComplete(initialData);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="space-y-6">
       <IdentityRequiredNotice initialData={initialData} />
 
       {/* Current Role — the "how you introduce yourself" section.
@@ -302,16 +292,14 @@ export function ProfessionalForm({ initialData }: ProfessionalFormProps) {
         </div>
       </section>
 
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="submit"
-          disabled={saving || !identityOk}
-          title={!identityOk ? "Complete the Personal tab first" : undefined}
-          className={primaryWhiteBtnClass}
-        >
-          {saving ? "Saving…" : "Save changes"}
-        </button>
-      </div>
-    </form>
+      {/* Live save indicator — replaces the explicit Save button. */}
+      {saving && (
+        <div className="flex items-center justify-end">
+          <FormEyebrow>
+            {identityOk ? "saving…" : "complete the Personal tab to save"}
+          </FormEyebrow>
+        </div>
+      )}
+    </div>
   );
 }

@@ -24,10 +24,8 @@
  * 1 of 6 personal contributors).
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
 import type { UserProfile } from "@prisma/client";
-import { toast } from "sonner";
 import { AddressCombobox } from "@/components/ui/address-combobox";
 import type { PlaceDetails } from "@/lib/validations/places";
 import {
@@ -36,14 +34,13 @@ import {
   gridThreeCol,
   gridTwoCol,
   labelClass,
-  primaryWhiteBtnClass,
 } from "./_shared/styles";
 import {
   FormEyebrow,
   SavedPill,
   SectionHeader,
 } from "./_shared/atoms";
-import { submitProfilePatch } from "./_shared/submit";
+import { useDebouncedProfileSave } from "./_shared/use-debounced-profile-save";
 
 // Runtime-vs-generated-type bridge — these structured location columns exist
 // in the DB even before the Prisma client regen reflects them.
@@ -225,19 +222,13 @@ interface PersonalFormProps {
 }
 
 export function PersonalForm({ initialData }: PersonalFormProps) {
-  const router = useRouter();
   const [form, setForm] = useState<PersonalFormState>(initState(initialData));
-  const [saving, setSaving] = useState(false);
-  const [recentlySaved, setRecentlySaved] = useState(false);
 
-  const set = (field: keyof PersonalFormState, value: string) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
-    const payload = {
+  // Debounced PUT /api/profile fired from every field's onBlur (text) or
+  // onChange (selects, address picker). Coalesces rapid edits into one PUT.
+  // Best-effort unmount flush so navigating away mid-edit doesn't lose data.
+  const buildPersonalPayload = useCallback(
+    () => ({
       firstName: form.firstName,
       lastName: form.lastName,
       email: form.email,
@@ -265,23 +256,22 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
       behanceUrl: form.behanceUrl,
       googleScholarUrl: form.googleScholarUrl,
       youtubeUrl: form.youtubeUrl,
-    };
+    }),
+    [form],
+  );
 
-    const result = await submitProfilePatch(payload);
-    if (!result.ok) {
-      toast.error(result.error ?? "Failed to save profile");
-    } else {
-      toast.success("Profile saved");
-      setRecentlySaved(true);
-      // Match the 2-second SAVED pill window used by list-editor saves.
-      setTimeout(() => setRecentlySaved(false), 2000);
-      router.refresh();
-    }
-    setSaving(false);
+  const { schedule, saving, recentlySaved } =
+    useDebouncedProfileSave(buildPersonalPayload);
+
+  // Every local-state update also schedules a debounced save — the user gets
+  // blur-to-save UX on every field with no per-input wiring.
+  const set = (field: keyof PersonalFormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    schedule();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="space-y-6">
       {/* Identity section */}
       <section className={directionASectionClass}>
         <SectionHeader
@@ -371,6 +361,8 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
                 locationLat: details.lat?.toString() ?? "",
                 locationLng: details.lng?.toString() ?? "",
               }));
+              // Multi-field setForm bypasses `set()`, so schedule manually.
+              schedule();
             }}
             placeholder="San Francisco, CA"
           />
@@ -422,15 +414,13 @@ export function PersonalForm({ initialData }: PersonalFormProps) {
         </div>
       </section>
 
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="submit"
-          disabled={saving}
-          className={primaryWhiteBtnClass}
-        >
-          {saving ? "Saving…" : "Save changes"}
-        </button>
-      </div>
-    </form>
+      {/* Live save indicator — replaces the explicit Save button. Saves fire
+          on every field change via the debounced scheduler. */}
+      {saving && (
+        <div className="flex items-center justify-end">
+          <FormEyebrow>saving…</FormEyebrow>
+        </div>
+      )}
+    </div>
   );
 }

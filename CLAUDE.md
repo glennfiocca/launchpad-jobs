@@ -27,16 +27,41 @@
 - Playwright apply consumes `applyUrl` when `APPLY_USE_CUSTOM_URLS=true`.
 
 ### Durable E2E test user
-- `e2e-test@trypipeline.ai` is permanently seeded in prod (`User.id =
-  cmpe2etest0000glenneeeeeee`, `UserProfile.id = cmpe2etestprof0000glenneeeee`).
-  Pre-loaded with partial profile data (firstName/lastName, location SF/CA,
-  2 work experiences, 3 skills across 3 proficiency tiers) so Playwright
-  specs can exercise blur-to-save, list editors, and the tier grid without
-  per-test seeding.
-- Used via `e2e/_helpers/auth.ts → signInAsTestUser(context, "e2e-test@...")`.
-- Requires `TEST_AUTH_SECRET` in local `.env` (and in prod env if running
-  Playwright against prod). Email allowlist enforced by
-  `/api/test/signin-as` is `e2e-*@trypipeline.ai` — safe to keep the
-  endpoint mounted in prod since only allowlisted emails can mint sessions.
-- DO NOT delete this user. Add new test users via `INSERT … ON CONFLICT DO
-  NOTHING` if specs need additional fixtures.
+- `e2e-test@trypipeline.ai` is permanently seeded in both **prod** and the
+  **local dev DB** (`User.id = cmpe2etest0000glenneeeeeee`, `UserProfile.id
+  = cmpe2etestprof0000glenneeeee`). Pre-loaded with partial profile data:
+  identity + location SF/CA + 2 work experiences (Stripe current + Affirm
+  past) + 3 skills across tiers 5/4/2. Empty axes — resume, education,
+  projects/certs, preferences — exercise the sigil's perimeter hit-area
+  and "invite to fill" tooltip copy.
+- Used via `e2e/_helpers/auth.ts → signInAsTestUser(context, "e2e-test@trypipeline.ai")`.
+- Re-seed any time via `npx tsx scripts/seed-e2e-test-user.ts` (idempotent
+  upserts; safe to re-run against either DB; uses `.env` DATABASE_URL).
+- Endpoint allowlist (`/api/test/signin-as`) is `e2e-*@trypipeline.ai` —
+  safe to keep mounted in prod since only allowlisted emails can mint
+  sessions, and the secret must also match `TEST_AUTH_SECRET` from env.
+- DO NOT delete the user. Add new test users with new IDs if specs need
+  additional fixtures.
+
+### Running Playwright locally
+1. `.env.local` overrides `DATABASE_URL` + `DIRECT_URL` to point at the
+   local Postgres (`postgresql://glennfiocca@localhost:5432/launchpad`).
+   This is intentional — dev work stays off prod.
+2. Local DB schema must be current. To sync after a schema change:
+   - Temporarily put the local URL in `.env` (or `unset DATABASE_URL` in
+     shell and export the local one) so Prisma CLI picks it up.
+   - `npx prisma db push --skip-generate` to sync without writing a
+     migration entry. Restore prod `.env` afterward.
+3. Seed the test user into the local DB if not yet present:
+   `npx tsx scripts/seed-e2e-test-user.ts` (after step 2 so the
+   `targetRoles`/`requiredLanguages` columns exist).
+4. Make sure `.env` has `TEST_AUTH_SECRET` (generate via
+   `openssl rand -base64 32` if missing). Same value goes in DO env vars
+   if running Playwright against prod.
+5. Run the suite: `BASE_URL=http://localhost:3000 npx playwright test`
+   (Playwright auto-starts the dev server via `playwright.config.ts`'s
+   `webServer` block, OR you can run `npm run dev` separately and point
+   `BASE_URL` at it).
+6. For SVG `<g role="button">` triggers (sigil vertices), use `.focus()`
+   instead of `.hover()` — Radix Tooltip opens on both, and `.focus()`
+   is unambiguous for collapsed-vertex empty axes.

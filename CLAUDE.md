@@ -25,3 +25,18 @@
 - Same value for Ashby self-hosters; different for hosted Ashby and
   Greenhouse self-hosters (where `applyUrl` is the rewritten target).
 - Playwright apply consumes `applyUrl` when `APPLY_USE_CUSTOM_URLS=true`.
+
+### Durable E2E test user
+- `e2e-test@trypipeline.ai` is permanently seeded in prod (`User.id =
+  cmpe2etest0000glenneeeeeee`, `UserProfile.id = cmpe2etestprof0000glenneeeee`).
+  Pre-loaded with partial profile data (firstName/lastName, location SF/CA,
+  2 work experiences, 3 skills across 3 proficiency tiers) so Playwright
+  specs can exercise blur-to-save, list editors, and the tier grid without
+  per-test seeding.
+- Used via `e2e/_helpers/auth.ts → signInAsTestUser(context, "e2e-test@...")`.
+- Requires `TEST_AUTH_SECRET` in local `.env` (and in prod env if running
+  Playwright against prod). Email allowlist enforced by
+  `/api/test/signin-as` is `e2e-*@trypipeline.ai` — safe to keep the
+  endpoint mounted in prod since only allowlisted emails can mint sessions.
+- DO NOT delete this user. Add new test users via `INSERT … ON CONFLICT DO
+  NOTHING` if specs need additional fixtures.
